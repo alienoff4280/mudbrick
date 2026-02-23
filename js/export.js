@@ -88,22 +88,21 @@ export async function exportAnnotatedPDF(opts) {
       obj => obj.mudbrickType === 'cover' || obj.mudbrickType === 'redact'
     );
 
+    // Use stored canvas dimensions from savePageAnnotations, or fallback
+    const savedCanvasW = json._canvasWidth || effectiveWidth;
+    const savedCanvasH = json._canvasHeight || effectiveHeight;
+
     for (const cover of coverObjects) {
       // Fabric stores coords in screen space; we need PDF space
-      // The JSON was saved at some zoom, but objects are in canvas pixels
       const cx = cover.left || 0;
       const cy = cover.top || 0;
       const cw = (cover.width || 0) * (cover.scaleX || 1);
       const ch = (cover.height || 0) * (cover.scaleY || 1);
 
       // Convert from Fabric (top-left origin, Y down) to PDF (bottom-left, Y up)
-      // We need to scale from canvas size to PDF page size
-      const canvasWidth = json.background?.width || effectiveWidth;
-      const canvasHeight = json.background?.height || effectiveHeight;
-
       // Scale factors (canvas → PDF)
-      const sx = effectiveWidth / (canvasWidth || effectiveWidth);
-      const sy = effectiveHeight / (canvasHeight || effectiveHeight);
+      const sx = effectiveWidth / savedCanvasW;
+      const sy = effectiveHeight / savedCanvasH;
 
       const pdfX = cx * sx;
       const pdfY = effectiveHeight - (cy * sy) - (ch * sy);
@@ -137,60 +136,59 @@ export async function exportAnnotatedPDF(opts) {
         height: effectiveHeight * 2,
       });
 
-      // Build a modified JSON with only non-cover objects, scaled to PDF coords
-      const renderJson = {
-        ...json,
-        objects: nonCoverObjects,
-      };
+      try {
+        // Build a modified JSON with only non-cover objects
+        const renderJson = {
+          ...json,
+          objects: nonCoverObjects,
+        };
 
-      // Load annotations into temp canvas
-      await new Promise((resolve) => {
-        tempCanvas.loadFromJSON(renderJson, () => {
-          // Scale all objects to fill the 2x canvas from the original canvas size
-          const canvasWidth = json.objects?.length > 0 ?
-            (fabricCanvas.width || effectiveWidth) : effectiveWidth;
-          const canvasHeight = json.objects?.length > 0 ?
-            (fabricCanvas.height || effectiveHeight) : effectiveHeight;
+        // Load annotations into temp canvas
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Canvas load timed out')), 10000);
+          tempCanvas.loadFromJSON(renderJson, () => {
+            clearTimeout(timeout);
+            // Use stored canvas dimensions for accurate scaling
+            const scaleX = (effectiveWidth * 2) / savedCanvasW;
+            const scaleY = (effectiveHeight * 2) / savedCanvasH;
 
-          const scaleX = (effectiveWidth * 2) / canvasWidth;
-          const scaleY = (effectiveHeight * 2) / canvasHeight;
-
-          tempCanvas.getObjects().forEach(obj => {
-            obj.set({
-              left: obj.left * scaleX,
-              top: obj.top * scaleY,
-              scaleX: (obj.scaleX || 1) * scaleX,
-              scaleY: (obj.scaleY || 1) * scaleY,
+            tempCanvas.getObjects().forEach(obj => {
+              obj.set({
+                left: obj.left * scaleX,
+                top: obj.top * scaleY,
+                scaleX: (obj.scaleX || 1) * scaleX,
+                scaleY: (obj.scaleY || 1) * scaleY,
+              });
+              obj.setCoords();
             });
-            obj.setCoords();
+
+            tempCanvas.renderAll();
+            resolve();
           });
-
-          tempCanvas.renderAll();
-          resolve();
         });
-      });
 
-      // Export temp canvas to PNG
-      const dataUrl = tempCanvas.toDataURL({
-        format: 'png',
-        multiplier: 1,
-      });
+        // Export temp canvas to PNG
+        const dataUrl = tempCanvas.toDataURL({
+          format: 'png',
+          multiplier: 1,
+        });
 
-      // Clean up temp canvas
-      tempCanvas.dispose();
-      tempCanvasEl.remove();
+        // Embed PNG into PDF page
+        const pngBytes = dataUrlToUint8Array(dataUrl);
+        const pngImage = await pdfDoc.embedPng(pngBytes);
 
-      // Embed PNG into PDF page
-      const pngBytes = dataUrlToUint8Array(dataUrl);
-      const pngImage = await pdfDoc.embedPng(pngBytes);
-
-      // Draw the annotation image over the entire page
-      page.drawImage(pngImage, {
-        x: 0,
-        y: 0,
-        width: effectiveWidth,
-        height: effectiveHeight,
-      });
+        // Draw the annotation image over the entire page
+        page.drawImage(pngImage, {
+          x: 0,
+          y: 0,
+          width: effectiveWidth,
+          height: effectiveHeight,
+        });
+      } finally {
+        // Always clean up temp canvas, even if an error occurred
+        tempCanvas.dispose();
+        tempCanvasEl.remove();
+      }
     }
   }
 

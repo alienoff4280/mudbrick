@@ -85,6 +85,11 @@ export function setTool(toolName, options = {}) {
   currentTool = toolName;
   Object.assign(toolOptions, options);
 
+  // Always remove path:created listeners before re-binding to prevent accumulation
+  fabricCanvas.off('path:created', markHighlightPath);
+  fabricCanvas.off('path:created', markUnderlinePath);
+  fabricCanvas.off('path:created', markStrikethroughPath);
+
   // Reset drawing mode
   fabricCanvas.isDrawingMode = false;
   fabricCanvas.selection = true;
@@ -192,16 +197,6 @@ export function setTool(toolName, options = {}) {
       wrapper.style.pointerEvents = 'none';
   }
 
-  // Remove path:created listeners if switching away from those tools
-  if (toolName !== 'highlight') {
-    fabricCanvas.off('path:created', markHighlightPath);
-  }
-  if (toolName !== 'underline') {
-    fabricCanvas.off('path:created', markUnderlinePath);
-  }
-  if (toolName !== 'strikethrough') {
-    fabricCanvas.off('path:created', markStrikethroughPath);
-  }
 }
 
 function markHighlightPath(e) {
@@ -669,7 +664,11 @@ export function savePageAnnotations(pageNum) {
     delete pageAnnotations[pageNum];
     return;
   }
-  pageAnnotations[pageNum] = fabricCanvas.toJSON(CUSTOM_PROPS);
+  const json = fabricCanvas.toJSON(CUSTOM_PROPS);
+  // Store canvas dimensions alongside so export can properly scale coordinates
+  json._canvasWidth = fabricCanvas.width;
+  json._canvasHeight = fabricCanvas.height;
+  pageAnnotations[pageNum] = json;
 }
 
 /**
@@ -687,15 +686,16 @@ export function loadPageAnnotations(pageNum) {
   const json = pageAnnotations[pageNum];
   if (json) {
     fabricCanvas.loadFromJSON(json, () => {
-      suppressAutoSave = false;
       fabricCanvas.renderAll();
-      // Push initial state for undo baseline on this page
+      // Always push undo baseline so user can revert to the loaded state
       if (!canUndo(pageNum)) pushState(pageNum, json);
+      // Release suppression only after load is fully complete
+      suppressAutoSave = false;
     });
   } else {
-    suppressAutoSave = false;
     // Push empty state as baseline
     if (!canUndo(pageNum)) pushState(pageNum, fabricCanvas.toJSON(CUSTOM_PROPS));
+    suppressAutoSave = false;
   }
 }
 

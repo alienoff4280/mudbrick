@@ -116,6 +116,7 @@ const DOM = {
   totalPages: $('total-pages'),
   zoomBtn: $('btn-zoom-level'),
   statusFilename: $('status-filename'),
+  statusBarFilename: $('statusbar-filename'),
   statusPagesSize: $('status-pages-size'),
   statusZoom: $('status-zoom'),
   statusBates: $('status-bates'),
@@ -1431,7 +1432,9 @@ async function executeSplit() {
 /* ═══════════════════ Status Bar ═══════════════════ */
 
 function updateStatusBar() {
-  DOM.statusFilename.textContent = State.fileName || 'No file loaded';
+  const fname = State.fileName || 'No file loaded';
+  DOM.statusFilename.textContent = fname;
+  if (DOM.statusBarFilename) DOM.statusBarFilename.textContent = fname;
 
   // Pages · Size combined
   const parts = [];
@@ -4007,6 +4010,12 @@ function selectTool(toolName) {
   State.activeTool = toolName;
   setTool(toolName, { shapeType: 'rect', stampType: 'approved' });
   updatePanelToolTitle();
+  // Show/hide tool properties section based on active tool
+  const toolPropsEl = $('panel-tool-props');
+  if (toolPropsEl) {
+    const noPropsTools = ['select', 'hand'];
+    toolPropsEl.style.display = noPropsTools.includes(toolName) ? 'none' : '';
+  }
   // Update canvas cursor
   DOM.canvasArea.setAttribute('data-cursor', toolName);
 
