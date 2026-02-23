@@ -95,7 +95,9 @@ export function setTool(toolName, options = {}) {
 
   switch (toolName) {
     case 'select':
-      wrapper.style.pointerEvents = 'auto';
+      // Let clicks pass through to text-layer for text selection;
+      // fabric canvas stays visible for annotation display.
+      wrapper.style.pointerEvents = 'none';
       fabricCanvas.hoverCursor = 'move';
       break;
 

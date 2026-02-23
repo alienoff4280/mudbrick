@@ -2286,6 +2286,38 @@ function wireEvents() {
     });
   }
 
+  // Hand-tool panning (click-and-drag to scroll canvas-area)
+  {
+    let panning = false, panStartX = 0, panStartY = 0, scrollStartX = 0, scrollStartY = 0;
+
+    DOM.canvasArea.addEventListener('mousedown', e => {
+      if (State.activeTool !== 'hand') return;
+      // Don't interfere with sidebar or toolbar clicks
+      if (e.target.closest('#sidebar') || e.target.closest('#floating-toolbar')) return;
+      panning = true;
+      panStartX = e.clientX;
+      panStartY = e.clientY;
+      scrollStartX = DOM.canvasArea.scrollLeft;
+      scrollStartY = DOM.canvasArea.scrollTop;
+      DOM.canvasArea.style.cursor = 'grabbing';
+      e.preventDefault();
+    });
+
+    document.addEventListener('mousemove', e => {
+      if (!panning) return;
+      const dx = e.clientX - panStartX;
+      const dy = e.clientY - panStartY;
+      DOM.canvasArea.scrollLeft = scrollStartX - dx;
+      DOM.canvasArea.scrollTop = scrollStartY - dy;
+    });
+
+    document.addEventListener('mouseup', () => {
+      if (!panning) return;
+      panning = false;
+      DOM.canvasArea.style.cursor = '';
+    });
+  }
+
   // Undo / Redo
   DOM.btnUndo.addEventListener('click', handleUndo);
   DOM.btnRedo.addEventListener('click', handleRedo);
@@ -3977,6 +4009,23 @@ function selectTool(toolName) {
   updatePanelToolTitle();
   // Update canvas cursor
   DOM.canvasArea.setAttribute('data-cursor', toolName);
+
+  // Hand tool: disable text selection so it doesn't interfere with panning
+  // Select tool: enable text selection on the text layer
+  const textLayer = DOM.textLayer;
+  if (textLayer) {
+    if (toolName === 'hand') {
+      textLayer.style.pointerEvents = 'none';
+      textLayer.style.userSelect = 'none';
+    } else if (toolName === 'select') {
+      textLayer.style.pointerEvents = 'auto';
+      textLayer.style.userSelect = 'auto';
+    } else {
+      // Other annotation tools: disable text selection
+      textLayer.style.pointerEvents = 'none';
+      textLayer.style.userSelect = 'none';
+    }
+  }
 }
 
 /* ═══════════════════ Public API (for testing & URL loading) ═══════════════════ */
