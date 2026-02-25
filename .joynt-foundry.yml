@@ -1,0 +1,32 @@
+repo: "NovoLegalGroup/mudbrick"
+
+labels:
+  ready: "state:ready"
+  in_progress: "state:in-progress"
+  done: "state:done"
+  ready_for_review: "state:ready-for-human-review"
+  spec_changed: "spec:changed"
+
+branch_template: "feature/{issue}-{slug}"
+worktree_base: "./wts"
+max_sessions: 4
+poll_interval_seconds: 30
+
+# Mudbrick is vanilla HTML/CSS/JS — no build step, no bundler.
+# No verify commands needed. Add linting if you introduce one later.
+# verify:
+#   - "npx eslint js/"
+
+default_agent_backend: "claude-code"
+
+agent_backends:
+  claude-code:
+    type: command
+    command: >-
+      claude --dangerously-skip-permissions
+      -p "You are working on issue #{issue_number}: {title}.
+      The issue is at {issue_url}. Read the issue body and implement the task.
+      This is a vanilla HTML/CSS/JS project with no build step.
+      All JS lives in js/, styles in styles/, and the app shell is index.html.
+      When done, create a commit with your changes."
+      --output-format stream-json 2>&1 | tee {log_dir}/agent.log
