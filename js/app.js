@@ -21,7 +21,7 @@ import {
 import {
   resetPdfLib, ensurePdfLib, rotatePage, deletePage,
   reorderPages, mergePDFs, splitPDF, addWatermark, appendPages,
-  insertBlankPage, cropPages, getPageDimensions, replacePages,
+  insertBlankPage, cropPages, replacePages,
 } from './pdf-edit.js';
 
 import {
@@ -33,6 +33,7 @@ import {
   duplicateSelected, copySelected, pasteClipboard,
   lockSelected, unlockSelected, isSelectionLocked,
   getAllStickyNotes, updateSelectedNoteText, setOnStickyNoteSelected,
+  addAnnotationToPage,
 } from './annotations.js';
 
 import { exportAnnotatedPDF } from './export.js';
@@ -169,6 +170,8 @@ async function boot() {
 
     // Wire up all UI events
     wireEvents();
+    initDropdownMenus();
+    initModalFocusTrapping();
 
     // Replace emoji placeholders with SVG icons
     replaceIcons();
@@ -195,7 +198,8 @@ async function boot() {
       clearRecentFiles();
     });
 
-    console.log('Mudbrick ready');
+    // Offline detection
+    initOfflineIndicator();
   } catch (e) {
     console.error('Boot failed:', e);
     toast('Failed to initialize PDF engine. Please refresh.', 'error');
@@ -297,7 +301,7 @@ async function handleFiles(files) {
     return;
   }
 
-  showLoading();
+  showLoading('Opening file…');
   try {
     if (isImage) {
       const pdfBytes = await createPDFFromImages([file], { pageSize: 'fit' });
@@ -547,6 +551,9 @@ function goToPage(pageNum) {
   // Scroll thumbnail into view
   const thumb = DOM.thumbnailList.querySelector(`[data-page="${clamped}"]`);
   if (thumb) thumb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+
+  // Scroll canvas area to top on page change
+  DOM.canvasArea.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
 function prevPage() { goToPage(State.currentPage - 1); }
@@ -1091,7 +1098,7 @@ function showContextMenu(e, pageNum) {
 
     // Insert blank page
     if (action === 'insert-blank') {
-      showLoading();
+      showLoading('Inserting page…');
       try {
         const newBytes = await insertBlankPage(State.pdfBytes, idx);
         State.currentPage = pageNum + 1; // navigate to the new blank page
@@ -1124,7 +1131,7 @@ function showContextMenu(e, pageNum) {
 
     // Duplicate page via pdf-lib
     if (action === 'duplicate') {
-      showLoading();
+      showLoading('Duplicating page…');
       try {
         const PDFLib = window.PDFLib;
         const doc = await PDFLib.PDFDocument.load(State.pdfBytes, { ignoreEncryption: true });
@@ -1143,7 +1150,7 @@ function showContextMenu(e, pageNum) {
       return;
     }
 
-    showLoading();
+    showLoading('Editing page…');
     try {
       let newBytes;
       switch (action) {
@@ -1348,7 +1355,7 @@ function renderMergeFileList() {
 
 async function executeMerge() {
   if (mergeFiles.length < 2) return;
-  showLoading();
+  showLoading('Merging PDFs…');
   try {
     const fileList = mergeFiles.map(f => ({ bytes: f.bytes }));
     const mergedBytes = await mergePDFs(fileList);
@@ -1410,7 +1417,7 @@ async function executeSplit() {
   const ranges = parsePageRanges(input, State.totalPages);
   if (!ranges) return;
 
-  showLoading();
+  showLoading('Splitting PDF…');
   try {
     const results = await splitPDF(State.pdfBytes, ranges);
     closeSplitModal();
@@ -1454,7 +1461,7 @@ function updateStatusBar() {
 async function handlePrint() {
   if (!State.pdfDoc) return;
 
-  showLoading();
+  showLoading('Preparing to print…');
   try {
     // Save current page annotations before printing
     savePageAnnotations(State.currentPage);
@@ -1530,7 +1537,7 @@ async function handlePrint() {
   } catch (err) {
     console.error('Print failed:', err);
     hideLoading();
-    showToast('Print failed: ' + err.message, 'error');
+    toast('Print failed: ' + err.message, 'error');
   }
 }
 
@@ -1538,7 +1545,7 @@ async function handlePrint() {
 
 async function handleExport() {
   if (!State.pdfBytes) return;
-  showLoading();
+  showLoading('Exporting PDF…');
   try {
     // Write form field values into the source bytes before export
     let exportBytes = State.pdfBytes;
@@ -1585,7 +1592,7 @@ async function executeWatermark() {
   const text = $('watermark-text').value.trim();
   if (!text) { toast('Enter watermark text', 'warning'); return; }
 
-  showLoading();
+  showLoading('Applying watermark…');
   try {
     const newBytes = await addWatermark(State.pdfBytes, {
       text,
@@ -1659,7 +1666,7 @@ async function executeBates() {
     }
   }
 
-  showLoading();
+  showLoading('Applying Bates numbers…');
   try {
     const { bytes, firstLabel, lastLabel } = await applyBatesNumbers(State.pdfBytes, {
       prefix: $('bates-prefix').value,
@@ -1778,7 +1785,7 @@ async function executeHeadersFooters() {
     return;
   }
 
-  showLoading();
+  showLoading('Applying headers & footers…');
   try {
     const bytes = await applyHeadersFooters(State.pdfBytes, {
       topLeft: $('hf-top-left').value,
@@ -1821,17 +1828,28 @@ const cropState = {
 async function openCropModal() {
   if (!State.pdfBytes || cropState.active) return;
 
-  // Get page dimensions
-  const dims = await getPageDimensions(State.pdfBytes, State.currentPage - 1);
-  cropState.pdfW = dims.width;
-  cropState.pdfH = dims.height;
+  // Get effective page dimensions via PDF.js viewport (handles rotation & CropBox)
+  const pdfPage = await State.pdfDoc.getPage(State.currentPage);
+  const vp1 = pdfPage.getViewport({ scale: 1 });
+  cropState.pdfW = vp1.width;
+  cropState.pdfH = vp1.height;
 
-  // Get rendered page size
-  const canvas = DOM.pdfCanvas;
-  cropState.pageW = canvas.clientWidth;
-  cropState.pageH = canvas.clientHeight;
+  // Auto-collapse sidebar on tablet to avoid overlap
+  cropState._sidebarWasOpen = State.sidebarOpen;
+  if (window.innerWidth <= 768 && State.sidebarOpen) {
+    toggleSidebar();
+  }
 
-  // Default crop: inset 10% from each edge
+  // Show overlay first so we can measure it
+  $('crop-overlay').classList.remove('hidden');
+  $('crop-bar').classList.remove('hidden');
+
+  // Use overlay dimensions for coordinate system consistency
+  const overlay = $('crop-overlay');
+  cropState.pageW = overlay.offsetWidth;
+  cropState.pageH = overlay.offsetHeight;
+
+  // Default crop: inset 5% from each edge
   const inset = 0.05;
   cropState.x = Math.round(cropState.pageW * inset);
   cropState.y = Math.round(cropState.pageH * inset);
@@ -1839,9 +1857,6 @@ async function openCropModal() {
   cropState.h = Math.round(cropState.pageH * (1 - 2 * inset));
   cropState.active = true;
 
-  // Show overlay & bar
-  $('crop-overlay').classList.remove('hidden');
-  $('crop-bar').classList.remove('hidden');
   updateCropOverlay();
   updateCropInfo();
 }
@@ -1851,6 +1866,12 @@ function closeCropModal() {
   $('crop-overlay').classList.add('hidden');
   $('crop-bar').classList.add('hidden');
   $('crop-modal-backdrop').classList.add('hidden');
+
+  // Restore sidebar if it was open before crop
+  if (cropState._sidebarWasOpen && !State.sidebarOpen) {
+    toggleSidebar();
+  }
+  cropState._sidebarWasOpen = false;
 }
 
 function updateCropOverlay() {
@@ -1920,31 +1941,30 @@ function setCropFromPreset(topPt, bottomPt, leftPt, rightPt) {
 
 function initCropDragHandlers() {
   const overlay = $('crop-overlay');
-  const sel = overlay.querySelector('.crop-selection');
   let dragMode = null; // 'move' | handle name
   let startMX = 0, startMY = 0;
   let startRect = {};
 
-  overlay.addEventListener('mousedown', e => {
-    if (!cropState.active) return;
-    const handle = e.target.closest('.crop-handle');
+  function beginDrag(target, clientX, clientY) {
+    if (!cropState.active) return false;
+    const handle = target.closest('.crop-handle');
     if (handle) {
       dragMode = handle.dataset.handle;
-    } else if (e.target.closest('.crop-selection')) {
+    } else if (target.closest('.crop-selection')) {
       dragMode = 'move';
     } else {
-      return;
+      return false;
     }
-    startMX = e.clientX;
-    startMY = e.clientY;
+    startMX = clientX;
+    startMY = clientY;
     startRect = { x: cropState.x, y: cropState.y, w: cropState.w, h: cropState.h };
-    e.preventDefault();
-  });
+    return true;
+  }
 
-  document.addEventListener('mousemove', e => {
+  function applyDrag(clientX, clientY) {
     if (!dragMode || !cropState.active) return;
-    const dx = e.clientX - startMX;
-    const dy = e.clientY - startMY;
+    const dx = clientX - startMX;
+    const dy = clientY - startMY;
     const { pageW, pageH } = cropState;
     const MIN = 20;
 
@@ -1975,11 +1995,31 @@ function initCropDragHandlers() {
     cropState.h = h;
     updateCropOverlay();
     updateCropInfo();
-  });
+  }
 
-  document.addEventListener('mouseup', () => {
+  function endDrag() {
     dragMode = null;
+  }
+
+  // Mouse events
+  overlay.addEventListener('mousedown', e => {
+    if (beginDrag(e.target, e.clientX, e.clientY)) e.preventDefault();
   });
+  document.addEventListener('mousemove', e => applyDrag(e.clientX, e.clientY));
+  document.addEventListener('mouseup', endDrag);
+
+  // Touch events
+  overlay.addEventListener('touchstart', e => {
+    const t = e.touches[0];
+    if (beginDrag(e.target, t.clientX, t.clientY)) e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchmove', e => {
+    if (!dragMode) return;
+    const t = e.touches[0];
+    applyDrag(t.clientX, t.clientY);
+    e.preventDefault();
+  }, { passive: false });
+  document.addEventListener('touchend', endDrag);
 }
 
 async function executeCrop() {
@@ -1997,7 +2037,7 @@ async function executeCrop() {
 
   const scope = $('crop-scope').value;
 
-  showLoading();
+  showLoading('Cropping pages…');
   try {
     const bytes = await cropPages(State.pdfBytes, {
       top, bottom, left, right,
@@ -2061,7 +2101,7 @@ function readFileAsDataUrl(file) {
  */
 async function handleAddPages(files, insertAfter) {
   if (!State.pdfBytes || !files.length) return;
-  showLoading();
+  showLoading('Adding pages…');
   try {
     const additions = [];
     let totalNewPages = 0;
@@ -2237,6 +2277,260 @@ function refreshNotesSidebar() {
   // Update badge count
   const badge = document.querySelector('.sidebar-tab[data-sidebar="notes"] .sidebar-tab-label');
   if (badge) badge.dataset.count = notes.length;
+}
+
+/* ═══════════════════ Modal Focus Trapping ═══════════════════ */
+
+let _focusTrapCleanup = null;
+let _previousFocus = null;
+
+function trapFocus(modalEl) {
+  _previousFocus = document.activeElement;
+  const focusable = modalEl.querySelectorAll(
+    'button:not([disabled]), input:not([disabled]):not([hidden]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  if (focusable.length === 0) return;
+
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+
+  // Focus the first element
+  setTimeout(() => first.focus(), 50);
+
+  const onKeyDown = (e) => {
+    if (e.key !== 'Tab') return;
+    if (e.shiftKey) {
+      if (document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      if (document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+  };
+
+  modalEl.addEventListener('keydown', onKeyDown);
+  _focusTrapCleanup = () => {
+    modalEl.removeEventListener('keydown', onKeyDown);
+  };
+}
+
+function releaseFocus() {
+  if (_focusTrapCleanup) {
+    _focusTrapCleanup();
+    _focusTrapCleanup = null;
+  }
+  if (_previousFocus && _previousFocus.focus) {
+    _previousFocus.focus();
+    _previousFocus = null;
+  }
+}
+
+/* ═══════════════════ Offline Indicator ═══════════════════ */
+
+function initOfflineIndicator() {
+  const badge = $('status-offline');
+  if (!badge) return;
+
+  const update = () => {
+    if (navigator.onLine) {
+      badge.classList.add('hidden');
+    } else {
+      badge.classList.remove('hidden');
+    }
+  };
+
+  update();
+  window.addEventListener('online', () => {
+    update();
+    toast('Back online', 'success', 2000);
+  });
+  window.addEventListener('offline', () => {
+    update();
+    toast('You are offline — your work is safe locally', 'warning', 4000);
+  });
+}
+
+/* ═══════════════════ Unsaved Changes Indicator ═══════════════════ */
+
+function updateUnsavedIndicator() {
+  const dot = $('status-unsaved');
+  if (!dot) return;
+  const hasUnsaved = State.pdfBytes && hasAnnotations && hasAnnotations();
+  dot.classList.toggle('hidden', !hasUnsaved);
+}
+
+function initModalFocusTrapping() {
+  // Observe all modal backdrops for visibility changes
+  document.querySelectorAll('.modal-backdrop').forEach(backdrop => {
+    const observer = new MutationObserver(() => {
+      if (!backdrop.classList.contains('hidden')) {
+        const modal = backdrop.querySelector('.modal, .modal-panel');
+        if (modal) trapFocus(modal);
+      } else {
+        releaseFocus();
+      }
+    });
+    observer.observe(backdrop, { attributes: true, attributeFilter: ['class'] });
+  });
+}
+
+/* ═══════════════════ Title Bar Dropdown Menus ═══════════════════ */
+
+let _activeDropdown = null;
+
+function closeDropdown() {
+  if (_activeDropdown) {
+    _activeDropdown.remove();
+    _activeDropdown = null;
+  }
+  document.querySelectorAll('.menu-item.active').forEach(el => el.classList.remove('active'));
+}
+
+function openDropdown(menuBtn, items) {
+  closeDropdown();
+  hideContextMenu();
+
+  menuBtn.classList.add('active');
+  const rect = menuBtn.getBoundingClientRect();
+  const menu = document.createElement('div');
+  menu.className = 'dropdown-menu';
+
+  for (const item of items) {
+    if (item === '---') {
+      const sep = document.createElement('div');
+      sep.className = 'dropdown-menu-separator';
+      menu.appendChild(sep);
+      continue;
+    }
+    const btn = document.createElement('button');
+    const needsDoc = item.needsDoc !== false;
+    btn.disabled = needsDoc && !State.pdfBytes;
+    btn.innerHTML = `${icon(item.icon, 14)}<span>${item.label}</span>${item.shortcut ? `<span class="shortcut-hint">${item.shortcut}</span>` : ''}`;
+    btn.addEventListener('click', () => {
+      closeDropdown();
+      item.action();
+    });
+    menu.appendChild(btn);
+  }
+
+  menu.style.left = rect.left + 'px';
+  menu.style.top = rect.bottom + 'px';
+  document.body.appendChild(menu);
+
+  // Keep menu within viewport
+  const menuRect = menu.getBoundingClientRect();
+  if (menuRect.right > window.innerWidth) {
+    menu.style.left = (window.innerWidth - menuRect.width - 8) + 'px';
+  }
+
+  _activeDropdown = menu;
+
+  // Close on click outside
+  const onOutsideClick = (e) => {
+    if (!menu.contains(e.target) && !e.target.closest('.menu-item')) {
+      closeDropdown();
+      document.removeEventListener('mousedown', onOutsideClick);
+    }
+  };
+  setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
+
+  // Close on Escape
+  const onKey = (e) => {
+    if (e.key === 'Escape') {
+      closeDropdown();
+      document.removeEventListener('keydown', onKey);
+    }
+  };
+  document.addEventListener('keydown', onKey);
+}
+
+function getMenuDefinitions() {
+  return {
+    'File': [
+      { icon: 'folder-open', label: 'Open', shortcut: 'Ctrl+O', needsDoc: false, action: () => DOM.fileInput.click() },
+      { icon: 'save', label: 'Export', shortcut: 'Ctrl+S', action: handleExport },
+      { icon: 'printer', label: 'Print', shortcut: 'Ctrl+P', action: handlePrint },
+      '---',
+      { icon: 'download', label: 'Export as Image', action: () => $('btn-export-image').click() },
+    ],
+    'Edit': [
+      { icon: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', action: handleUndo },
+      { icon: 'redo', label: 'Redo', shortcut: 'Ctrl+Y', action: handleRedo },
+      '---',
+      { icon: 'search', label: 'Find', shortcut: 'Ctrl+F', action: openFindBar },
+      { icon: 'trash', label: 'Delete Selection', shortcut: 'Del', action: deleteSelected },
+    ],
+    'View': [
+      { icon: 'zoom-in', label: 'Zoom In', shortcut: '+', action: zoomIn },
+      { icon: 'zoom-out', label: 'Zoom Out', shortcut: '−', action: zoomOut },
+      { icon: 'columns', label: 'Fit Width', action: fitWidth },
+      { icon: 'maximize', label: 'Fit Page', action: fitPage },
+      '---',
+      { icon: 'panel-left-open', label: 'Toggle Sidebar', action: toggleSidebar },
+      { icon: 'moon', label: 'Toggle Dark Mode', needsDoc: false, action: toggleDarkMode },
+    ],
+    'Insert': [
+      { icon: 'type', label: 'Text', shortcut: 'T', action: () => setTool('text') },
+      { icon: 'image', label: 'Image', action: handleImageInsert },
+      { icon: 'pen-tool', label: 'Signature', action: () => $('btn-signature').click() },
+      { icon: 'stamp', label: 'Stamp', action: () => setTool('stamp') },
+      { icon: 'droplet', label: 'Watermark', action: openWatermarkModal },
+      '---',
+      { icon: 'file-plus', label: 'Blank Page', action: () => $('btn-insert-blank').click() },
+    ],
+    'Tools': [
+      { icon: 'link', label: 'Merge', action: openMergeModal },
+      { icon: 'scissors', label: 'Split', action: openSplitModal },
+      '---',
+      { icon: 'file-scan', label: 'OCR', action: () => $('btn-ocr').click() },
+      { icon: 'git-compare', label: 'Compare', action: () => $('btn-compare').click() },
+      { icon: 'shrink', label: 'Optimize', action: () => $('btn-optimize').click() },
+      '---',
+      { icon: 'lock', label: 'Encrypt', action: () => $('btn-encrypt').click() },
+      { icon: 'shield-off', label: 'Redact Search', action: () => $('btn-redact-search').click() },
+      { icon: 'eye-off', label: 'Sanitize', action: () => $('btn-sanitize')?.click() },
+    ],
+    'Help': [
+      { icon: 'info', label: 'Keyboard Shortcuts', shortcut: '?', needsDoc: false, action: openShortcutsModal },
+      '---',
+      { icon: 'zap', label: 'About Mudbrick', needsDoc: false, action: openAboutModal },
+    ],
+  };
+}
+
+function openShortcutsModal() {
+  $('shortcuts-modal-backdrop').classList.remove('hidden');
+}
+
+function openAboutModal() {
+  $('about-modal-backdrop').classList.remove('hidden');
+}
+
+function initDropdownMenus() {
+  const defs = getMenuDefinitions();
+  document.querySelectorAll('.menu-item').forEach(btn => {
+    const label = btn.textContent.trim();
+    const items = defs[label];
+    if (!items) return;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (_activeDropdown && btn.classList.contains('active')) {
+        closeDropdown();
+      } else {
+        openDropdown(btn, items);
+      }
+    });
+    // Open on hover when another menu is already open
+    btn.addEventListener('mouseenter', () => {
+      if (_activeDropdown) {
+        openDropdown(btn, items);
+      }
+    });
+  });
 }
 
 /* ═══════════════════ Event Wiring ═══════════════════ */
@@ -2426,6 +2720,8 @@ function wireEvents() {
       if (modal === 'form-data') $('form-data-modal-backdrop').classList.add('hidden');
       if (modal === 'exhibit') $('exhibit-modal-backdrop').classList.add('hidden');
       if (modal === 'sanitize') $('sanitize-modal-backdrop').classList.add('hidden');
+      if (modal === 'shortcuts') $('shortcuts-modal-backdrop').classList.add('hidden');
+      if (modal === 'about') $('about-modal-backdrop').classList.add('hidden');
       if (modal === 'page-labels') {
         $('page-labels-modal-backdrop').classList.add('hidden');
         // Restore previously saved ranges on cancel
@@ -2434,6 +2730,14 @@ function wireEvents() {
       }
       if (modal === 'replace-pages') $('replace-pages-modal-backdrop').classList.add('hidden');
     });
+  });
+
+  // Close modal on backdrop click (click on the overlay, not the dialog content)
+  document.addEventListener('click', e => {
+    if (e.target.classList.contains('modal-backdrop') && !e.target.classList.contains('hidden')) {
+      const closeBtn = e.target.querySelector('[data-close-modal]');
+      if (closeBtn) closeBtn.click();
+    }
   });
 
   // Annotation tool buttons (sync active state across all ribbon panels)
@@ -2648,7 +2952,7 @@ function wireEvents() {
   // Edit ribbon — Insert Blank Page
   $('btn-insert-blank').addEventListener('click', async () => {
     if (!State.pdfBytes) return;
-    showLoading();
+    showLoading('Inserting page…');
     try {
       const newBytes = await insertBlankPage(State.pdfBytes, State.currentPage - 1);
       await reloadAfterEdit(newBytes);
@@ -2734,11 +3038,17 @@ function wireEvents() {
     // Also refresh notes sidebar after any annotation modification
     canvas.on('object:modified', () => {
       refreshNotesSidebar();
+      updateUnsavedIndicator();
+    });
+
+    canvas.on('object:added', () => {
+      updateUnsavedIndicator();
     });
 
     canvas.on('object:removed', () => {
       refreshNotesSidebar();
       hideNotePropsPanel();
+      updateUnsavedIndicator();
     });
   }, 500);
 
@@ -2933,12 +3243,27 @@ function wireEvents() {
 
   $('btn-optimize').addEventListener('click', () => {
     $('optimize-result').textContent = '';
+    $('optimize-result').classList.add('hidden');
     $('optimize-modal-backdrop').classList.remove('hidden');
   });
   $('btn-optimize-execute').addEventListener('click', executeOptimize);
   $('optimize-quality')?.addEventListener('input', (e) => {
     const display = $('optimize-quality-val');
     if (display) display.textContent = e.target.value + '%';
+  });
+  // Show/hide custom options based on preset
+  $('optimize-preset')?.addEventListener('change', (e) => {
+    const customOpts = $('optimize-custom-opts');
+    if (customOpts) customOpts.classList.toggle('hidden', e.target.value !== 'custom');
+  });
+  // Update hint text when mode changes
+  $('optimize-mode')?.addEventListener('change', (e) => {
+    const hint = $('optimize-mode-hint');
+    if (hint) {
+      hint.textContent = e.target.value === 'smart'
+        ? 'Smart mode preserves text, links, and fonts on text-only pages. Only image-heavy pages are recompressed.'
+        : 'Aggressive mode rasterizes all pages as JPEG. Text will become non-selectable.';
+    }
   });
 
   $('btn-compare').addEventListener('click', () => {
@@ -3120,7 +3445,7 @@ async function executeEncrypt() {
   const ownerPwd = $('encrypt-owner-pw').value.trim();
   if (!userPwd && !ownerPwd) { toast('Enter at least one password', 'error'); return; }
 
-  showLoading();
+  showLoading('Encrypting PDF…');
   try {
     const permissions = {
       printing: $('perm-print').checked,
@@ -3161,7 +3486,7 @@ async function openMetadataModal() {
 
 async function executeMetadataSave() {
   if (!State.pdfBytes) return;
-  showLoading();
+  showLoading('Saving metadata…');
   try {
     const fields = {
       title: $('meta-title').value,
@@ -3183,7 +3508,7 @@ async function executeMetadataSave() {
 async function executeMetadataRemove() {
   if (!State.pdfBytes) return;
   if (!confirm('Remove all metadata from this document?')) return;
-  showLoading();
+  showLoading('Removing metadata…');
   try {
     const newBytes = await removeMetadata(State.pdfBytes);
     await reloadAfterEdit(newBytes);
@@ -3211,7 +3536,7 @@ async function executeRedactSearch() {
   }
   if (customPattern && !patternNames.includes('custom')) patternNames.push('custom');
 
-  showLoading();
+  showLoading('Searching for redaction patterns…');
   try {
     _redactMatches = await searchPatterns(State.pdfDoc, patternNames, customPattern);
     const container = $('redact-results-list');
@@ -3221,9 +3546,9 @@ async function executeRedactSearch() {
       $('btn-redact-apply').classList.add('hidden');
     } else {
       container.innerHTML = _redactMatches.map((m, i) =>
-        `<label style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:1px solid var(--border);">
+        `<label class="redact-match-label">
           <input type="checkbox" checked data-redact-idx="${i}">
-          <span style="font-size:12px;"><strong>Page ${m.pageNum}</strong> — ${escapeHtml(m.text)} <em>(${m.pattern})</em></span>
+          <span class="redact-match-text"><strong>Page ${m.pageNum}</strong> — ${escapeHtml(m.text)} <em>(${m.pattern})</em></span>
         </label>`
       ).join('');
       $('btn-redact-apply').classList.remove('hidden');
@@ -3247,23 +3572,24 @@ function executeRedactApply() {
     const idx = parseInt(cb.dataset.redactIdx);
     const match = _redactMatches[idx];
     if (!match) continue;
-    // Create redaction rects via annotations on the matching page
+    // Create redaction rects on the matching page
     for (const rect of match.rects) {
-      // Save current page, switch to target page, add rect, switch back
-      savePageAnnotations(State.currentPage);
-      // We add a Fabric rect for each match rect
+      const rectProps = {
+        type: 'rect',
+        left: rect.x,
+        top: rect.y,
+        width: rect.width,
+        height: rect.height,
+        fill: '#000000',
+        opacity: 1,
+        selectable: true,
+        mudbrickType: 'redact',
+      };
       if (match.pageNum === State.currentPage) {
-        const fabricRect = new window.fabric.Rect({
-          left: rect.x,
-          top: rect.y,
-          width: rect.width,
-          height: rect.height,
-          fill: '#000000',
-          opacity: 1,
-          selectable: true,
-          mudbrickType: 'redact',
-        });
-        canvas.add(fabricRect);
+        canvas.add(new window.fabric.Rect(rectProps));
+      } else {
+        // Add directly to the page's annotation store
+        addAnnotationToPage(match.pageNum, rectProps);
       }
       applied++;
     }
@@ -3294,7 +3620,7 @@ async function executeExportImage() {
     pages = rangeInput ? parsePageRanges(rangeInput.value, State.totalPages) : [State.currentPage];
   }
 
-  showLoading();
+  showLoading('Exporting images…');
   try {
     await exportPagesToImages(State.pdfDoc, pages, {
       format, dpi, quality, fileName: State.fileName,
@@ -3315,9 +3641,9 @@ function addImagesToList(files) {
   _imagesToPdf.push(...files);
   const list = $('images-file-list');
   list.innerHTML = _imagesToPdf.map((f, i) =>
-    `<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid var(--border);">
-      <span style="font-size:12px;">${escapeHtml(f.name)} (${formatFileSize(f.size)})</span>
-      <button onclick="this.parentElement.remove(); window._removeImageFromPdf(${i})" style="background:none;border:none;cursor:pointer;color:var(--danger);">&times;</button>
+    `<div class="image-file-row">
+      <span class="image-file-name">${escapeHtml(f.name)} (${formatFileSize(f.size)})</span>
+      <button onclick="this.parentElement.remove(); window._removeImageFromPdf(${i})" class="image-file-remove">&times;</button>
     </div>`
   ).join('');
 }
@@ -3328,7 +3654,7 @@ async function executeCreateFromImages() {
   const pageSize = $('images-page-size')?.value || 'fit';
   const margin = parseInt($('images-margin')?.value) || 0;
 
-  showLoading();
+  showLoading('Creating PDF from images…');
   try {
     const pdfBytes = await createPDFFromImages(_imagesToPdf, { pageSize, margin }, (done, total) => {
       $('loading-text').textContent = `Processing image ${done}/${total}...`;
@@ -3347,21 +3673,43 @@ async function executeCreateFromImages() {
 /* ── Optimize PDF ── */
 async function executeOptimize() {
   if (!State.pdfDoc || !State.pdfBytes) return;
-  const dpi = parseInt($('optimize-dpi')?.value) || 150;
-  const quality = parseFloat($('optimize-quality')?.value) || 0.75;
 
-  showLoading();
+  const mode = $('optimize-mode')?.value || 'smart';
+  const preset = $('optimize-preset')?.value || 'ebook';
+
+  // For custom preset, read DPI and quality from the controls
+  const dpi = preset === 'custom' ? (parseInt($('optimize-dpi')?.value) || 150) : undefined;
+  const quality = preset === 'custom' ? ((parseFloat($('optimize-quality')?.value) || 75) / 100) : undefined;
+
+  showLoading('Analyzing pages…');
   try {
     const originalSize = State.pdfBytes.length;
-    const newBytes = await optimizePDF(State.pdfDoc, State.pdfBytes, { dpi, quality }, (done, total) => {
-      $('loading-text').textContent = `Optimizing page ${done}/${total}...`;
+    const opts = { mode };
+    if (preset === 'custom') {
+      opts.dpi = dpi;
+      opts.quality = quality;
+    } else {
+      opts.preset = preset;
+    }
+
+    const newBytes = await optimizePDF(State.pdfDoc, State.pdfBytes, opts, (done, total, label) => {
+      $('loading-text').textContent = `${label === 'compressing' ? 'Compressing' : 'Copying'} page ${done}/${total}…`;
     });
+
     const saved = originalSize - newBytes.length;
     const pct = ((saved / originalSize) * 100).toFixed(1);
-    $('optimize-result').textContent = `Original: ${formatFileSize(originalSize)} → Optimized: ${formatFileSize(newBytes.length)} (${pct}% smaller)`;
+    const stats = newBytes._optimizeStats || {};
+    let resultText = `Original: ${formatFileSize(originalSize)} → Optimized: ${formatFileSize(newBytes.length)} (${pct}% ${saved > 0 ? 'smaller' : 'larger'})`;
+    if (mode === 'smart' && stats.preserved > 0) {
+      resultText += `\n${stats.preserved} text page${stats.preserved > 1 ? 's' : ''} preserved, ${stats.rasterized} image page${stats.rasterized > 1 ? 's' : ''} compressed`;
+    }
+
+    const resultEl = $('optimize-result');
+    resultEl.textContent = resultText;
+    resultEl.classList.remove('hidden');
 
     await reloadAfterEdit(newBytes);
-    toast(`Optimized — saved ${formatFileSize(saved)} (${pct}%)`, 'success');
+    toast(`Optimized — saved ${formatFileSize(Math.max(0, saved))} (${pct}%)`, saved > 0 ? 'success' : 'info');
   } catch (err) {
     toast('Optimization failed: ' + err.message, 'error');
   } finally {
@@ -3391,7 +3739,7 @@ async function executeCompare() {
   const dpi = parseInt($('compare-dpi')?.value) || 96;
   const threshold = parseInt($('compare-threshold')?.value) || 30;
 
-  showLoading();
+  showLoading('Comparing documents…');
   try {
     _compareResults = await compareDocuments(State.pdfDoc, _compareDocB, { dpi, threshold }, (page, total) => {
       $('loading-text').textContent = `Comparing page ${page}/${total}...`;
@@ -3469,7 +3817,7 @@ function downloadCommentSummary() {
 async function executeFlattenAnnotations() {
   if (!State.pdfBytes) return;
   if (!confirm('Flatten all annotations into the PDF permanently? This cannot be undone.')) return;
-  showLoading();
+  showLoading('Flattening annotations…');
   try {
     const result = await flattenAnnotations({
       pdfBytes: State.pdfBytes,
@@ -3522,7 +3870,7 @@ async function showTabOrder() {
 async function executeFormFlatten() {
   if (!State.pdfLibDoc) return;
   if (!confirm('Flatten all form fields? They will become non-editable.')) return;
-  showLoading();
+  showLoading('Flattening form fields…');
   try {
     const newBytes = await flattenFormFields(State.pdfLibDoc);
     await reloadAfterEdit(newBytes);
@@ -3537,7 +3885,7 @@ async function executeFormFlatten() {
 /* ── Form Data Import/Export ── */
 async function executeFormDataImport() {
   if (!State.pdfLibDoc || !_formDataFile) { toast('Select a file to import', 'error'); return; }
-  showLoading();
+  showLoading('Importing form data…');
   try {
     const text = await _formDataFile.text();
     const ext = _formDataFile.name.split('.').pop().toLowerCase();
@@ -3657,7 +4005,7 @@ function openSanitizeModal() {
 
 async function executeSanitize() {
   if (!State.pdfBytes) return;
-  showLoading();
+  showLoading('Sanitizing document…');
   try {
     const result = await sanitizeDocument(State.pdfBytes);
     await reloadAfterEdit(result.bytes);
@@ -3718,17 +4066,16 @@ function addLabelRangeRow(evt, prefill) {
   const row = document.createElement('div');
   row.className = 'label-range-row';
   row.dataset.rangeIdx = idx;
-  row.style.cssText = 'display:flex;gap:6px;align-items:center;padding:6px 8px;background:var(--mb-surface-secondary);border-radius:var(--mb-radius-sm);font-size:12px;';
   row.innerHTML = `
     <label style="min-width:40px;">Pages</label>
-    <input type="number" class="label-start" value="${startVal}" min="1" max="${State.totalPages}" style="width:52px;padding:4px;">
+    <input type="number" class="label-start label-range-input" value="${startVal}" min="1" max="${State.totalPages}">
     <span>–</span>
-    <input type="number" class="label-end" value="${endVal}" min="1" max="${State.totalPages}" style="width:52px;padding:4px;">
-    <select class="label-format" style="padding:4px;">${fmtOptions}</select>
-    <input type="text" class="label-prefix" value="${escapeHtml(prefixVal)}" placeholder="Prefix" style="width:52px;padding:4px;">
-    <label style="font-size:11px;">Start#</label>
-    <input type="number" class="label-startnum" value="${startNumVal}" min="1" style="width:44px;padding:4px;">
-    <button class="btn-remove-range" title="Remove" style="background:none;border:none;color:var(--mb-text-muted);cursor:pointer;font-size:16px;padding:2px 4px;">&times;</button>
+    <input type="number" class="label-end label-range-input" value="${endVal}" min="1" max="${State.totalPages}">
+    <select class="label-format label-range-select">${fmtOptions}</select>
+    <input type="text" class="label-prefix label-range-prefix" value="${escapeHtml(prefixVal)}" placeholder="Prefix">
+    <label class="label-range-startlabel">Start#</label>
+    <input type="number" class="label-startnum label-range-startnum" value="${startNumVal}" min="1">
+    <button class="btn-remove-range label-range-remove" title="Remove">&times;</button>
   `;
 
   row.querySelector('.btn-remove-range').addEventListener('click', () => {
@@ -3761,13 +4108,13 @@ function updateLabelsPreview() {
   const preview = previewLabels(Math.min(State.totalPages, 20));
   const container = $('page-labels-preview');
   container.innerHTML = preview.map(p =>
-    `<span style="display:inline-block;padding:2px 6px;margin:2px;background:var(--mb-surface);border:1px solid var(--mb-border);border-radius:3px;font-size:12px;">
+    `<span class="label-preview-tag">
       <strong>${p.page}</strong>→${escapeHtml(p.label)}
     </span>`
   ).join('');
 
   if (State.totalPages > 20) {
-    container.innerHTML += `<span style="font-size:12px;color:var(--mb-text-muted);margin-left:4px">...and ${State.totalPages - 20} more</span>`;
+    container.innerHTML += `<span class="label-preview-more">...and ${State.totalPages - 20} more</span>`;
   }
 }
 
@@ -3851,7 +4198,7 @@ async function executeReplacePages() {
     return;
   }
 
-  showLoading();
+  showLoading('Replacing pages…');
   try {
     const newBytes = await replacePages(State.pdfBytes, _replaceSourceBytes, mappings);
     await reloadAfterEdit(newBytes);
@@ -3879,6 +4226,14 @@ function handleKeyboard(e) {
   // Don't intercept when typing in inputs, selects, or Fabric IText editing
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.target.contentEditable === 'true') return;
+
+  // ? key — show keyboard shortcuts (works without a PDF loaded)
+  if (e.key === '?' && !mod) {
+    e.preventDefault();
+    openShortcutsModal();
+    return;
+  }
+
   if (!State.pdfDoc) return;
 
   // Check if Fabric.js IText is being edited
@@ -3917,15 +4272,22 @@ function handleKeyboard(e) {
       deleteSelected();
       break;
 
-    // Escape: close find bar → deselect → switch to select tool
-    case e.key === 'Escape':
-      if (isFindOpen()) {
+    // Escape: close modal → close crop → close find bar → deselect → switch to select tool
+    case e.key === 'Escape': {
+      const openBackdrop = document.querySelector('.modal-backdrop:not(.hidden)');
+      if (openBackdrop) {
+        const closeBtn = openBackdrop.querySelector('[data-close-modal]');
+        if (closeBtn) closeBtn.click();
+      } else if (cropState.active) {
+        closeCropModal();
+      } else if (isFindOpen()) {
         closeFindBar();
       } else {
         if (canvas) canvas.discardActiveObject().renderAll();
         selectTool('select');
       }
       break;
+    }
 
     // Tool shortcuts (only when not editing text)
     case e.key === 'v' && !mod && !isEditingText:
@@ -4010,6 +4372,13 @@ function selectTool(toolName) {
   State.activeTool = toolName;
   setTool(toolName, { shapeType: 'rect', stampType: 'approved' });
   updatePanelToolTitle();
+  // Update status bar tool indicator
+  const toolLabel = $('status-tool');
+  if (toolLabel) {
+    const names = { select: 'Select', hand: 'Hand', text: 'Text', draw: 'Draw', highlight: 'Highlight', underline: 'Underline', strikethrough: 'Strikethrough', shape: 'Shape', cover: 'Cover', redact: 'Redact', stamp: 'Stamp', 'sticky-note': 'Note' };
+    toolLabel.textContent = 'Tool: ' + (names[toolName] || toolName);
+    toolLabel.classList.remove('hidden');
+  }
   // Show/hide tool properties section based on active tool
   const toolPropsEl = $('panel-tool-props');
   if (toolPropsEl) {
@@ -4042,7 +4411,7 @@ function selectTool(toolName) {
 window.Mudbrick = {
   /** Load a PDF from a URL (useful for testing and link sharing) */
   async loadFromURL(url) {
-    showLoading();
+    showLoading('Loading PDF from URL…');
     try {
       const resp = await fetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);

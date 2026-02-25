@@ -672,6 +672,18 @@ export function savePageAnnotations(pageNum) {
 }
 
 /**
+ * Directly inject a Fabric object JSON into a page's annotation store
+ * without needing to navigate to that page first.
+ * Used by multi-page operations like redaction.
+ */
+export function addAnnotationToPage(pageNum, objJSON) {
+  if (!pageAnnotations[pageNum]) {
+    pageAnnotations[pageNum] = { version: '5.3.0', objects: [] };
+  }
+  pageAnnotations[pageNum].objects.push(objJSON);
+}
+
+/**
  * Load annotations for the given page.
  * Call after resizeOverlay so dimensions are correct.
  */

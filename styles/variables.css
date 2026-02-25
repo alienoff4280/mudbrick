@@ -86,6 +86,11 @@
 
   /* Transitions */
   --mb-transition: 150ms ease;
+  --mb-transition-slow: 250ms ease;
+
+  /* Focus ring */
+  --mb-focus-ring: 0 0 0 2px var(--mb-accent);
+  --mb-focus-ring-offset: 0 0 0 3px var(--mb-surface);
 
   /* Z-index layers */
   --z-pdf-canvas: 1;
@@ -124,4 +129,6 @@ html[data-theme="dark"] {
   --mb-brand-tint-subtle: rgba(192, 57, 43, 0.12);
   --mb-scrollbar-thumb: rgba(255,255,255,0.2);
   --mb-scrollbar-thumb-hover: rgba(255,255,255,0.35);
+  --mb-focus-ring: 0 0 0 2px rgba(41,128,185,0.7);
+  --mb-focus-ring-offset: 0 0 0 3px var(--mb-surface);
 }

@@ -177,56 +177,163 @@ export async function createPDFFromImages(imageFiles, opts = {}, onProgress) {
 
 /* ═══════════════════ Page Optimization ═══════════════════ */
 
+/** Quality presets — maps preset name to {dpi, quality} */
+const PRESETS = {
+  screen:   { dpi: 72,  quality: 0.55 },
+  ebook:    { dpi: 150, quality: 0.72 },
+  print:    { dpi: 200, quality: 0.82 },
+  prepress: { dpi: 300, quality: 0.90 },
+};
+
 /**
- * Reduce PDF file size by re-rendering pages as compressed images.
- * This is a lossy operation — text becomes rasterized.
+ * Detect if a PDF page is image-heavy by checking its operator list.
+ * Returns { hasImages: bool, imageCount: number, imageArea: number }
+ */
+async function analyzePageContent(page, viewport) {
+  const ops = await page.getOperatorList();
+  const OPS = window.pdfjsLib.OPS;
+  let imageCount = 0;
+  let imageArea = 0;
+  const pageArea = viewport.width * viewport.height;
+  let ctm = [1, 0, 0, 1, 0, 0];
+  const ctmStack = [];
+
+  for (let i = 0; i < ops.fnArray.length; i++) {
+    const fn = ops.fnArray[i];
+    const args = ops.argsArray[i];
+
+    switch (fn) {
+      case OPS.save:
+        ctmStack.push([...ctm]);
+        break;
+      case OPS.restore:
+        if (ctmStack.length > 0) ctm = ctmStack.pop();
+        break;
+      case OPS.transform: {
+        const m = args;
+        ctm = [
+          ctm[0] * m[0] + ctm[2] * m[1],
+          ctm[1] * m[0] + ctm[3] * m[1],
+          ctm[0] * m[2] + ctm[2] * m[3],
+          ctm[1] * m[2] + ctm[3] * m[3],
+          ctm[0] * m[4] + ctm[2] * m[5] + ctm[4],
+          ctm[1] * m[4] + ctm[3] * m[5] + ctm[5],
+        ];
+        break;
+      }
+      case OPS.paintImageXObject:
+      case OPS.paintImageXObjectRepeat: {
+        const w = Math.abs(ctm[0]) || Math.abs(ctm[2]);
+        const h = Math.abs(ctm[3]) || Math.abs(ctm[1]);
+        if (w > 10 && h > 10) {
+          imageCount++;
+          imageArea += w * h;
+        }
+        break;
+      }
+    }
+  }
+
+  return {
+    hasImages: imageCount > 0,
+    imageCount,
+    imageAreaRatio: pageArea > 0 ? imageArea / pageArea : 0,
+  };
+}
+
+/**
+ * Reduce PDF file size with smart or aggressive optimization.
+ *
+ * Smart mode: Preserves text-only pages as-is (lossless), only re-renders
+ * image-heavy pages as compressed JPEG. This maintains text quality,
+ * searchability, links, and fonts while still achieving significant
+ * size reduction on image-heavy documents.
+ *
+ * Aggressive mode: Re-renders every page as JPEG (lossy, rasterizes text).
  *
  * @param {Object} pdfDoc - PDF.js document
  * @param {Uint8Array} pdfBytes - Original PDF bytes
  * @param {Object} opts
  * @param {number} opts.dpi - Render DPI (default 150)
  * @param {number} opts.quality - JPEG quality 0-1 (default 0.75)
- * @param {Function} [onProgress] - Progress callback
+ * @param {string} opts.mode - 'smart' or 'aggressive' (default 'smart')
+ * @param {string} opts.preset - Preset name (overrides dpi/quality if set)
+ * @param {Function} [onProgress] - Progress callback (done, total, pageLabel)
  * @returns {Promise<Uint8Array>} Optimized PDF bytes
  */
 export async function optimizePDF(pdfDoc, pdfBytes, opts = {}, onProgress) {
   const PDFLib = getPDFLib();
   if (!PDFLib) throw new Error('pdf-lib not loaded');
 
-  const { dpi = 150, quality = 0.75 } = opts;
-  const newDoc = await PDFLib.PDFDocument.create();
+  // Resolve preset → dpi/quality
+  const preset = opts.preset && PRESETS[opts.preset];
+  const dpi = preset ? preset.dpi : (opts.dpi || 150);
+  const quality = preset ? preset.quality : (opts.quality || 0.75);
+  const mode = opts.mode || 'smart';
+
   const pageCount = pdfDoc.numPages;
+  const sourceDoc = await PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+  const newDoc = await PDFLib.PDFDocument.create();
+
+  // Copy document metadata
+  newDoc.setTitle(sourceDoc.getTitle() || '');
+  newDoc.setAuthor(sourceDoc.getAuthor() || '');
+  newDoc.setSubject(sourceDoc.getSubject() || '');
+
+  let rasterized = 0;
+  let preserved = 0;
 
   for (let i = 1; i <= pageCount; i++) {
     const page = await pdfDoc.getPage(i);
-    const viewport = page.getViewport({ scale: dpi / 72 });
+    const origViewport = page.getViewport({ scale: 1 });
 
-    const canvas = document.createElement('canvas');
-    canvas.width = Math.floor(viewport.width);
-    canvas.height = Math.floor(viewport.height);
-    const ctx = canvas.getContext('2d');
+    let shouldRasterize = mode === 'aggressive';
 
-    await page.render({ canvasContext: ctx, viewport }).promise;
+    if (mode === 'smart') {
+      const analysis = await analyzePageContent(page, origViewport);
+      // Rasterize if images cover >15% of the page area
+      shouldRasterize = analysis.imageAreaRatio > 0.15;
+    }
 
-    // Convert to JPEG
-    const jpegBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
-    const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
+    if (shouldRasterize) {
+      // Re-render as compressed JPEG
+      const renderViewport = page.getViewport({ scale: dpi / 72 });
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.floor(renderViewport.width);
+      canvas.height = Math.floor(renderViewport.height);
+      const ctx = canvas.getContext('2d');
 
-    const image = await newDoc.embedJpg(jpegBytes);
-    const origPage = await pdfDoc.getPage(i);
-    const origViewport = origPage.getViewport({ scale: 1 });
+      await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
 
-    const newPage = newDoc.addPage([origViewport.width, origViewport.height]);
-    newPage.drawImage(image, {
-      x: 0, y: 0,
-      width: origViewport.width,
-      height: origViewport.height,
-    });
+      const jpegBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+      const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
 
-    onProgress?.(i, pageCount);
+      const image = await newDoc.embedJpg(jpegBytes);
+      const newPage = newDoc.addPage([origViewport.width, origViewport.height]);
+      newPage.drawImage(image, {
+        x: 0, y: 0,
+        width: origViewport.width,
+        height: origViewport.height,
+      });
+      rasterized++;
+
+      // Release canvas memory
+      canvas.width = canvas.height = 0;
+    } else {
+      // Copy page as-is (lossless) — preserves text, fonts, links
+      const [copiedPage] = await newDoc.copyPages(sourceDoc, [i - 1]);
+      newDoc.addPage(copiedPage);
+      preserved++;
+    }
+
+    onProgress?.(i, pageCount, shouldRasterize ? 'compressing' : 'copying');
   }
 
-  return newDoc.save();
+  const result = await newDoc.save();
+
+  // Attach stats to the result for reporting
+  result._optimizeStats = { rasterized, preserved, pageCount };
+  return result;
 }
 
 /* ═══════════════════ Helpers ═══════════════════ */

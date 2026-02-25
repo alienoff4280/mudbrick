@@ -4,7 +4,7 @@
  * cache-first for local assets.
  */
 
-const CACHE_VERSION = 'mudbrick-v3.0';
+const CACHE_VERSION = 'mudbrick-v3.1';
 
 /* App shell — local assets */
 const SHELL_ASSETS = [
@@ -27,6 +27,16 @@ const SHELL_ASSETS = [
   './js/pdf-edit.js',
   './js/history.js',
   './js/ocr.js',
+  './js/text-edit.js',
+  './js/security.js',
+  './js/export-image.js',
+  './js/form-creator.js',
+  './js/comment-summary.js',
+  './js/doc-compare.js',
+  './js/doc-history.js',
+  './js/exhibit-stamps.js',
+  './js/page-labels.js',
+  './js/redact-patterns.js',
 ];
 
 /* CDN assets (pre-cache the critical ones) */

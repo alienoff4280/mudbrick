@@ -20,12 +20,18 @@ export function toast(message, type = 'info', duration = 3500) {
 
 /* ── Loading Overlay ── */
 
-export function showLoading() {
-  document.getElementById('loading-overlay').classList.remove('hidden');
+export function showLoading(message = 'Processing…') {
+  const el = document.getElementById('loading-overlay');
+  const txt = document.getElementById('loading-text');
+  if (txt) txt.textContent = message;
+  el.classList.remove('hidden');
 }
 
 export function hideLoading() {
-  document.getElementById('loading-overlay').classList.add('hidden');
+  const el = document.getElementById('loading-overlay');
+  el.classList.add('hidden');
+  const txt = document.getElementById('loading-text');
+  if (txt) txt.textContent = 'Processing…';
 }
 
 /* ── File Reading ── */

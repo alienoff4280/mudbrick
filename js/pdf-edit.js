@@ -221,13 +221,14 @@ export async function insertBlankPage(pdfBytes, afterIndex, width, height) {
 
 /**
  * Crop pages by setting the CropBox.
- * Margins specify how much to trim from each edge (in points, 72 pt = 1 inch).
+ * Margins specify how much to trim from each visual edge (in points, 72 pt = 1 inch).
+ * Handles page rotation and existing CropBox correctly.
  * @param {Uint8Array} pdfBytes
  * @param {Object} opts
- * @param {number} opts.top    - Points to trim from top
- * @param {number} opts.bottom - Points to trim from bottom
- * @param {number} opts.left   - Points to trim from left
- * @param {number} opts.right  - Points to trim from right
+ * @param {number} opts.top    - Points to trim from visual top
+ * @param {number} opts.bottom - Points to trim from visual bottom
+ * @param {number} opts.left   - Points to trim from visual left
+ * @param {number} opts.right  - Points to trim from visual right
  * @param {string} opts.pages  - 'all' | 'current'
  * @param {number} opts.currentPage - 1-based current page
  * @returns {Promise<Uint8Array>}
@@ -246,16 +247,35 @@ export async function cropPages(pdfBytes, opts = {}) {
 
   for (let i = startIdx; i < endIdx; i++) {
     const page = doc.getPage(i);
-    const { width, height } = page.getSize();
+    const rotation = page.getRotation().angle % 360;
 
-    // Validate margins don't exceed page dimensions
-    const cropW = width - left - right;
-    const cropH = height - top - bottom;
-    if (cropW < 36 || cropH < 36) {
-      throw new Error(`Crop margins too large for page ${i + 1} (${Math.round(width)}×${Math.round(height)} pt). Remaining area would be ${Math.round(cropW)}×${Math.round(cropH)} pt.`);
+    // Use existing CropBox as reference (defaults to MediaBox if none set)
+    const ref = page.getCropBox();
+    const rx = ref.x, ry = ref.y, rw = ref.width, rh = ref.height;
+
+    // Map visual margins to MediaBox coordinates based on rotation.
+    // Visual margins are relative to the rendered (rotation-aware) page.
+    let cx, cy, cw, ch;
+    if (rotation === 90) {
+      cx = rx + top;    cy = ry + left;
+      cw = rw - top - bottom;  ch = rh - left - right;
+    } else if (rotation === 180) {
+      cx = rx + right;  cy = ry + top;
+      cw = rw - left - right;  ch = rh - top - bottom;
+    } else if (rotation === 270) {
+      cx = rx + bottom;  cy = ry + right;
+      cw = rw - top - bottom;  ch = rh - left - right;
+    } else {
+      // 0° (default)
+      cx = rx + left;   cy = ry + bottom;
+      cw = rw - left - right;  ch = rh - top - bottom;
     }
 
-    page.setCropBox(left, bottom, cropW, cropH);
+    if (cw < 36 || ch < 36) {
+      throw new Error(`Crop margins too large for page ${i + 1} (${Math.round(rw)}×${Math.round(rh)} pt). Remaining area would be ${Math.round(cw)}×${Math.round(ch)} pt.`);
+    }
+
+    page.setCropBox(cx, cy, cw, ch);
   }
 
   return doc.save();
