@@ -31,6 +31,8 @@ let currentViewport = null;
 let currentPageNum = 0;
 let currentPdfDoc = null;
 
+let _focusedLine = null; // currently focused text-edit-line div
+
 // Image edit state
 let imageActive = false;
 let imageContainer = null;
@@ -38,6 +40,10 @@ let imageOverlays = []; // { div, pdfX, pdfY, pdfW, pdfH, action: 'none'|'delete
 
 /* ═══════════════════ Font Mapping ═══════════════════ */
 
+/**
+ * Map a PDF font name (e.g. "g_d0_f1", "TimesNewRomanPSMT", "ArialMT")
+ * to a pdf-lib StandardFonts key.
+ */
 function mapToStandardFont(fontName) {
   const lower = (fontName || '').toLowerCase();
 
@@ -60,6 +66,52 @@ function mapToStandardFont(fontName) {
   if (lower.includes('oblique') || lower.includes('italic')) return 'HelveticaOblique';
   return 'Helvetica';
 }
+
+/**
+ * Map a PDF font name to a CSS font-family stack so overlays visually
+ * match the PDF text as closely as possible.
+ */
+function mapToCSSFont(fontName) {
+  const lower = (fontName || '').toLowerCase();
+
+  if (lower.includes('courier') || lower.includes('mono')) {
+    return '"Courier New", Courier, monospace';
+  }
+  if (lower.includes('times') || lower.includes('roman') ||
+      (lower.includes('serif') && !lower.includes('sans'))) {
+    return '"Times New Roman", Times, serif';
+  }
+  if (lower.includes('arial') || lower.includes('helvetica') || lower.includes('sans')) {
+    return 'Arial, Helvetica, sans-serif';
+  }
+  if (lower.includes('georgia')) return 'Georgia, serif';
+  if (lower.includes('verdana')) return 'Verdana, sans-serif';
+  if (lower.includes('trebuchet')) return '"Trebuchet MS", sans-serif';
+  if (lower.includes('tahoma')) return 'Tahoma, sans-serif';
+  if (lower.includes('palatino')) return '"Palatino Linotype", "Book Antiqua", Palatino, serif';
+  if (lower.includes('garamond')) return 'Garamond, serif';
+
+  // Default: match Helvetica (most common PDF base font)
+  return 'Arial, Helvetica, sans-serif';
+}
+
+/**
+ * Detect font weight and style from PDF font name.
+ */
+function detectFontStyle(fontName) {
+  const lower = (fontName || '').toLowerCase();
+  return {
+    bold: lower.includes('bold') || lower.includes('heavy') || lower.includes('black'),
+    italic: lower.includes('italic') || lower.includes('oblique'),
+  };
+}
+
+/** Font family options for the toolbar selector */
+const FONT_FAMILIES = [
+  { label: 'Sans-serif (Helvetica)', css: 'Arial, Helvetica, sans-serif', pdf: 'Helvetica' },
+  { label: 'Serif (Times)', css: '"Times New Roman", Times, serif', pdf: 'TimesRoman' },
+  { label: 'Monospace (Courier)', css: '"Courier New", Courier, monospace', pdf: 'Courier' },
+];
 
 /* ═══════════════════ Text Grouping ═══════════════════ */
 
@@ -116,18 +168,23 @@ function groupIntoLines(items, viewport) {
     const maxRight = Math.max(...line.items.map(i => i.left + i.width));
     const fontSize = line.items[0].fontSize;
     const height = Math.max(...line.items.map(i => i.height));
+    // Compute precise bounding box in PDF coordinates for accurate cover rects
+    const pdfMinX = Math.min(...line.items.map(i => i.pdfX));
+    const pdfMaxX = Math.max(...line.items.map(i => i.pdfX + (i.width / (viewport?.scale || 1))));
+    const pdfMinY = Math.min(...line.items.map(i => i.pdfY));
 
     return {
       text,
       left: minLeft,
       top: line.top,
       width: maxRight - minLeft,
-      height: height + 4,
+      height: height + 2,     // tighter fit for visual blending
       fontSize,
       fontName: line.items[0].fontName,
-      pdfX: line.items[0].pdfX,
-      pdfY: line.items[0].pdfY,
+      pdfX: pdfMinX,
+      pdfY: pdfMinY,
       pdfFontSize: line.items[0].pdfFontSize,
+      pdfLineWidth: pdfMaxX - pdfMinX,  // precise width in PDF units
       pdfItems: line.items,
     };
   });
@@ -202,6 +259,7 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container) {
     div.spellcheck = false;
     div.textContent = line.text;
 
+    // Position & size
     div.style.left = line.left + 'px';
     div.style.top = line.top + 'px';
     div.style.minWidth = line.width + 'px';
@@ -209,25 +267,45 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container) {
     div.style.fontSize = line.fontSize + 'px';
     div.style.lineHeight = line.height + 'px';
 
+    // Match PDF font visually
+    const cssFont = mapToCSSFont(line.fontName);
+    const fontStyle = detectFontStyle(line.fontName);
+    div.style.fontFamily = cssFont;
+    if (fontStyle.bold) div.style.fontWeight = 'bold';
+    if (fontStyle.italic) div.style.fontStyle = 'italic';
+
+    // Store original data
     div.dataset.original = line.text;
     div.dataset.pdfX = line.pdfX;
     div.dataset.pdfY = line.pdfY;
     div.dataset.pdfFontSize = line.pdfFontSize;
+    div.dataset.pdfLineWidth = line.pdfLineWidth || '';
     div.dataset.fontName = line.fontName || '';
+    div.dataset.cssFont = cssFont;
     div.dataset.width = line.width;
     div.dataset.height = line.height;
 
     // Track formatting changes per line
     div.dataset.fontSizeOverride = '';
     div.dataset.colorOverride = '';
-    div.dataset.bold = '';
-    div.dataset.italic = '';
+    div.dataset.fontFamilyOverride = '';
+    div.dataset.bold = fontStyle.bold ? 'true' : '';
+    div.dataset.italic = fontStyle.italic ? 'true' : '';
 
-    // Highlight on focus
-    div.addEventListener('focus', () => updateToolbarState(div));
+    // Track changes for live preview indicator
+    div.addEventListener('input', () => markDirty(div));
+    div.addEventListener('focus', () => {
+      _focusedLine = div;
+      updateToolbarState(div);
+    });
+    div.addEventListener('blur', () => {
+      if (_focusedLine === div) _focusedLine = null;
+    });
 
     container.appendChild(div);
   }
+
+  _focusedLine = null;
 
   // Create enhanced floating toolbar
   createToolbar(container);
@@ -253,6 +331,7 @@ export function exitTextEditMode() {
   currentViewport = null;
   currentPageNum = 0;
   currentPdfDoc = null;
+  _focusedLine = null;
 }
 
 export function isTextEditActive() {
@@ -266,8 +345,18 @@ function createToolbar(container) {
 
   toolbar = document.createElement('div');
   toolbar.className = 'text-edit-toolbar';
+
+  // Build font family options
+  const fontFamilyOptions = FONT_FAMILIES.map(f =>
+    `<option value="${f.css}" data-pdf="${f.pdf}">${f.label}</option>`
+  ).join('');
+
   toolbar.innerHTML = `
     <div class="text-edit-toolbar-group">
+      <select class="text-edit-font-family" title="Font family">
+        <option value="">Font</option>
+        ${fontFamilyOptions}
+      </select>
       <select class="text-edit-font-size" title="Font size">
         <option value="">Size</option>
         <option value="8">8</option>
@@ -307,7 +396,20 @@ function createToolbar(container) {
     </div>
   `;
 
-  // Wire toolbar events
+  // Wire toolbar events — font family
+  const fontFamilySelect = toolbar.querySelector('.text-edit-font-family');
+  fontFamilySelect.addEventListener('change', () => {
+    const val = fontFamilySelect.value;
+    if (val) applyToFocused(div => {
+      div.style.fontFamily = val;
+      div.dataset.fontFamilyOverride = val;
+      // Store the pdf-lib font name for commit
+      const opt = fontFamilySelect.selectedOptions[0];
+      div.dataset.fontNameOverride = opt?.dataset.pdf || '';
+    });
+  });
+
+  // Wire toolbar events — font size
   const fontSizeSelect = toolbar.querySelector('.text-edit-font-size');
   fontSizeSelect.addEventListener('change', () => {
     const val = fontSizeSelect.value;
@@ -346,11 +448,35 @@ function createToolbar(container) {
   parent.appendChild(toolbar);
 }
 
+/** Mark a line as changed for live preview indication */
+function markDirty(div) {
+  const hasTextChange = div.textContent !== div.dataset.original;
+  const hasFormatChange = div.dataset.fontSizeOverride || div.dataset.colorOverride ||
+    div.dataset.fontFamilyOverride || div.dataset.bold !== (detectFontStyle(div.dataset.fontName).bold ? 'true' : '') ||
+    div.dataset.italic !== (detectFontStyle(div.dataset.fontName).italic ? 'true' : '');
+  div.classList.toggle('text-edit-dirty', hasTextChange || !!hasFormatChange);
+  updateEditCount();
+}
+
+/** Update the status text showing how many lines have been modified */
+function updateEditCount() {
+  if (!toolbar || !editContainer) return;
+  const dirty = editContainer.querySelectorAll('.text-edit-line.text-edit-dirty').length;
+  const info = toolbar.querySelector('.text-edit-info');
+  if (info) {
+    info.textContent = dirty > 0
+      ? `${dirty} line${dirty > 1 ? 's' : ''} modified`
+      : 'Click text to edit';
+  }
+}
+
 /** Apply a callback to the currently focused text-edit-line */
 function applyToFocused(fn) {
-  if (!editContainer) return;
-  const focused = editContainer.querySelector('.text-edit-line:focus');
-  if (focused) fn(focused);
+  const focused = _focusedLine;
+  if (focused) {
+    fn(focused);
+    markDirty(focused);
+  }
 }
 
 /** Update toolbar buttons to reflect current line's state */
@@ -361,6 +487,9 @@ function updateToolbarState(div) {
 
   const sizeSelect = toolbar.querySelector('.text-edit-font-size');
   sizeSelect.value = div.dataset.fontSizeOverride || '';
+
+  const familySelect = toolbar.querySelector('.text-edit-font-family');
+  familySelect.value = div.dataset.fontFamilyOverride || div.dataset.cssFont || '';
 
   const colorInput = toolbar.querySelector('.text-edit-color');
   colorInput.value = div.dataset.colorOverride || '#000000';
@@ -379,12 +508,16 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     const original = div.dataset.original;
     const fontSizeOverride = div.dataset.fontSizeOverride ? parseFloat(div.dataset.fontSizeOverride) : 0;
     const colorOverride = div.dataset.colorOverride || '';
+    const fontFamilyOverride = div.dataset.fontFamilyOverride || '';
+    const fontNameOverride = div.dataset.fontNameOverride || '';
     const bold = div.dataset.bold === 'true';
     const italic = div.dataset.italic === 'true';
 
     // Changed if text differs OR formatting was modified
     const hasTextChange = newText !== original;
-    const hasFormatChange = fontSizeOverride || colorOverride || bold || italic;
+    const origStyle = detectFontStyle(div.dataset.fontName);
+    const hasFormatChange = fontSizeOverride || colorOverride || fontFamilyOverride ||
+      bold !== origStyle.bold || italic !== origStyle.italic;
 
     if (!hasTextChange && !hasFormatChange) continue;
 
@@ -393,7 +526,8 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       pdfX: parseFloat(div.dataset.pdfX),
       pdfY: parseFloat(div.dataset.pdfY),
       pdfFontSize: parseFloat(div.dataset.pdfFontSize),
-      fontName: div.dataset.fontName,
+      pdfLineWidth: parseFloat(div.dataset.pdfLineWidth) || 0,
+      fontName: fontNameOverride || div.dataset.fontName,
       screenWidth: parseFloat(div.dataset.width),
       screenHeight: parseFloat(div.dataset.height),
       fontSizeOverride,
@@ -430,14 +564,15 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     const x = change.pdfX;
     const y = change.pdfY;
 
+    // Use precise PDF line width when available, fall back to screen-based estimate
     const scale = currentViewport ? currentViewport.scale : 1;
-    const rectWidth = change.screenWidth / scale + 4;
-    const rectHeight = change.pdfFontSize + 4;
+    const rectWidth = (change.pdfLineWidth > 0 ? change.pdfLineWidth : change.screenWidth / scale) + 4;
+    const rectHeight = change.pdfFontSize * 1.3;  // 1.3x covers ascenders/descenders
 
-    // White cover rectangle
+    // White cover rectangle — precise positioning
     page.drawRectangle({
       x: x - 1,
-      y: y - 2,
+      y: y - change.pdfFontSize * 0.25,  // extend below baseline for descenders
       width: rectWidth,
       height: rectHeight,
       color: PDFLib.rgb(1, 1, 1),

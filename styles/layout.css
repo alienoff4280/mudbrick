@@ -1010,26 +1010,36 @@ html, body {
 
 .text-edit-line {
   position: absolute;
-  outline: 2px solid var(--mb-accent);
-  background: rgba(255, 255, 255, 0.92);
+  outline: 1px solid transparent;
+  background: transparent;
   padding: 0 2px;
   cursor: text;
   z-index: 15;
   white-space: pre;
   min-width: 20px;
   box-sizing: border-box;
-  font-family: sans-serif;
+  /* font-family is set inline from PDF font detection */
   color: #000;
-  transition: outline-color 0.15s, background 0.15s;
+  border-radius: 2px;
+  transition: outline-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .text-edit-line:hover {
-  outline-color: var(--mb-accent);
-  background: rgba(255, 255, 255, 0.97);
+  outline-color: rgba(41, 128, 185, 0.4);
+  background: rgba(255, 255, 255, 0.5);
 }
 .text-edit-line:focus {
+  outline: 2px solid var(--mb-accent);
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.15);
+}
+/* Visual indicator for modified lines */
+.text-edit-line.text-edit-dirty {
+  outline-color: rgba(234, 179, 8, 0.5);
+  background: rgba(253, 224, 71, 0.08);
+}
+.text-edit-line.text-edit-dirty:focus {
   outline-color: var(--mb-accent);
-  background: #fff;
-  box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.3);
+  background: rgba(255, 255, 255, 0.95);
 }
 
 /* ── Text/Image Edit Toolbar ── */
@@ -1084,6 +1094,9 @@ html, body {
   color: var(--mb-text);
   cursor: pointer;
   min-width: 60px;
+}
+.text-edit-toolbar .text-edit-font-family {
+  min-width: 140px;
 }
 
 .text-edit-toolbar input[type="color"] {
@@ -2086,14 +2099,16 @@ html, body {
 /* ── Dark Mode Overrides ── */
 
 html[data-theme="dark"] .text-edit-line {
-  background: rgba(30, 30, 30, 0.95);
   color: var(--mb-text);
 }
 html[data-theme="dark"] .text-edit-line:hover {
-  background: rgba(40, 40, 40, 0.97);
+  background: rgba(30, 30, 30, 0.5);
 }
 html[data-theme="dark"] .text-edit-line:focus {
-  background: var(--mb-surface);
+  background: rgba(30, 30, 30, 0.95);
+}
+html[data-theme="dark"] .text-edit-line.text-edit-dirty {
+  background: rgba(234, 179, 8, 0.08);
 }
 
 html[data-theme="dark"] .image-edit-btn {
