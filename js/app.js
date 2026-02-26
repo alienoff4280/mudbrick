@@ -810,7 +810,7 @@ function handleEditText() {
     DOM.btnEditText.classList.remove('active');
     return;
   }
-  enterTextEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer)
+  enterTextEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer, DOM.pdfCanvas)
     .then(ok => {
       if (ok) DOM.btnEditText.classList.add('active');
     }).catch(err => console.warn('Text edit failed:', err));

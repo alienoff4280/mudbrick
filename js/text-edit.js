@@ -28,12 +28,80 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+/**
+ * Sample the dominant text color from a rendered PDF canvas at the given region.
+ * Scans pixels and returns the most common non-background color as a hex string.
+ * Falls back to #000000 if no distinct color is found.
+ */
+function sampleTextColor(canvas, x, y, width, height) {
+  if (!canvas) return '#000000';
+  const ctx = canvas.getContext('2d');
+  // Clamp to canvas bounds
+  const sx = Math.max(0, Math.round(x));
+  const sy = Math.max(0, Math.round(y));
+  const sw = Math.min(Math.round(width), canvas.width - sx);
+  const sh = Math.min(Math.round(height), canvas.height - sy);
+  if (sw <= 0 || sh <= 0) return '#000000';
+
+  let data;
+  try {
+    data = ctx.getImageData(sx, sy, sw, sh).data;
+  } catch (_) {
+    return '#000000';
+  }
+
+  // Count dark pixel colors (skip near-white background pixels)
+  const colorCounts = {};
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
+    if (a < 128) continue; // skip transparent
+    // Skip near-white (background) pixels — luminance > 230
+    const lum = r * 0.299 + g * 0.587 + b * 0.114;
+    if (lum > 230) continue;
+    // Quantize to reduce noise (round to nearest 8)
+    const qr = (r >> 3) << 3, qg = (g >> 3) << 3, qb = (b >> 3) << 3;
+    const key = `${qr},${qg},${qb}`;
+    colorCounts[key] = (colorCounts[key] || 0) + 1;
+  }
+
+  // Find the most frequent color
+  let maxCount = 0, bestColor = null;
+  for (const [key, count] of Object.entries(colorCounts)) {
+    if (count > maxCount) {
+      maxCount = count;
+      bestColor = key;
+    }
+  }
+
+  if (!bestColor) return '#000000';
+  const [r, g, b] = bestColor.split(',').map(Number);
+  return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Sample a single pixel color from the PDF canvas at (x, y).
+ * Returns hex string.
+ */
+function samplePixelColor(canvas, x, y) {
+  if (!canvas) return null;
+  const ctx = canvas.getContext('2d');
+  const px = Math.round(x), py = Math.round(y);
+  if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return null;
+  try {
+    const [r, g, b] = ctx.getImageData(px, py, 1, 1).data;
+    return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
+  } catch (_) {
+    return null;
+  }
+}
+
 let active = false;
 let editContainer = null;
 let toolbar = null;
 let currentViewport = null;
 let currentPageNum = 0;
 let currentPdfDoc = null;
+let _pdfCanvas = null; // reference to rendered PDF canvas for color sampling
 
 let _focusedLine = null; // currently focused text-edit-line div
 
@@ -397,8 +465,9 @@ function groupIntoParagraphs(lines) {
 
 /* ═══════════════════ Enter / Exit Text Edit ═══════════════════ */
 
-export async function enterTextEditMode(pageNum, pdfDoc, viewport, container) {
+export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pdfCanvas) {
   if (active) exitTextEditMode();
+  _pdfCanvas = pdfCanvas || null;
 
   const page = await pdfDoc.getPage(pageNum);
   let textContent;
@@ -498,6 +567,13 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container) {
       if (fontStyle.bold) div.style.fontWeight = 'bold';
       if (fontStyle.italic) div.style.fontStyle = 'italic';
 
+      // Color-match: sample the text color from the rendered PDF canvas
+      const matchedColor = sampleTextColor(
+        _pdfCanvas, line.left, line.top, line.width, line.height
+      );
+      div.style.color = matchedColor;
+      div.dataset.matchedColor = matchedColor;
+
       // Store original data
       div.dataset.original = line.text;
       div.dataset.pdfX = line.pdfX;
@@ -579,6 +655,7 @@ export function exitTextEditMode() {
   currentPageNum = 0;
   currentPdfDoc = null;
   _focusedLine = null;
+  _pdfCanvas = null;
   undoStack = [];
   redoStack = [];
 }
@@ -640,6 +717,9 @@ function createToolbar(container) {
     <div class="text-edit-toolbar-sep"></div>
     <div class="text-edit-toolbar-group">
       <input type="color" class="text-edit-color" value="#000000" title="Text color">
+      <button class="text-edit-btn text-edit-eyedropper" title="Pick color from page">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22l1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="M15 6l3-3 3 3-3 3"/><path d="M12 9l3 3"/></svg>
+      </button>
     </div>
     <div class="text-edit-toolbar-sep"></div>
     <div class="text-edit-toolbar-group">
@@ -721,6 +801,49 @@ function createToolbar(container) {
       div.style.color = e.target.value;
       div.dataset.colorOverride = e.target.value;
     });
+  });
+
+  // Eyedropper — click a pixel on the PDF canvas to pick its color
+  const eyedropperBtn = toolbar.querySelector('.text-edit-eyedropper');
+  eyedropperBtn.addEventListener('click', () => {
+    if (!_pdfCanvas) return;
+    // Try the native EyeDropper API first (Chrome 95+)
+    if (typeof window.EyeDropper === 'function') {
+      const dropper = new window.EyeDropper();
+      dropper.open().then(result => {
+        const hex = result.sRGBHex;
+        toolbar.querySelector('.text-edit-color').value = hex;
+        applyToFocused(div => {
+          pushUndo(div);
+          div.style.color = hex;
+          div.dataset.colorOverride = hex;
+        });
+      }).catch(() => { /* user cancelled */ });
+      return;
+    }
+    // Fallback: manual canvas click-to-pick
+    eyedropperBtn.classList.add('active');
+    _pdfCanvas.style.cursor = 'crosshair';
+    function onCanvasPick(e) {
+      const rect = _pdfCanvas.getBoundingClientRect();
+      const scaleX = _pdfCanvas.width / rect.width;
+      const scaleY = _pdfCanvas.height / rect.height;
+      const x = (e.clientX - rect.left) * scaleX;
+      const y = (e.clientY - rect.top) * scaleY;
+      const hex = samplePixelColor(_pdfCanvas, x, y);
+      if (hex) {
+        toolbar.querySelector('.text-edit-color').value = hex;
+        applyToFocused(div => {
+          pushUndo(div);
+          div.style.color = hex;
+          div.dataset.colorOverride = hex;
+        });
+      }
+      _pdfCanvas.style.cursor = '';
+      eyedropperBtn.classList.remove('active');
+      _pdfCanvas.removeEventListener('click', onCanvasPick);
+    }
+    _pdfCanvas.addEventListener('click', onCanvasPick, { once: true });
   });
 
   // Undo / Redo buttons
@@ -826,7 +949,7 @@ function updateToolbarState(div) {
   familySelect.value = div.dataset.fontFamilyOverride || div.dataset.cssFont || '';
 
   const colorInput = toolbar.querySelector('.text-edit-color');
-  colorInput.value = div.dataset.colorOverride || '#000000';
+  colorInput.value = div.dataset.colorOverride || div.dataset.matchedColor || '#000000';
 }
 
 /* ═══════════════════ Commit Text Edits ═══════════════════ */
@@ -842,6 +965,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     const original = div.dataset.original;
     const fontSizeOverride = div.dataset.fontSizeOverride ? parseFloat(div.dataset.fontSizeOverride) : 0;
     const colorOverride = div.dataset.colorOverride || '';
+    const matchedColor = div.dataset.matchedColor || '';
     const fontFamilyOverride = div.dataset.fontFamilyOverride || '';
     const fontNameOverride = div.dataset.fontNameOverride || '';
     const bold = div.dataset.bold === 'true';
@@ -855,6 +979,9 @@ export async function commitTextEdits(pdfBytes, pageNum) {
 
     if (!hasTextChange && !hasFormatChange) continue;
 
+    // Use matched color when re-drawing changed text (preserves original color)
+    const effectiveColor = colorOverride || matchedColor || '';
+
     changes.push({
       newText,
       pdfX: parseFloat(div.dataset.pdfX),
@@ -865,7 +992,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       screenWidth: parseFloat(div.dataset.width),
       screenHeight: parseFloat(div.dataset.height),
       fontSizeOverride,
-      colorOverride,
+      colorOverride: effectiveColor,
       bold,
       italic,
     });
