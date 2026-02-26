@@ -156,6 +156,9 @@ function handleUpload(e) {
       preview.classList.remove('hidden');
     }
   };
+  reader.onerror = () => {
+    console.warn('Failed to read signature file');
+  };
   reader.readAsDataURL(file);
 }
 
@@ -186,6 +189,15 @@ async function insertSignature() {
 
   // Auto-save if user wants
   closeSignatureModal();
+}
+
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 /* ═══════════════════ Save / Load Signatures ═══════════════════ */
@@ -241,7 +253,7 @@ function loadSavedList() {
 
   container.innerHTML = saved.map((s, i) => `
     <div class="sig-saved-item" data-sig-index="${i}" style="display:inline-flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--mb-border);border-radius:var(--mb-radius-sm);cursor:pointer;background:var(--mb-surface);">
-      <img src="${s.dataUrl}" style="height:28px;max-width:120px;object-fit:contain;" alt="${s.name}">
+      <img src="${s.dataUrl}" style="height:28px;max-width:120px;object-fit:contain;" alt="${escapeHtml(s.name)}">
       <button class="sig-saved-delete" data-sig-del="${i}" style="background:none;border:none;color:var(--mb-text-muted);cursor:pointer;font-size:14px;padding:0 2px;" title="Delete">&times;</button>
     </div>
   `).join('');
@@ -251,6 +263,7 @@ function loadSavedList() {
     el.addEventListener('click', async (e) => {
       if (e.target.classList.contains('sig-saved-delete')) return;
       const idx = parseInt(el.dataset.sigIndex);
+      if (idx < 0 || idx >= saved.length) return;
       const sig = saved[idx];
       if (sig) {
         await insertImage(sig.dataUrl, 'signature');

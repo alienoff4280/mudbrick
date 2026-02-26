@@ -24,6 +24,10 @@
  *   isImageEditActive()
  */
 
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 let active = false;
 let editContainer = null;
 let toolbar = null;
@@ -56,7 +60,7 @@ function mapToStandardFont(fontName) {
   const lower = (fontName || '').toLowerCase();
 
   if (lower.includes('courier') || lower.includes('mono')) {
-    if (lower.includes('bold') && lower.includes('oblique')) return 'CourierBoldOblique';
+    if (lower.includes('bold') && (lower.includes('oblique') || lower.includes('italic'))) return 'CourierBoldOblique';
     if (lower.includes('bold')) return 'CourierBold';
     if (lower.includes('oblique') || lower.includes('italic')) return 'CourierOblique';
     return 'Courier';
@@ -397,7 +401,13 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container) {
   if (active) exitTextEditMode();
 
   const page = await pdfDoc.getPage(pageNum);
-  const textContent = await page.getTextContent();
+  let textContent;
+  try {
+    textContent = await page.getTextContent();
+  } catch (err) {
+    console.warn('Text extraction failed (may be encrypted):', err);
+    textContent = { items: [] };
+  }
   const lines = groupIntoLines(textContent.items, viewport);
 
   if (lines.length === 0) {
@@ -592,7 +602,7 @@ function createToolbar(container) {
 
   // Include custom font option if one is loaded
   const customFontOption = customFont
-    ? `<option value="custom" data-pdf="custom">${customFont.name}</option>`
+    ? `<option value="custom" data-pdf="custom">${escapeHtml(customFont.name)}</option>`
     : '';
 
   toolbar.innerHTML = `
@@ -746,6 +756,7 @@ async function handleFontUpload(fontFamilySelect) {
       const fontFace = new FontFace(name, `url(${fontUrl})`);
       await fontFace.load();
       document.fonts.add(fontFace);
+      URL.revokeObjectURL(fontUrl);
 
       // Store for pdf-lib embedding during commit
       customFont = { name, bytes, fontObj: null };
@@ -882,8 +893,11 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     let variant = fontName;
     if (bold) variant += '-Bold';
     if (italic) variant += '-Italic';
-    const stdName = mapToStandardFont(variant);
+    let stdName = mapToStandardFont(variant);
     if (!fontCache[stdName]) {
+      if (!PDFLib.StandardFonts[stdName]) {
+        stdName = 'Helvetica'; // safe fallback
+      }
       fontCache[stdName] = await doc.embedFont(PDFLib.StandardFonts[stdName]);
     }
     return fontCache[stdName];
@@ -941,6 +955,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
  */
 async function extractImagePositions(page, viewport) {
   const ops = await page.getOperatorList();
+  if (!window.pdfjsLib) return [];
   const OPS = window.pdfjsLib.OPS;
   const images = [];
 

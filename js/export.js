@@ -217,7 +217,8 @@ function makeExportName(fileName) {
 }
 
 function dataUrlToUint8Array(dataUrl) {
-  const base64 = dataUrl.split(',')[1];
+  const parts = dataUrl.split(',');
+  const base64 = parts.length > 1 ? parts[1] : parts[0];
   const binary = atob(base64);
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) {

@@ -6,13 +6,14 @@
  * Per-page history stacks keep undo scoped to the active page.
  *
  * Usage:
- *   import { pushState, undo, redo, canUndo, canRedo, clearHistory } from './history.js';
- *   pushState(pageNum, canvasJSON);  // after each annotation change
- *   undo(pageNum);                    // returns canvasJSON or null
- *   redo(pageNum);                    // returns canvasJSON or null
+ *   import { initPageState, pushState, undo, redo, canUndo, canRedo, clearHistory } from './history.js';
+ *   initPageState(pageNum, canvasJSON); // once on page load (baseline for undo)
+ *   pushState(pageNum, canvasJSON);     // after each annotation change
+ *   undo(pageNum);                      // returns canvasJSON or null
+ *   redo(pageNum);                      // returns canvasJSON or null
  */
 
-const MAX_HISTORY = 50;
+const MAX_HISTORY = 30;
 
 // Per-page history: { pageNum: { undoStack: [], redoStack: [] } }
 const pageHistory = {};
@@ -25,17 +26,42 @@ function getPageHistory(pageNum) {
 }
 
 /**
+ * Push the initial (baseline) canvas state for a page.
+ * Call this once on page load so that the first real action can be undone
+ * back to this initial state.
+ * @param {number} pageNum - The page this state belongs to
+ * @param {object} canvasJSON - Fabric canvas.toJSON() result (initial/empty state)
+ */
+export function initPageState(pageNum, canvasJSON) {
+  const hist = getPageHistory(pageNum);
+  if (hist.undoStack.length === 0) {
+    try {
+      const stateStr = JSON.stringify(canvasJSON);
+      hist.undoStack.push(stateStr);
+    } catch (e) {
+      console.warn('Failed to save initial undo state:', e);
+    }
+  }
+}
+
+/**
  * Push a new canvas state snapshot. Clears redo stack.
  * @param {number} pageNum - The page this state belongs to
  * @param {object} canvasJSON - Fabric canvas.toJSON() result
  */
 export function pushState(pageNum, canvasJSON) {
   const hist = getPageHistory(pageNum);
-  hist.undoStack.push(JSON.stringify(canvasJSON));
-  if (hist.undoStack.length > MAX_HISTORY) {
-    hist.undoStack.shift();
+  try {
+    const stateStr = JSON.stringify(canvasJSON);
+    hist.undoStack.push(stateStr);
+    if (hist.undoStack.length > MAX_HISTORY) {
+      hist.undoStack.splice(0, hist.undoStack.length - MAX_HISTORY);
+    }
+    hist.redoStack.length = 0; // clear redo on new action
+  } catch (e) {
+    console.warn('Failed to save undo state:', e);
+    return;
   }
-  hist.redoStack.length = 0; // clear redo on new action
 }
 
 /**
@@ -44,13 +70,18 @@ export function pushState(pageNum, canvasJSON) {
  */
 export function undo(pageNum) {
   const hist = getPageHistory(pageNum);
-  if (hist.undoStack.length <= 1) return null; // keep at least the initial state
+  if (hist.undoStack.length < 2) return null; // need initial state + at least 1 action
 
   const current = hist.undoStack.pop();
   hist.redoStack.push(current);
 
   const previous = hist.undoStack[hist.undoStack.length - 1];
-  return JSON.parse(previous);
+  try {
+    return JSON.parse(previous);
+  } catch (e) {
+    console.warn('Failed to parse undo state:', e);
+    return null;
+  }
 }
 
 /**
@@ -64,7 +95,12 @@ export function redo(pageNum) {
   const next = hist.redoStack.pop();
   hist.undoStack.push(next);
 
-  return JSON.parse(next);
+  try {
+    return JSON.parse(next);
+  } catch (e) {
+    console.warn('Failed to parse redo state:', e);
+    return null;
+  }
 }
 
 /**

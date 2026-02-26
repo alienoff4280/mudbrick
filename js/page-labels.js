@@ -97,6 +97,7 @@ export function clearLabels() {
  * Remove a specific range by index.
  */
 export function removeLabelRange(index) {
+  if (index < 0 || index >= _ranges.length) return;
   _ranges.splice(index, 1);
 }
 

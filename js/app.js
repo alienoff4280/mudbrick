@@ -75,7 +75,7 @@ import {
 } from './comment-summary.js';
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
-import { canUndo, canRedo } from './history.js';
+import { canUndo, canRedo, initPageState } from './history.js';
 import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive } from './text-edit.js';
 import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
 import { setLabelRange, getPageLabel, getLabelRanges, clearLabels, removeLabelRange, previewLabels, LABEL_FORMATS } from './page-labels.js';
@@ -176,11 +176,12 @@ async function boot() {
     // Replace emoji placeholders with SVG icons
     replaceIcons();
 
-    // Check for dark mode preference
+    // Restore dark mode preference
     if (localStorage.getItem('mudbrick-dark') === 'true' ||
         (!localStorage.getItem('mudbrick-dark') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       document.documentElement.setAttribute('data-theme', 'dark');
-      $('btn-dark-mode').innerHTML = icon('sun', 16);
+      const btn = $('btn-dark-mode');
+      if (btn) btn.innerHTML = icon('sun', 16);
     }
 
     // Auto-collapse sidebar on narrow screens
@@ -200,6 +201,14 @@ async function boot() {
 
     // Offline detection
     initOfflineIndicator();
+
+    // Warn before closing/navigating away when work might be lost
+    window.addEventListener('beforeunload', (e) => {
+      if (State.pdfDoc && hasAnnotations && hasAnnotations()) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
   } catch (e) {
     console.error('Boot failed:', e);
     toast('Failed to initialize PDF engine. Please refresh.', 'error');
@@ -265,12 +274,17 @@ function renderRecentFiles() {
     li.innerHTML = `
       <span class="recent-file-icon">${icon('file', 16)}</span>
       <div class="recent-file-info">
-        <div class="recent-file-name" title="${file.name}">${file.name}</div>
+        <div class="recent-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
         <div class="recent-file-meta">${meta}</div>
       </div>
     `;
 
+    li.title = 'Click to learn more';
     list.appendChild(li);
+    li.addEventListener('click', () => {
+      toast('Use "Open a PDF" to reopen files — file data is not stored in browser', 'info');
+    });
+    li.style.cursor = 'pointer';
   }
 }
 
@@ -385,6 +399,7 @@ async function openPDF(bytes, fileName, fileSize) {
 
   // Annotate ribbon — exhibit stamp
   $('btn-exhibit-stamp').disabled = false;
+  if ($('btn-anno-image')) $('btn-anno-image').disabled = false;
 
   // Security ribbon buttons
   $('btn-encrypt').disabled = false;
@@ -507,6 +522,12 @@ async function renderCurrentPage() {
   resizeOverlay(w, h, State.zoom);
   loadPageAnnotations(State.currentPage);
 
+  // Ensure undo history has a baseline state for this page
+  const canvas = getCanvas();
+  if (canvas) {
+    initPageState(State.currentPage, canvas.toJSON());
+  }
+
   // Render form field overlays
   clearFormOverlay();
   if (State.formFields.length > 0 && State.pdfLibDoc) {
@@ -562,7 +583,8 @@ function firstPage() { goToPage(1); }
 function lastPage() { goToPage(State.totalPages); }
 
 function updatePageNav() {
-  DOM.pageInput.value = State.currentPage;
+  const label = typeof getPageLabel === 'function' ? getPageLabel(State.currentPage) : null;
+  DOM.pageInput.value = label || State.currentPage;
   DOM.pageInput.max = State.totalPages;
   DOM.totalPages.textContent = State.totalPages;
   const atFirst = State.currentPage <= 1;
@@ -591,7 +613,7 @@ function fitWidth() {
     const container = DOM.canvasArea;
     const newZoom = calculateFitWidth(viewport.width, container.clientWidth);
     setZoom(newZoom);
-  });
+  }).catch(() => {});
 }
 
 function fitPage() {
@@ -604,7 +626,7 @@ function fitPage() {
       container.clientWidth, container.clientHeight
     );
     setZoom(newZoom);
-  });
+  }).catch(() => {});
 }
 
 function updateZoomDisplay() {
@@ -791,7 +813,7 @@ function handleEditText() {
   enterTextEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer)
     .then(ok => {
       if (ok) DOM.btnEditText.classList.add('active');
-    });
+    }).catch(err => console.warn('Text edit failed:', err));
 }
 
 async function handleCommitTextEdits() {
@@ -832,7 +854,7 @@ function handleEditImage() {
   enterImageEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer)
     .then(ok => {
       if (ok) DOM.btnEditImage.classList.add('active');
-    });
+    }).catch(err => console.warn('Image edit failed:', err));
 }
 
 async function handleCommitImageEdits() {
@@ -1240,7 +1262,7 @@ function showAnnotationContextMenu(e, target) {
     <button data-action="anno-backward" ${!hasSelection ? 'disabled' : ''}>${icon('chevron-down', 14)} Send Backward</button>
     <button data-action="anno-back" ${!hasSelection ? 'disabled' : ''}>${icon('arrow-down-to-line', 14)} Send to Back</button>
     <div class="context-menu-separator"></div>
-    <button data-action="anno-lock" ${!hasSelection ? 'disabled' : ''}>${locked ? icon('lock-open', 14) + ' Unlock' : icon('lock-open', 14) + ' Lock'}</button>
+    <button data-action="anno-lock" ${!hasSelection ? 'disabled' : ''}>${locked ? icon('lock', 14) + ' Unlock' : icon('lock-open', 14) + ' Lock'}</button>
     <button data-action="anno-delete" ${!hasSelection ? 'disabled' : ''}>${icon('trash', 14)} Delete</button>
   `;
 
@@ -2141,7 +2163,7 @@ function toggleDarkMode() {
   const html = document.documentElement;
   const isDark = html.getAttribute('data-theme') === 'dark';
   html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  localStorage.setItem('mudbrick-dark', !isDark);
+  localStorage.setItem('mudbrick-dark', isDark ? 'false' : 'true');
   $('btn-dark-mode').innerHTML = isDark ? icon('moon', 16) : icon('sun', 16);
 }
 
@@ -2261,7 +2283,7 @@ function refreshNotesSidebar() {
 
     item.innerHTML = `
       <span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${bg};border:1px solid rgba(0,0,0,0.15);flex-shrink:0;margin-top:1px;"></span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${note.noteText || '<em style="color:var(--mb-text-muted)">Empty note</em>'}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${note.noteText ? escapeHtml(note.noteText) : '<em style="color:var(--mb-text-muted)">Empty note</em>'}</span>
       <span style="color:var(--mb-text-muted);flex-shrink:0;">p.${note.pageNum}</span>
     `;
 
@@ -2750,7 +2772,13 @@ function wireEvents() {
 
   // Floating toolbar tool buttons
   document.querySelectorAll('.float-btn[data-tool]').forEach(btn => {
-    btn.addEventListener('click', () => selectTool(btn.dataset.tool));
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tool === 'image') {
+        handleImageInsert();
+      } else {
+        selectTool(btn.dataset.tool);
+      }
+    });
   });
 
   // Sidebar tab switching
@@ -2775,7 +2803,7 @@ function wireEvents() {
     swatch.addEventListener('click', () => {
       document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
       swatch.classList.add('active');
-      // Future: push color to active annotation tool
+      updateToolOptions({ color: swatch.dataset.color });
     });
   });
 
@@ -2785,7 +2813,7 @@ function wireEvents() {
   if (opacitySlider && opacityValue) {
     opacitySlider.addEventListener('input', () => {
       opacityValue.textContent = opacitySlider.value + '%';
-      // Future: push opacity to active annotation tool
+      updateToolOptions({ opacity: parseInt(opacitySlider.value) / 100 });
     });
   }
 
@@ -2903,11 +2931,13 @@ function wireEvents() {
         toast('Enter a page range', 'warning');
         return;
       }
-      pageNumbers = parsePageRanges(rangeStr, State.totalPages);
-      if (!pageNumbers.length) {
+      const parsed = parsePageRanges(rangeStr, State.totalPages);
+      if (!parsed || !parsed.length) {
         toast('Invalid page range', 'error');
         return;
       }
+      // Flatten array-of-arrays and convert from 0-based to 1-based
+      pageNumbers = parsed.flat().map(p => p + 1);
     }
 
     // Show progress
@@ -2967,6 +2997,9 @@ function wireEvents() {
   // Image insertion
   $('btn-insert-image').addEventListener('click', handleImageInsert);
   $('image-file-input').addEventListener('change', onImageFileSelected);
+
+  // Annotate ribbon image button
+  if ($('btn-anno-image')) $('btn-anno-image').addEventListener('click', handleImageInsert);
 
   // Sticky note — note text textarea
   const noteTextarea = $('prop-note-text');
@@ -3210,15 +3243,14 @@ function wireEvents() {
   });
   // Update quality % display
   $('export-img-quality')?.addEventListener('input', (e) => {
-    const pct = Math.round(parseFloat(e.target.value) * 100);
     const display = $('export-img-quality-val');
-    if (display) display.textContent = pct + '%';
+    if (display) display.textContent = e.target.value + '%';
   });
 
   $('btn-create-from-images').addEventListener('click', () => {
     $('create-from-images-modal-backdrop').classList.remove('hidden');
     _imagesToPdf = [];
-    $('images-file-list').innerHTML = '<p style="color:var(--text-secondary)">No images added yet.</p>';
+    $('images-file-list').innerHTML = '<p style="color:var(--mb-text-secondary)">No images added yet.</p>';
   });
   $('btn-create-from-images-execute').addEventListener('click', executeCreateFromImages);
 
@@ -3629,7 +3661,8 @@ async function executeExportImage() {
   } else {
     // Custom range
     const rangeInput = $('export-img-range');
-    pages = rangeInput ? parsePageRanges(rangeInput.value, State.totalPages) : [State.currentPage];
+    const parsed = rangeInput ? parsePageRanges(rangeInput.value, State.totalPages) : null;
+    pages = parsed ? parsed.flat().map(p => p + 1) : [State.currentPage];
   }
 
   showLoading('Exporting images…');
@@ -3785,6 +3818,11 @@ function renderCurrentCompare() {
   const container = $('compare-view');
   if (container) renderComparisonView(container, page, { view });
   $('compare-page-info').textContent = `Page ${page.pageNum} of ${_compareResults.maxPages} (${page.diffPercentage.toFixed(2)}% diff)`;
+  // Update prev/next button states
+  const prevBtn = $('btn-compare-prev');
+  const nextBtn = $('btn-compare-next');
+  if (prevBtn) prevBtn.disabled = _comparePageIdx <= 0;
+  if (nextBtn) nextBtn.disabled = _comparePageIdx >= _compareResults.pages.length - 1;
 }
 
 function navigateCompare(dir) {
@@ -3948,7 +3986,7 @@ function executeFormDataExport(format) {
 
 /* ── Helpers ── */
 function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /* ═══════════════════ Phase 3 Batch — Feature Handlers ═══════════════════ */
@@ -4462,4 +4500,4 @@ boot().then(() => {
   if (pdfUrl) {
     window.Mudbrick.loadFromURL(pdfUrl);
   }
-});
+}).catch(e => console.error('Boot failed:', e));

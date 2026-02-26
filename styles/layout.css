@@ -640,7 +640,7 @@ html, body {
 }
 
 .sidebar-empty-hint {
-  font-size: 11px !important;
+  font-size: 11px;
   color: var(--mb-text-muted);
   opacity: 0.7;
 }
@@ -672,6 +672,11 @@ html, body {
 
 .bookmark-row:hover {
   background: var(--mb-surface-hover);
+}
+
+.bookmark-row:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: -2px;
 }
 
 .bookmark-toggle {
@@ -748,7 +753,7 @@ html, body {
 }
 
 .note-list-item:hover {
-  background: var(--mb-surface-hover) !important;
+  background: var(--mb-surface-hover);
 }
 
 #thumbnail-list {
@@ -863,6 +868,7 @@ html, body {
   box-shadow: var(--mb-shadow-md);
   padding: 6px 10px;
   font-size: 13px;
+  max-width: calc(100vw - 32px);
 }
 
 .find-bar.hidden {
@@ -967,7 +973,7 @@ html, body {
 #page-container {
   position: relative;
   box-shadow: var(--mb-shadow-lg);
-  background: #fff;
+  background: var(--mb-surface);
   line-height: 0; /* prevent gaps from inline canvas */
 }
 
@@ -1019,7 +1025,7 @@ html, body {
   min-width: 20px;
   box-sizing: border-box;
   /* font-family is set inline from PDF font detection */
-  color: #000;
+  color: var(--mb-text);
   border-radius: 2px;
   transition: outline-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
@@ -1067,7 +1073,7 @@ html, body {
   top: 140px;
   left: 50%;
   transform: translateX(-50%);
-  z-index: 200;
+  z-index: var(--z-toolbar);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1112,6 +1118,10 @@ html, body {
   color: var(--mb-text);
   cursor: pointer;
   min-width: 60px;
+}
+.text-edit-toolbar select:focus {
+  border-color: var(--mb-accent);
+  outline: none;
 }
 .text-edit-toolbar .text-edit-font-family {
   min-width: 140px;
@@ -1442,7 +1452,7 @@ html, body {
   transition: all var(--mb-transition);
 }
 .color-swatch:hover { transform: scale(1.15); box-shadow: var(--mb-shadow-sm); }
-.color-swatch.active { border-color: var(--mb-text); box-shadow: 0 0 0 1px white, var(--mb-shadow-sm); }
+.color-swatch.active { border-color: var(--mb-text); box-shadow: 0 0 0 1px var(--mb-surface), 0 0 0 2px var(--mb-text); }
 
 /* Slider */
 .prop-slider {
@@ -1483,6 +1493,12 @@ html, body {
   color: var(--mb-text);
   font-family: inherit;
   cursor: pointer;
+}
+
+.prop-select:focus {
+  border-color: var(--mb-accent);
+  box-shadow: 0 0 0 2px rgba(41,128,185,0.15);
+  outline: none;
 }
 
 /* Annotation List */
@@ -1740,7 +1756,7 @@ html, body {
   align-items: center;
   justify-content: center;
   gap: 16px;
-  z-index: 1050;
+  z-index: calc(var(--z-modal) + 50);
   animation: fadeIn 150ms ease;
 }
 
@@ -2136,6 +2152,10 @@ html[data-theme="dark"] .image-edit-btn {
   border-color: rgba(255, 255, 255, 0.25);
 }
 
+html[data-theme="dark"] .crop-handle {
+  background: var(--mb-surface);
+}
+
 html[data-theme="dark"] .crop-shade {
   background: rgba(0, 0, 0, 0.6);
 }
@@ -2150,4 +2170,58 @@ html[data-theme="dark"] .crop-shade {
     animation-duration: 0.01ms !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ── Dark Mode: Text Edit Buttons ── */
+
+html[data-theme="dark"] .text-edit-commit {
+  background: #2563eb;
+  color: #fff;
+}
+html[data-theme="dark"] .text-edit-commit:hover {
+  background: #1d4ed8;
+}
+
+/* ── Dark Mode: Image Edit Overlay Buttons ── */
+
+html[data-theme="dark"] .image-edit-replace {
+  background: rgba(59, 130, 246, 0.95);
+}
+html[data-theme="dark"] .image-edit-delete {
+  background: rgba(239, 68, 68, 0.95);
+}
+html[data-theme="dark"] .image-edit-deleted {
+  border-color: #f87171;
+  color: #f87171;
+}
+
+/* ── Dark Mode: Find Highlights ── */
+
+html[data-theme="dark"] .find-highlight {
+  background: rgba(253, 224, 71, 0.5);
+}
+html[data-theme="dark"] .find-highlight-active {
+  background: rgba(249, 115, 22, 0.7);
+}
+
+/* ── Color Swatch Focus State ── */
+
+.color-swatch:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 2px;
+}
+
+/* ── Dark Mode: Status Bar Badges ── */
+
+html[data-theme="dark"] #status-bar .status-badge.encrypted {
+  background: rgba(5, 150, 105, 0.3);
+  color: #6ee7b7;
+}
+html[data-theme="dark"] #status-bar .status-badge.tagged {
+  background: rgba(37, 99, 235, 0.3);
+  color: #93c5fd;
+}
+html[data-theme="dark"] #status-bar .status-offline {
+  background: rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
 }

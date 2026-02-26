@@ -75,6 +75,11 @@ button:disabled {
   background: var(--mb-surface-active);
 }
 
+.btn-secondary:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 2px;
+}
+
 /* Small button variant */
 .btn-sm {
   padding: 4px 12px;
@@ -150,6 +155,11 @@ button:disabled {
 .modal-header .modal-close:hover {
   background: var(--mb-surface-hover);
   color: var(--mb-text);
+}
+
+.modal-close:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 2px;
 }
 
 .modal-body {
@@ -260,6 +270,11 @@ button:disabled {
 .modal-drop-zone:hover {
   border-color: var(--mb-brand);
   background: var(--mb-brand-tint-subtle);
+}
+
+.modal-drop-zone:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 2px;
 }
 
 .modal-drop-zone p {
@@ -396,6 +411,11 @@ button:disabled {
   border-bottom-color: var(--mb-accent);
 }
 
+.sig-tab:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: -2px;
+}
+
 .sig-tabs-bar {
   display: flex;
   gap: 0;
@@ -407,7 +427,7 @@ button:disabled {
   border: 1px solid var(--mb-border);
   border-radius: var(--mb-radius-sm);
   overflow: hidden;
-  background: #fff;
+  background: var(--mb-surface);
 }
 
 .sig-type-field {
@@ -663,7 +683,7 @@ button:disabled {
   box-shadow: var(--mb-shadow-md);
   padding: 4px 0;
   min-width: 160px;
-  z-index: 1150;
+  z-index: var(--z-toast);
 }
 
 .context-menu button {
@@ -705,7 +725,7 @@ button:disabled {
   box-shadow: var(--mb-shadow-lg);
   padding: 4px 0;
   min-width: 200px;
-  z-index: 1060;
+  z-index: calc(var(--z-modal) + 60);
   animation: dropdownFadeIn 120ms ease-out;
 }
 
@@ -809,6 +829,12 @@ button:disabled {
   background: var(--mb-scrollbar-thumb-hover);
 }
 
+/* Firefox scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--mb-scrollbar-thumb) transparent;
+}
+
 /* ── Reduced Motion ── */
 
 @media (prefers-reduced-motion: reduce) {
@@ -887,18 +913,13 @@ input[type="range"]:focus-visible::-webkit-slider-thumb {
   font-weight: 500;
   line-height: 1.3;
   white-space: nowrap;
-  color: #fff;
-  background: #1e293b;
+  color: var(--mb-text-inverse);
+  background: var(--mb-toolbar-bg);
   border-radius: var(--mb-radius-sm);
   pointer-events: none;
   opacity: 0;
   transition: opacity 150ms ease;
   z-index: 1100;
-}
-
-html[data-theme="dark"] [data-tooltip]::after {
-  background: #e2e8f0;
-  color: #1e293b;
 }
 
 [data-tooltip]:hover::after {
@@ -1147,6 +1168,15 @@ html[data-theme="dark"] .exhibit-preview-text {
 
   .modal-header h2 {
     font-size: 16px;
+  }
+
+  .modal-form-grid,
+  .modal-form-grid-3 {
+    grid-template-columns: 1fr;
+  }
+
+  .modal-stat-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 

@@ -90,7 +90,7 @@ export function collectComments(currentPage) {
           }
       }
 
-      comment.date = new Date().toISOString();
+      comment.date = obj.date || obj.created || new Date().toISOString();
       comments.push(comment);
     }
   }

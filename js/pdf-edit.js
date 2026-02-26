@@ -35,7 +35,8 @@ export async function saveToBytes() {
 export async function rotatePage(pdfBytes, pageIndex, degrees) {
   const doc = await ensurePdfLib(pdfBytes);
   const page = doc.getPage(pageIndex);
-  const current = page.getRotation().angle;
+  const rot = page.getRotation();
+  const current = (rot && typeof rot.angle === 'number') ? rot.angle : 0;
   page.setRotation(getPDFLib().degrees((current + degrees) % 360));
   return doc.save();
 }
@@ -250,8 +251,10 @@ export async function cropPages(pdfBytes, opts = {}) {
     const rotation = page.getRotation().angle % 360;
 
     // Use existing CropBox as reference (defaults to MediaBox if none set)
-    const ref = page.getCropBox();
-    const rx = ref.x, ry = ref.y, rw = ref.width, rh = ref.height;
+    const cropBox = page.getCropBox();
+    const mediaBox = page.getMediaBox();
+    const box = (cropBox && cropBox.width > 0) ? cropBox : mediaBox;
+    const { x: rx, y: ry, width: rw, height: rh } = box;
 
     // Map visual margins to MediaBox coordinates based on rotation.
     // Visual margins are relative to the rendered (rotation-aware) page.

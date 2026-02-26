@@ -45,31 +45,36 @@ export async function compareDocuments(docA, docB, opts = {}, onProgress) {
       diffCanvas: null, // Will hold the diff visualization canvas
     };
 
-    if (i <= pagesA && i <= pagesB) {
-      // Compare both pages
-      const canvasA = await renderPageToCanvas(docA, i, dpi);
-      const canvasB = await renderPageToCanvas(docB, i, dpi);
+    try {
+      if (i <= pagesA && i <= pagesB) {
+        // Compare both pages
+        const canvasA = await renderPageToCanvas(docA, i, dpi);
+        const canvasB = await renderPageToCanvas(docB, i, dpi);
 
-      const diff = diffCanvases(canvasA, canvasB, threshold);
-      pageResult.diffPercentage = diff.percentage;
-      pageResult.diffPixelCount = diff.diffCount;
-      pageResult.totalPixels = diff.totalPixels;
-      pageResult.diffCanvas = diff.canvas;
-      pageResult.canvasA = canvasA;
-      pageResult.canvasB = canvasB;
+        const diff = diffCanvases(canvasA, canvasB, threshold);
+        pageResult.diffPercentage = diff.percentage;
+        pageResult.diffPixelCount = diff.diffCount;
+        pageResult.totalPixels = diff.totalPixels;
+        pageResult.diffCanvas = diff.canvas;
+        pageResult.canvasA = canvasA;
+        pageResult.canvasB = canvasB;
 
-      results.totalDiffPixels += diff.diffCount;
-      results.totalPixels += diff.totalPixels;
-    } else if (i <= pagesA) {
-      // Only in A
-      const canvasA = await renderPageToCanvas(docA, i, dpi);
-      pageResult.canvasA = canvasA;
-      pageResult.diffPercentage = 100;
-    } else {
-      // Only in B
-      const canvasB = await renderPageToCanvas(docB, i, dpi);
-      pageResult.canvasB = canvasB;
-      pageResult.diffPercentage = 100;
+        results.totalDiffPixels += diff.diffCount;
+        results.totalPixels += diff.totalPixels;
+      } else if (i <= pagesA) {
+        // Only in A
+        const canvasA = await renderPageToCanvas(docA, i, dpi);
+        pageResult.canvasA = canvasA;
+        pageResult.diffPercentage = 100;
+      } else {
+        // Only in B
+        const canvasB = await renderPageToCanvas(docB, i, dpi);
+        pageResult.canvasB = canvasB;
+        pageResult.diffPercentage = 100;
+      }
+    } catch (err) {
+      console.warn(`Failed to render page ${i} for comparison:`, err);
+      pageResult.error = err.message || String(err);
     }
 
     results.pages.push(pageResult);
@@ -244,7 +249,7 @@ export function renderComparisonView(container, pageResult, opts = {}) {
       wrapA.style.cssText = 'text-align:center;flex:1;min-width:0;';
       wrapA.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">Original</div>';
       const imgA = scaleToMaxHeight(pageResult.canvasA, maxH);
-      imgA.style.border = '1px solid var(--border)';
+      imgA.style.border = '1px solid var(--mb-border)';
       wrapA.appendChild(imgA);
       container.appendChild(wrapA);
     }
@@ -254,7 +259,7 @@ export function renderComparisonView(container, pageResult, opts = {}) {
       wrapB.style.cssText = 'text-align:center;flex:1;min-width:0;';
       wrapB.innerHTML = '<div style="font-weight:600;margin-bottom:4px;">Modified</div>';
       const imgB = scaleToMaxHeight(pageResult.canvasB, maxH);
-      imgB.style.border = '1px solid var(--border)';
+      imgB.style.border = '1px solid var(--mb-border)';
       wrapB.appendChild(imgB);
       container.appendChild(wrapB);
     }
@@ -273,7 +278,7 @@ export function renderComparisonView(container, pageResult, opts = {}) {
     wrap.style.cssText = 'text-align:center;position:relative;';
     if (pageResult.canvasA) {
       const imgA = scaleToMaxHeight(pageResult.canvasA, maxH);
-      imgA.style.border = '1px solid var(--border)';
+      imgA.style.border = '1px solid var(--mb-border)';
       wrap.appendChild(imgA);
     }
     if (pageResult.diffCanvas) {

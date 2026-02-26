@@ -4,7 +4,7 @@
  * cache-first for local assets.
  */
 
-const CACHE_VERSION = 'mudbrick-v3.2';
+const CACHE_VERSION = 'mudbrick-v3.3';
 
 /* App shell — local assets */
 const SHELL_ASSETS = [
@@ -37,6 +37,7 @@ const SHELL_ASSETS = [
   './js/exhibit-stamps.js',
   './js/page-labels.js',
   './js/redact-patterns.js',
+  './manifest.json',
 ];
 
 /* CDN assets (pre-cache the critical ones) */

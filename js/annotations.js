@@ -90,6 +90,21 @@ export function setTool(toolName, options = {}) {
   fabricCanvas.off('path:created', markUnderlinePath);
   fabricCanvas.off('path:created', markStrikethroughPath);
 
+  // Remove shape/cover/redact mouse listeners to prevent leaks
+  fabricCanvas.off('mouse:move', onShapeMove);
+  fabricCanvas.off('mouse:up', onShapeUp);
+  fabricCanvas.off('mouse:move', onCoverMove);
+  fabricCanvas.off('mouse:up', onCoverUp);
+  fabricCanvas.off('mouse:move', onRedactMove);
+  fabricCanvas.off('mouse:up', onRedactUp);
+
+  // Clean up any in-progress shape/cover/redact preview
+  if (shapePreview) {
+    fabricCanvas.remove(shapePreview);
+    shapePreview = null;
+  }
+  shapeStartPoint = null;
+
   // Reset drawing mode
   fabricCanvas.isDrawingMode = false;
   fabricCanvas.selection = true;
@@ -209,12 +224,14 @@ function markHighlightPath(e) {
 
 function markUnderlinePath(e) {
   if (e.path) {
+    e.path.set({ selectable: false, evented: false });
     e.path.mudbrickType = 'underline';
   }
 }
 
 function markStrikethroughPath(e) {
   if (e.path) {
+    e.path.set({ selectable: false, evented: false });
     e.path.mudbrickType = 'strikethrough';
   }
 }
@@ -534,9 +551,12 @@ function addStickyNote(x, y) {
     top: size / 2,
   });
 
+  // Clamp to canvas boundaries
+  const clampedLeft = Math.max(0, Math.min(x - size / 2, fabricCanvas.width - size));
+  const clampedTop = Math.max(0, Math.min(y - size / 2, fabricCanvas.height - size));
   const group = new fabric.Group([rect, icon], {
-    left: x - size / 2,
-    top: y - size / 2,
+    left: clampedLeft,
+    top: clampedTop,
     mudbrickType: 'sticky-note',
     noteText: '',
     noteColor: color,
@@ -545,6 +565,9 @@ function addStickyNote(x, y) {
   fabricCanvas.add(group);
   fabricCanvas.setActiveObject(group);
   fabricCanvas.renderAll();
+
+  // Make the note immediately selectable
+  group.set({ selectable: true, evented: true });
 
   // Notify listeners (properties panel) that a new sticky note was placed
   if (typeof onStickyNoteSelected === 'function') {
@@ -622,6 +645,10 @@ function addStamp(x, y) {
     angle: -15,
     mudbrickType: 'stamp',
   });
+
+  // Ensure text dimensions are computed before sizing the rect
+  text.set({ left: 0, top: 0 });
+  text.initDimensions();
 
   // Add border rect around stamp
   const padding = 8 * currentZoom;
@@ -758,6 +785,10 @@ export function updateToolOptions(opts) {
       fabricCanvas.freeDrawingBrush.width = toolOptions.strokeWidth * currentZoom;
     } else if (currentTool === 'highlight') {
       fabricCanvas.freeDrawingBrush.color = hexToRgba(toolOptions.highlightColor, 0.35);
+    } else if (currentTool === 'underline' || currentTool === 'strikethrough') {
+      if (opts.color) {
+        fabricCanvas.freeDrawingBrush.color = opts.color;
+      }
     }
   }
 }
@@ -795,8 +826,8 @@ export function insertImage(dataUrl, name = 'image') {
       if (!img) { reject(new Error('Failed to load image')); return; }
 
       // Scale image to fit within the canvas (max 50% of canvas dimension)
-      const maxW = fabricCanvas.width * 0.5;
-      const maxH = fabricCanvas.height * 0.5;
+      const maxW = Math.max(fabricCanvas.width * 0.5, 100);
+      const maxH = Math.max(fabricCanvas.height * 0.5, 100);
       const scale = Math.min(maxW / img.width, maxH / img.height, 1);
 
       img.set({
@@ -893,6 +924,7 @@ export function copySelected() {
   if (!fabricCanvas) return;
   const active = fabricCanvas.getActiveObject();
   if (!active) return;
+  _clipboard = null; // Clear immediately to signal pending copy
   active.clone(cloned => {
     _clipboard = cloned;
   }, CUSTOM_PROPS);

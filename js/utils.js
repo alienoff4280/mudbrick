@@ -10,7 +10,12 @@ export function toast(message, type = 'info', duration = 3500) {
   const el = document.createElement('div');
   el.className = `toast ${type}`;
   const icons = { success: '✓', error: '✕', warning: '⚠', info: 'ℹ' };
-  el.innerHTML = `<span>${icons[type] || ''}</span><span>${message}</span>`;
+  const iconSpan = document.createElement('span');
+  iconSpan.textContent = icons[type] || '';
+  const msgSpan = document.createElement('span');
+  msgSpan.textContent = message;
+  el.appendChild(iconSpan);
+  el.appendChild(msgSpan);
   container.appendChild(el);
   setTimeout(() => {
     el.classList.add('exiting');
@@ -102,7 +107,18 @@ export function initDragDrop(dropZoneId, onFile) {
 /* ── Download Helper ── */
 
 export function downloadBlob(bytes, filename) {
-  const blob = new Blob([bytes], { type: 'application/pdf' });
+  let blob;
+  if (bytes instanceof Blob) {
+    blob = bytes;
+  } else {
+    // Infer MIME type from filename extension
+    const ext = (filename || '').split('.').pop().toLowerCase();
+    const types = {
+      pdf: 'application/pdf', json: 'application/json', csv: 'text/csv',
+      txt: 'text/plain', xfdf: 'application/xml', png: 'image/png', jpg: 'image/jpeg',
+    };
+    blob = new Blob([bytes], { type: types[ext] || 'application/octet-stream' });
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;

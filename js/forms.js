@@ -212,9 +212,13 @@ function createFieldElement(fieldDesc, w, h) {
       cb.style.cssText = 'width: 70%; height: 70%; cursor: pointer;';
       cb.dataset.fieldName = fieldDesc.name;
       wrapper.appendChild(cb);
-      // Propagate events from wrapper
-      wrapper.addEventListener('change', () => {});
-      wrapper.addEventListener('input', () => {});
+      // Save checkbox state on change
+      cb.addEventListener('change', () => {
+        formFieldValues[fieldDesc.name] = cb.checked;
+      });
+      cb.addEventListener('input', () => {
+        formFieldValues[fieldDesc.name] = cb.checked;
+      });
       Object.defineProperty(wrapper, '_checkbox', { value: cb });
       return wrapper;
     }

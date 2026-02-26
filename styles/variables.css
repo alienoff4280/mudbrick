@@ -73,6 +73,7 @@
   --mb-shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
 
   /* Radii */
+  --mb-radius-xs: 2px;
   --mb-radius-sm: 4px;
   --mb-radius-md: 8px;
   --mb-radius-lg: 12px;
