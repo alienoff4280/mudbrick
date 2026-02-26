@@ -200,6 +200,14 @@ async function boot() {
 
     // Offline detection
     initOfflineIndicator();
+
+    // Warn before closing/navigating away when work might be lost
+    window.addEventListener('beforeunload', (e) => {
+      if (State.pdfDoc && hasAnnotations && hasAnnotations()) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    });
   } catch (e) {
     console.error('Boot failed:', e);
     toast('Failed to initialize PDF engine. Please refresh.', 'error');
@@ -265,7 +273,7 @@ function renderRecentFiles() {
     li.innerHTML = `
       <span class="recent-file-icon">${icon('file', 16)}</span>
       <div class="recent-file-info">
-        <div class="recent-file-name" title="${file.name}">${file.name}</div>
+        <div class="recent-file-name" title="${escapeHtml(file.name)}">${escapeHtml(file.name)}</div>
         <div class="recent-file-meta">${meta}</div>
       </div>
     `;
@@ -385,6 +393,7 @@ async function openPDF(bytes, fileName, fileSize) {
 
   // Annotate ribbon — exhibit stamp
   $('btn-exhibit-stamp').disabled = false;
+  if ($('btn-anno-image')) $('btn-anno-image').disabled = false;
 
   // Security ribbon buttons
   $('btn-encrypt').disabled = false;
@@ -2261,7 +2270,7 @@ function refreshNotesSidebar() {
 
     item.innerHTML = `
       <span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:${bg};border:1px solid rgba(0,0,0,0.15);flex-shrink:0;margin-top:1px;"></span>
-      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${note.noteText || '<em style="color:var(--mb-text-muted)">Empty note</em>'}</span>
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${note.noteText ? escapeHtml(note.noteText) : '<em style="color:var(--mb-text-muted)">Empty note</em>'}</span>
       <span style="color:var(--mb-text-muted);flex-shrink:0;">p.${note.pageNum}</span>
     `;
 
@@ -2750,7 +2759,13 @@ function wireEvents() {
 
   // Floating toolbar tool buttons
   document.querySelectorAll('.float-btn[data-tool]').forEach(btn => {
-    btn.addEventListener('click', () => selectTool(btn.dataset.tool));
+    btn.addEventListener('click', () => {
+      if (btn.dataset.tool === 'image') {
+        handleImageInsert();
+      } else {
+        selectTool(btn.dataset.tool);
+      }
+    });
   });
 
   // Sidebar tab switching
@@ -2775,7 +2790,7 @@ function wireEvents() {
     swatch.addEventListener('click', () => {
       document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
       swatch.classList.add('active');
-      // Future: push color to active annotation tool
+      updateToolOptions({ color: swatch.dataset.color });
     });
   });
 
@@ -2785,7 +2800,7 @@ function wireEvents() {
   if (opacitySlider && opacityValue) {
     opacitySlider.addEventListener('input', () => {
       opacityValue.textContent = opacitySlider.value + '%';
-      // Future: push opacity to active annotation tool
+      updateToolOptions({ opacity: parseInt(opacitySlider.value) / 100 });
     });
   }
 
@@ -2903,11 +2918,13 @@ function wireEvents() {
         toast('Enter a page range', 'warning');
         return;
       }
-      pageNumbers = parsePageRanges(rangeStr, State.totalPages);
-      if (!pageNumbers.length) {
+      const parsed = parsePageRanges(rangeStr, State.totalPages);
+      if (!parsed || !parsed.length) {
         toast('Invalid page range', 'error');
         return;
       }
+      // Flatten array-of-arrays and convert from 0-based to 1-based
+      pageNumbers = parsed.flat().map(p => p + 1);
     }
 
     // Show progress
@@ -2967,6 +2984,9 @@ function wireEvents() {
   // Image insertion
   $('btn-insert-image').addEventListener('click', handleImageInsert);
   $('image-file-input').addEventListener('change', onImageFileSelected);
+
+  // Annotate ribbon image button
+  if ($('btn-anno-image')) $('btn-anno-image').addEventListener('click', handleImageInsert);
 
   // Sticky note — note text textarea
   const noteTextarea = $('prop-note-text');
@@ -3210,9 +3230,8 @@ function wireEvents() {
   });
   // Update quality % display
   $('export-img-quality')?.addEventListener('input', (e) => {
-    const pct = Math.round(parseFloat(e.target.value) * 100);
     const display = $('export-img-quality-val');
-    if (display) display.textContent = pct + '%';
+    if (display) display.textContent = e.target.value + '%';
   });
 
   $('btn-create-from-images').addEventListener('click', () => {
@@ -3629,7 +3648,8 @@ async function executeExportImage() {
   } else {
     // Custom range
     const rangeInput = $('export-img-range');
-    pages = rangeInput ? parsePageRanges(rangeInput.value, State.totalPages) : [State.currentPage];
+    const parsed = rangeInput ? parsePageRanges(rangeInput.value, State.totalPages) : null;
+    pages = parsed ? parsed.flat().map(p => p + 1) : [State.currentPage];
   }
 
   showLoading('Exporting images…');
@@ -3785,6 +3805,11 @@ function renderCurrentCompare() {
   const container = $('compare-view');
   if (container) renderComparisonView(container, page, { view });
   $('compare-page-info').textContent = `Page ${page.pageNum} of ${_compareResults.maxPages} (${page.diffPercentage.toFixed(2)}% diff)`;
+  // Update prev/next button states
+  const prevBtn = $('btn-compare-prev');
+  const nextBtn = $('btn-compare-next');
+  if (prevBtn) prevBtn.disabled = _comparePageIdx <= 0;
+  if (nextBtn) nextBtn.disabled = _comparePageIdx >= _compareResults.pages.length - 1;
 }
 
 function navigateCompare(dir) {
@@ -3948,7 +3973,7 @@ function executeFormDataExport(format) {
 
 /* ── Helpers ── */
 function escapeHtml(str) {
-  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
 /* ═══════════════════ Phase 3 Batch — Feature Handlers ═══════════════════ */
