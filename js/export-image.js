@@ -47,8 +47,8 @@ export async function exportPageToImage(pdfDoc, pageNum, opts = {}) {
 
   // Convert to blob
   const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
-  const blob = await new Promise(resolve => {
-    canvas.toBlob(resolve, mimeType, format === 'jpg' ? quality : undefined);
+  const blob = await new Promise((resolve, reject) => {
+    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed to render page image')), mimeType, quality);
   });
 
   return {
@@ -310,7 +310,9 @@ export async function optimizePDF(pdfDoc, pdfBytes, opts = {}, onProgress) {
 
       await page.render({ canvasContext: ctx, viewport: renderViewport }).promise;
 
-      const jpegBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+      const jpegBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('JPEG conversion failed')), 'image/jpeg', quality);
+      });
       const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
 
       const image = await newDoc.embedJpg(jpegBytes);
@@ -429,7 +431,9 @@ async function recompressImages(pdfDoc, pdfBytes, quality, onProgress) {
       const ctx = canvas.getContext('2d');
       ctx.putImageData(imageData, 0, 0);
 
-      const jpegBlob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+      const jpegBlob = await new Promise((resolve, reject) => {
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('JPEG conversion failed')), 'image/jpeg', quality);
+      });
       const jpegBytes = new Uint8Array(await jpegBlob.arrayBuffer());
 
       // Only replace if the JPEG is actually smaller
@@ -483,26 +487,26 @@ async function recompressImages(pdfDoc, pdfBytes, quality, onProgress) {
  * Used by recompressImages to convert raw PDF image bytes to pixels.
  */
 async function decodeImageBlob(blob, expectedW, expectedH) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(blob);
-    img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth || expectedW;
-      canvas.height = img.naturalHeight || expectedH;
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0);
-      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      URL.revokeObjectURL(url);
-      canvas.width = canvas.height = 0;
-      resolve(imageData);
-    };
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Image decode failed'));
-    };
-    img.src = url;
-  });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error('Image decode failed'));
+      image.src = url;
+    });
+    const MAX_CANVAS_DIM = 4096;
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.min(img.naturalWidth || expectedW, MAX_CANVAS_DIM);
+    canvas.height = Math.min(img.naturalHeight || expectedH, MAX_CANVAS_DIM);
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    canvas.width = canvas.height = 0;
+    return imageData;
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 /* ═══════════════════ Helpers ═══════════════════ */
@@ -538,9 +542,10 @@ async function convertToJpeg(file) {
     const img = new Image();
     const url = URL.createObjectURL(file);
     img.onload = () => {
+      const MAX_CANVAS_DIM = 4096;
       const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
+      canvas.width = Math.min(img.naturalWidth, MAX_CANVAS_DIM);
+      canvas.height = Math.min(img.naturalHeight, MAX_CANVAS_DIM);
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0);
       canvas.toBlob(blob => {

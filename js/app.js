@@ -75,7 +75,7 @@ import {
 } from './comment-summary.js';
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
-import { canUndo, canRedo } from './history.js';
+import { canUndo, canRedo, initPageState } from './history.js';
 import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive } from './text-edit.js';
 import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
 import { setLabelRange, getPageLabel, getLabelRanges, clearLabels, removeLabelRange, previewLabels, LABEL_FORMATS } from './page-labels.js';
@@ -279,7 +279,12 @@ function renderRecentFiles() {
       </div>
     `;
 
+    li.title = 'Click to learn more';
     list.appendChild(li);
+    li.addEventListener('click', () => {
+      toast('Use "Open a PDF" to reopen files — file data is not stored in browser', 'info');
+    });
+    li.style.cursor = 'pointer';
   }
 }
 
@@ -517,6 +522,12 @@ async function renderCurrentPage() {
   resizeOverlay(w, h, State.zoom);
   loadPageAnnotations(State.currentPage);
 
+  // Ensure undo history has a baseline state for this page
+  const canvas = getCanvas();
+  if (canvas) {
+    initPageState(State.currentPage, canvas.toJSON());
+  }
+
   // Render form field overlays
   clearFormOverlay();
   if (State.formFields.length > 0 && State.pdfLibDoc) {
@@ -572,7 +583,8 @@ function firstPage() { goToPage(1); }
 function lastPage() { goToPage(State.totalPages); }
 
 function updatePageNav() {
-  DOM.pageInput.value = State.currentPage;
+  const label = typeof getPageLabel === 'function' ? getPageLabel(State.currentPage) : null;
+  DOM.pageInput.value = label || State.currentPage;
   DOM.pageInput.max = State.totalPages;
   DOM.totalPages.textContent = State.totalPages;
   const atFirst = State.currentPage <= 1;
