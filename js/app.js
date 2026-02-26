@@ -176,11 +176,12 @@ async function boot() {
     // Replace emoji placeholders with SVG icons
     replaceIcons();
 
-    // Check for dark mode preference
+    // Restore dark mode preference
     if (localStorage.getItem('mudbrick-dark') === 'true' ||
         (!localStorage.getItem('mudbrick-dark') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
       document.documentElement.setAttribute('data-theme', 'dark');
-      $('btn-dark-mode').innerHTML = icon('sun', 16);
+      const btn = $('btn-dark-mode');
+      if (btn) btn.innerHTML = icon('sun', 16);
     }
 
     // Auto-collapse sidebar on narrow screens
@@ -1249,7 +1250,7 @@ function showAnnotationContextMenu(e, target) {
     <button data-action="anno-backward" ${!hasSelection ? 'disabled' : ''}>${icon('chevron-down', 14)} Send Backward</button>
     <button data-action="anno-back" ${!hasSelection ? 'disabled' : ''}>${icon('arrow-down-to-line', 14)} Send to Back</button>
     <div class="context-menu-separator"></div>
-    <button data-action="anno-lock" ${!hasSelection ? 'disabled' : ''}>${locked ? icon('lock-open', 14) + ' Unlock' : icon('lock-open', 14) + ' Lock'}</button>
+    <button data-action="anno-lock" ${!hasSelection ? 'disabled' : ''}>${locked ? icon('lock', 14) + ' Unlock' : icon('lock-open', 14) + ' Lock'}</button>
     <button data-action="anno-delete" ${!hasSelection ? 'disabled' : ''}>${icon('trash', 14)} Delete</button>
   `;
 
@@ -2150,7 +2151,7 @@ function toggleDarkMode() {
   const html = document.documentElement;
   const isDark = html.getAttribute('data-theme') === 'dark';
   html.setAttribute('data-theme', isDark ? 'light' : 'dark');
-  localStorage.setItem('mudbrick-dark', !isDark);
+  localStorage.setItem('mudbrick-dark', isDark ? 'false' : 'true');
   $('btn-dark-mode').innerHTML = isDark ? icon('moon', 16) : icon('sun', 16);
 }
 

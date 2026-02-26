@@ -56,7 +56,7 @@ function mapToStandardFont(fontName) {
   const lower = (fontName || '').toLowerCase();
 
   if (lower.includes('courier') || lower.includes('mono')) {
-    if (lower.includes('bold') && lower.includes('oblique')) return 'CourierBoldOblique';
+    if (lower.includes('bold') && (lower.includes('oblique') || lower.includes('italic'))) return 'CourierBoldOblique';
     if (lower.includes('bold')) return 'CourierBold';
     if (lower.includes('oblique') || lower.includes('italic')) return 'CourierOblique';
     return 'Courier';
@@ -397,7 +397,13 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container) {
   if (active) exitTextEditMode();
 
   const page = await pdfDoc.getPage(pageNum);
-  const textContent = await page.getTextContent();
+  let textContent;
+  try {
+    textContent = await page.getTextContent();
+  } catch (err) {
+    console.warn('Text extraction failed (may be encrypted):', err);
+    textContent = { items: [] };
+  }
   const lines = groupIntoLines(textContent.items, viewport);
 
   if (lines.length === 0) {

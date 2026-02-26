@@ -90,6 +90,21 @@ export function setTool(toolName, options = {}) {
   fabricCanvas.off('path:created', markUnderlinePath);
   fabricCanvas.off('path:created', markStrikethroughPath);
 
+  // Remove shape/cover/redact mouse listeners to prevent leaks
+  fabricCanvas.off('mouse:move', onShapeMove);
+  fabricCanvas.off('mouse:up', onShapeUp);
+  fabricCanvas.off('mouse:move', onCoverMove);
+  fabricCanvas.off('mouse:up', onCoverUp);
+  fabricCanvas.off('mouse:move', onRedactMove);
+  fabricCanvas.off('mouse:up', onRedactUp);
+
+  // Clean up any in-progress shape/cover/redact preview
+  if (shapePreview) {
+    fabricCanvas.remove(shapePreview);
+    shapePreview = null;
+  }
+  shapeStartPoint = null;
+
   // Reset drawing mode
   fabricCanvas.isDrawingMode = false;
   fabricCanvas.selection = true;
@@ -536,9 +551,12 @@ function addStickyNote(x, y) {
     top: size / 2,
   });
 
+  // Clamp to canvas boundaries
+  const clampedLeft = Math.max(0, Math.min(x - size / 2, fabricCanvas.width - size));
+  const clampedTop = Math.max(0, Math.min(y - size / 2, fabricCanvas.height - size));
   const group = new fabric.Group([rect, icon], {
-    left: x - size / 2,
-    top: y - size / 2,
+    left: clampedLeft,
+    top: clampedTop,
     mudbrickType: 'sticky-note',
     noteText: '',
     noteColor: color,
@@ -808,8 +826,8 @@ export function insertImage(dataUrl, name = 'image') {
       if (!img) { reject(new Error('Failed to load image')); return; }
 
       // Scale image to fit within the canvas (max 50% of canvas dimension)
-      const maxW = fabricCanvas.width * 0.5;
-      const maxH = fabricCanvas.height * 0.5;
+      const maxW = Math.max(fabricCanvas.width * 0.5, 100);
+      const maxH = Math.max(fabricCanvas.height * 0.5, 100);
       const scale = Math.min(maxW / img.width, maxH / img.height, 1);
 
       img.set({
@@ -906,6 +924,7 @@ export function copySelected() {
   if (!fabricCanvas) return;
   const active = fabricCanvas.getActiveObject();
   if (!active) return;
+  _clipboard = null; // Clear immediately to signal pending copy
   active.clone(cloned => {
     _clipboard = cloned;
   }, CUSTOM_PROPS);
