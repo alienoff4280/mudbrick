@@ -994,6 +994,10 @@ html, body {
   opacity: 0.25;
   line-height: 1.0;
 }
+/* When text edit mode is active, remove the opacity so editable text is fully visible */
+#text-layer.text-edit-active {
+  opacity: 1;
+}
 
 #text-layer span,
 #text-layer br {
@@ -1017,7 +1021,7 @@ html, body {
 .text-edit-line {
   position: absolute;
   outline: 1px solid transparent;
-  background: transparent;
+  background: rgba(255, 255, 255, 0.92);
   padding: 0 2px;
   cursor: text;
   z-index: 15;
@@ -1025,27 +1029,26 @@ html, body {
   min-width: 20px;
   box-sizing: border-box;
   /* font-family is set inline from PDF font detection */
-  color: var(--mb-text);
   border-radius: 2px;
   transition: outline-color 0.15s, background 0.15s, box-shadow 0.15s;
 }
 .text-edit-line:hover {
   outline-color: rgba(41, 128, 185, 0.4);
-  background: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.97);
 }
 .text-edit-line:focus {
   outline: 2px solid var(--mb-accent);
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
   box-shadow: 0 0 0 3px rgba(41, 128, 185, 0.15);
 }
 /* Visual indicator for modified lines */
 .text-edit-line.text-edit-dirty {
   outline-color: rgba(234, 179, 8, 0.5);
-  background: rgba(253, 224, 71, 0.08);
+  background: rgba(255, 252, 240, 0.95);
 }
 .text-edit-line.text-edit-dirty:focus {
   outline-color: var(--mb-accent);
-  background: rgba(255, 255, 255, 0.95);
+  background: #ffffff;
 }
 
 /* Paragraph grouping indicator — vertical bar to show grouped lines */
@@ -2133,16 +2136,19 @@ html, body {
 /* ── Dark Mode Overrides ── */
 
 html[data-theme="dark"] .text-edit-line {
-  color: var(--mb-text);
+  background: rgba(44, 44, 44, 0.92);
 }
 html[data-theme="dark"] .text-edit-line:hover {
-  background: rgba(30, 30, 30, 0.5);
+  background: rgba(44, 44, 44, 0.97);
 }
 html[data-theme="dark"] .text-edit-line:focus {
-  background: rgba(30, 30, 30, 0.95);
+  background: #2c2c2c;
 }
 html[data-theme="dark"] .text-edit-line.text-edit-dirty {
-  background: rgba(234, 179, 8, 0.08);
+  background: rgba(44, 44, 44, 0.92);
+}
+html[data-theme="dark"] .text-edit-line.text-edit-dirty:focus {
+  background: #2c2c2c;
 }
 html[data-theme="dark"] .text-edit-paragraph {
   background: var(--mb-accent);
