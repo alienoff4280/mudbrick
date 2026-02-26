@@ -666,6 +666,17 @@ export function isTextEditActive() {
   return active;
 }
 
+/** Check whether any text lines have been modified (dirty) */
+export function hasTextEditChanges() {
+  if (!editContainer) return false;
+  return editContainer.querySelectorAll('.text-edit-line.text-edit-dirty').length > 0;
+}
+
+/** Check whether any image overlays have pending actions */
+export function hasImageEditChanges() {
+  return imageOverlays.some(o => o.action !== 'none');
+}
+
 /* ═══════════════════ Enhanced Toolbar ═══════════════════ */
 
 function createToolbar(container) {

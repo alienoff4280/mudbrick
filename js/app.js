@@ -49,7 +49,8 @@ import {
   buildTextIndex, clearTextIndex, searchText, findNext as findNextMatch,
   findPrevious as findPrevMatch, getMatchInfo, renderHighlights,
   scrollToActiveHighlight, isFindOpen, setFindOpen, hasMatches,
-  augmentTextIndex,
+  augmentTextIndex, getCurrentMatchInfo, getAllMatchInfos,
+  removeCurrentMatch, clearMatches,
 } from './find.js';
 
 import { applyBatesNumbers, previewBatesLabel } from './bates.js';
@@ -76,7 +77,7 @@ import {
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
 import { canUndo, canRedo, initPageState } from './history.js';
-import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive } from './text-edit.js';
+import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges } from './text-edit.js';
 import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
 import { setLabelRange, getPageLabel, getLabelRanges, clearLabels, removeLabelRange, previewLabels, LABEL_FORMATS } from './page-labels.js';
 
@@ -477,9 +478,17 @@ async function openPDF(bytes, fileName, fileSize) {
 async function renderCurrentPage() {
   if (!State.pdfDoc) return;
 
-  // Exit edit modes when navigating to a different page
-  if (isTextEditActive()) exitTextEditMode();
-  if (isImageEditActive()) exitImageEditMode();
+  // Exit edit modes when navigating to a different page (warn if unsaved)
+  if (isTextEditActive()) {
+    if (hasTextEditChanges() && !confirm('You have unsaved text edits on this page. Discard changes?')) return;
+    exitTextEditMode();
+    DOM.btnEditText.classList.remove('active');
+  }
+  if (isImageEditActive()) {
+    if (hasImageEditChanges() && !confirm('You have unsaved image edits on this page. Discard changes?')) return;
+    exitImageEditMode();
+    DOM.btnEditImage.classList.remove('active');
+  }
 
   // Save annotations from the page we're leaving
   if (State._prevPage && State._prevPage !== State.currentPage) {
@@ -806,6 +815,7 @@ async function handleRedo() {
 function handleEditText() {
   if (!State.pdfDoc) return;
   if (isTextEditActive()) {
+    if (hasTextEditChanges() && !confirm('You have unsaved text edits. Discard changes?')) return;
     exitTextEditMode();
     DOM.btnEditText.classList.remove('active');
     return;
@@ -838,6 +848,7 @@ async function handleCommitTextEdits() {
 }
 
 function handleCancelTextEdits() {
+  if (hasTextEditChanges() && !confirm('Discard text edits? Changes will be lost.')) return;
   exitTextEditMode();
   DOM.btnEditText.classList.remove('active');
 }
@@ -847,6 +858,7 @@ function handleCancelTextEdits() {
 function handleEditImage() {
   if (!State.pdfDoc) return;
   if (isImageEditActive()) {
+    if (hasImageEditChanges() && !confirm('You have unsaved image edits. Discard changes?')) return;
     exitImageEditMode();
     DOM.btnEditImage.classList.remove('active');
     return;
@@ -879,17 +891,20 @@ async function handleCommitImageEdits() {
 }
 
 function handleCancelImageEdits() {
+  if (hasImageEditChanges() && !confirm('Discard image edits? Changes will be lost.')) return;
   exitImageEditMode();
   DOM.btnEditImage.classList.remove('active');
 }
 
 /* ═══════════════════ Find Bar ═══════════════════ */
 
-function openFindBar() {
+function openFindBar(showReplace) {
   const bar = $('find-bar');
   if (!bar || !State.pdfDoc) return;
   bar.classList.remove('hidden');
   setFindOpen(true);
+  const replaceRow = $('find-replace-row');
+  if (showReplace && replaceRow) replaceRow.classList.remove('hidden');
   const input = $('find-input');
   input.focus();
   input.select();
@@ -902,10 +917,134 @@ function closeFindBar() {
   bar.classList.add('hidden');
   setFindOpen(false);
   $('find-input').value = '';
+  $('replace-input').value = '';
   $('find-match-count').textContent = '';
+  const replaceRow = $('find-replace-row');
+  if (replaceRow) replaceRow.classList.add('hidden');
   // Clear search state and highlights
   searchText('', false);
   DOM.textLayer.querySelectorAll('.find-highlight').forEach(el => el.remove());
+}
+
+function toggleReplaceRow() {
+  const row = $('find-replace-row');
+  if (!row) return;
+  row.classList.toggle('hidden');
+  if (!row.classList.contains('hidden')) {
+    $('replace-input').focus();
+  }
+}
+
+async function executeReplace() {
+  const replacement = $('replace-input').value;
+  const matchInfo = getCurrentMatchInfo();
+  if (!matchInfo || !State.pdfBytes) return;
+
+  showLoading('Replacing…');
+  try {
+    const newBytes = await applyTextReplacements(State.pdfBytes, [
+      { ...matchInfo, replacement },
+    ]);
+    removeCurrentMatch();
+    await reloadAfterEdit(newBytes);
+
+    // Re-run search on the updated doc (index was rebuilt by reloadAfterEdit)
+    performSearch();
+    toast('Replaced 1 occurrence', 'success');
+  } catch (err) {
+    console.error('Replace failed:', err);
+    toast('Replace failed: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function executeReplaceAll() {
+  const replacement = $('replace-input').value;
+  const allInfos = getAllMatchInfos();
+  if (!allInfos.length || !State.pdfBytes) return;
+
+  showLoading('Replacing all…');
+  try {
+    const items = allInfos.map(m => ({ ...m, replacement }));
+    const newBytes = await applyTextReplacements(State.pdfBytes, items);
+    clearMatches();
+    await reloadAfterEdit(newBytes);
+
+    // Re-run search on the updated doc
+    performSearch();
+    toast(`Replaced ${allInfos.length} occurrence${allInfos.length !== 1 ? 's' : ''}`, 'success');
+  } catch (err) {
+    console.error('Replace all failed:', err);
+    toast('Replace all failed: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+/**
+ * Apply text replacements to the PDF using pdf-lib (cover-and-replace).
+ * Each item has { pageNum, rects, replacement }.
+ */
+async function applyTextReplacements(pdfBytes, items) {
+  const doc = await ensurePdfLib(pdfBytes);
+  const PDFLib = window.PDFLib;
+  const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+
+  for (const item of items) {
+    const page = doc.getPage(item.pageNum - 1);
+
+    for (const rect of item.rects) {
+      if (!rect.transform) continue;
+
+      const pdfX = rect.transform[4];
+      const pdfY = rect.transform[5];
+      const fontSize = Math.abs(rect.transform[3]) || Math.abs(rect.height) || 12;
+
+      // Calculate character-level positioning for partial item matches
+      const itemLen = rect.str.length;
+      const charWidth = itemLen > 0 ? (rect.width || 0) / itemLen : 0;
+      const clipStart = Math.max(0, item.startOffset - rect.itemStart);
+      const clipEnd = Math.min(itemLen, item.endOffset - rect.itemStart);
+
+      const coverX = pdfX + clipStart * charWidth;
+      const coverW = (clipEnd - clipStart) * charWidth + 2;
+
+      // White cover rectangle
+      page.drawRectangle({
+        x: coverX - 0.5,
+        y: pdfY - fontSize * 0.25,
+        width: coverW,
+        height: fontSize * 1.3,
+        color: PDFLib.rgb(1, 1, 1),
+        borderWidth: 0,
+      });
+    }
+
+    // Draw replacement text at the first rect's position
+    if (item.rects.length > 0 && item.rects[0].transform) {
+      const firstRect = item.rects[0];
+      const pdfX = firstRect.transform[4];
+      const pdfY = firstRect.transform[5];
+      const fontSize = Math.abs(firstRect.transform[3]) || 12;
+
+      // Offset to the match start within the first item
+      const itemLen = firstRect.str.length;
+      const charWidth = itemLen > 0 ? (firstRect.width || 0) / itemLen : 0;
+      const clipStart = Math.max(0, item.startOffset - firstRect.itemStart);
+      const drawX = pdfX + clipStart * charWidth;
+
+      page.drawText(item.replacement, {
+        x: drawX,
+        y: pdfY,
+        size: fontSize,
+        font,
+        color: PDFLib.rgb(0, 0, 0),
+      });
+    }
+  }
+
+  return doc.save();
 }
 
 function performSearch() {
@@ -1193,6 +1332,7 @@ function showContextMenu(e, pageNum) {
           break;
         case 'delete':
           if (State.totalPages <= 1) return;
+          if (!confirm(`Delete page ${pageNum}? This cannot be undone.`)) return;
           newBytes = await deletePage(State.pdfBytes, idx);
           // If we deleted the current page or a page before it, adjust
           if (pageNum <= State.currentPage && State.currentPage > 1) {
@@ -3125,6 +3265,16 @@ function wireEvents() {
   $('find-prev')?.addEventListener('click', () => navigateMatch('prev'));
   $('find-close')?.addEventListener('click', closeFindBar);
   $('find-case-sensitive')?.addEventListener('change', performSearch);
+  $('find-replace-toggle')?.addEventListener('click', toggleReplaceRow);
+  $('replace-one')?.addEventListener('click', executeReplace);
+  $('replace-all')?.addEventListener('click', executeReplaceAll);
+  const replaceInput = $('replace-input');
+  if (replaceInput) {
+    replaceInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); executeReplace(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
+    });
+  }
 
   // Window resize: debounced re-render
   window.addEventListener('resize', debounce(() => {
@@ -4277,6 +4427,13 @@ function handleKeyboard(e) {
   if (mod && e.key === 'f' && State.pdfDoc) {
     e.preventDefault();
     openFindBar();
+    return;
+  }
+
+  // Ctrl+H — open find bar with replace visible
+  if (mod && e.key === 'h' && State.pdfDoc) {
+    e.preventDefault();
+    openFindBar(true);
     return;
   }
 

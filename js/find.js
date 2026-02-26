@@ -269,3 +269,64 @@ export function getCurrentQuery() {
 export function hasMatches() {
   return matches.length > 0;
 }
+
+/**
+ * Get replacement info for the current match.
+ * Returns the match details including PDF text item rects/transforms
+ * needed to apply a cover-and-replace to the actual PDF.
+ * @returns {{pageNum, rects, matchText}|null}
+ */
+export function getCurrentMatchInfo() {
+  if (currentMatchIdx < 0 || currentMatchIdx >= matches.length) return null;
+  const m = matches[currentMatchIdx];
+  const page = textIndex ? textIndex.find(p => p.pageNum === m.pageNum) : null;
+  const matchText = page ? page.text.slice(m.startOffset, m.endOffset) : '';
+  return {
+    pageNum: m.pageNum,
+    startOffset: m.startOffset,
+    endOffset: m.endOffset,
+    rects: m.rects,
+    matchText,
+  };
+}
+
+/**
+ * Collect replacement info for all current matches.
+ * @returns {Array<{pageNum, rects, matchText, startOffset, endOffset}>}
+ */
+export function getAllMatchInfos() {
+  if (!matches.length || !textIndex) return [];
+  return matches.map(m => {
+    const page = textIndex.find(p => p.pageNum === m.pageNum);
+    const matchText = page ? page.text.slice(m.startOffset, m.endOffset) : '';
+    return {
+      pageNum: m.pageNum,
+      startOffset: m.startOffset,
+      endOffset: m.endOffset,
+      rects: m.rects,
+      matchText,
+    };
+  });
+}
+
+/**
+ * Remove the current match from the results and advance.
+ * Called after a single replacement has been applied to the PDF.
+ */
+export function removeCurrentMatch() {
+  if (currentMatchIdx < 0 || currentMatchIdx >= matches.length) return;
+  matches.splice(currentMatchIdx, 1);
+  if (matches.length === 0) {
+    currentMatchIdx = -1;
+  } else if (currentMatchIdx >= matches.length) {
+    currentMatchIdx = 0;
+  }
+}
+
+/**
+ * Clear all matches (called after replace-all has been applied to the PDF).
+ */
+export function clearMatches() {
+  matches = [];
+  currentMatchIdx = -1;
+}

@@ -860,7 +860,7 @@ html, body {
   right: 16px;
   z-index: 75;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 4px;
   background: var(--mb-surface);
   border: 1px solid var(--mb-border);
@@ -873,6 +873,39 @@ html, body {
 
 .find-bar.hidden {
   display: none;
+}
+
+.find-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.find-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 22px; /* align with search input (past icon) */
+}
+
+.find-replace-row.hidden {
+  display: none;
+}
+
+.find-replace-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--mb-border);
+  border-radius: var(--mb-radius-sm);
+  background: var(--mb-surface);
+  color: var(--mb-text);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.find-replace-btn:hover {
+  background: var(--mb-surface-hover);
 }
 
 .find-icon {

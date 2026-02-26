@@ -559,24 +559,34 @@
 
       <!-- Canvas Area -->
       <main id="canvas-area" role="main" aria-label="PDF document view">
-        <!-- Find Bar (Ctrl+F) -->
+        <!-- Find & Replace Bar (Ctrl+F / Ctrl+H) -->
         <div id="find-bar" class="find-bar hidden">
-          <span class="find-icon" data-icon="search" data-icon-size="14"></span>
-          <input type="text" id="find-input" class="find-input" placeholder="Find in document… (Ctrl+F)" autocomplete="off" spellcheck="false">
-          <span id="find-match-count" class="find-match-count" aria-live="polite"></span>
-          <button id="find-prev" class="find-nav-btn" title="Previous (Shift+Enter)" aria-label="Previous match">
-            <span data-icon="chevron-up" data-icon-size="14"></span>
-          </button>
-          <button id="find-next" class="find-nav-btn" title="Next (Enter)" aria-label="Next match">
-            <span data-icon="chevron-down" data-icon-size="14"></span>
-          </button>
-          <label class="find-case-toggle" title="Match Case">
-            <input type="checkbox" id="find-case-sensitive">
-            <span>Aa</span>
-          </label>
-          <button id="find-close" class="find-close-btn" title="Close (Esc)" aria-label="Close find bar">
-            <span data-icon="x" data-icon-size="14"></span>
-          </button>
+          <div class="find-bar-row">
+            <span class="find-icon" data-icon="search" data-icon-size="14"></span>
+            <input type="text" id="find-input" class="find-input" placeholder="Find in document… (Ctrl+F)" autocomplete="off" spellcheck="false">
+            <span id="find-match-count" class="find-match-count" aria-live="polite"></span>
+            <button id="find-prev" class="find-nav-btn" title="Previous (Shift+Enter)" aria-label="Previous match">
+              <span data-icon="chevron-up" data-icon-size="14"></span>
+            </button>
+            <button id="find-next" class="find-nav-btn" title="Next (Enter)" aria-label="Next match">
+              <span data-icon="chevron-down" data-icon-size="14"></span>
+            </button>
+            <label class="find-case-toggle" title="Match Case">
+              <input type="checkbox" id="find-case-sensitive">
+              <span>Aa</span>
+            </label>
+            <button id="find-replace-toggle" class="find-nav-btn" title="Toggle Replace (Ctrl+H)" aria-label="Toggle replace">
+              <span data-icon="replace" data-icon-size="14">↔</span>
+            </button>
+            <button id="find-close" class="find-close-btn" title="Close (Esc)" aria-label="Close find bar">
+              <span data-icon="x" data-icon-size="14"></span>
+            </button>
+          </div>
+          <div id="find-replace-row" class="find-replace-row hidden">
+            <input type="text" id="replace-input" class="find-input" placeholder="Replace with…" autocomplete="off" spellcheck="false">
+            <button id="replace-one" class="find-replace-btn" title="Replace current match" aria-label="Replace">Replace</button>
+            <button id="replace-all" class="find-replace-btn" title="Replace all matches" aria-label="Replace all">All</button>
+          </div>
         </div>
 
         <div id="page-container">
