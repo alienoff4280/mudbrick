@@ -14,7 +14,7 @@ import {
 } from './pdf-engine.js';
 
 import {
-  toast, showLoading, hideLoading, readFileAsArrayBuffer,
+  toast, showLoading, hideLoading, updateLoadingProgress, readFileAsArrayBuffer,
   formatFileSize, initDragDrop, debounce, downloadBlob, parsePageRanges,
 } from './utils.js';
 
@@ -660,6 +660,19 @@ function generateThumbnails() {
     `;
     item.addEventListener('click', () => goToPage(i));
     item.addEventListener('contextmenu', e => showContextMenu(e, i));
+
+    // Drag-and-drop reordering
+    item.draggable = true;
+    item.addEventListener('dragstart', e => {
+      e.dataTransfer.setData('text/x-mudbrick-page', String(i));
+      e.dataTransfer.effectAllowed = 'move';
+      item.classList.add('dragging');
+    });
+    item.addEventListener('dragend', () => {
+      item.classList.remove('dragging');
+      clearDropIndicators();
+    });
+
     DOM.thumbnailList.appendChild(item);
   }
 
@@ -3307,11 +3320,12 @@ function wireEvents() {
     }
   });
 
-  // Drag-and-drop on sidebar thumbnail list — insert pages at drop position
+  // Drag-and-drop on sidebar thumbnail list — reorder pages or insert new ones
   DOM.thumbnailList.addEventListener('dragover', e => {
     e.preventDefault();
-    e.dataTransfer.dropEffect = 'copy';
-    // Highlight drop target between thumbnails
+    // Set effect based on whether this is an internal reorder or external file
+    const isInternal = e.dataTransfer.types.includes('text/x-mudbrick-page');
+    e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy';
     const target = getDropTarget(e);
     clearDropIndicators();
     if (target.item) {
@@ -3319,14 +3333,51 @@ function wireEvents() {
     }
   });
   DOM.thumbnailList.addEventListener('dragleave', e => {
-    // Only clear if leaving the thumbnail list entirely
     if (!DOM.thumbnailList.contains(e.relatedTarget)) {
       clearDropIndicators();
     }
   });
-  DOM.thumbnailList.addEventListener('drop', e => {
+  DOM.thumbnailList.addEventListener('drop', async e => {
     e.preventDefault();
     clearDropIndicators();
+
+    // Internal page reorder
+    const draggedPage = e.dataTransfer.getData('text/x-mudbrick-page');
+    if (draggedPage && State.pdfBytes) {
+      const fromPage = parseInt(draggedPage);
+      const target = getDropTarget(e);
+      if (!target.item) return;
+      let toPage = parseInt(target.item.dataset.page);
+      if (target.position === 'after') toPage++;
+      // Convert to 0-based indices
+      const fromIdx = fromPage - 1;
+      let toIdx = toPage - 1;
+      if (fromIdx === toIdx || fromIdx === toIdx - 1) return; // no-op
+      // Adjust toIdx since removing fromIdx shifts indices
+      if (fromIdx < toIdx) toIdx--;
+      showLoading('Reordering pages…');
+      try {
+        const newBytes = await reorderPages(State.pdfBytes, fromIdx, toIdx);
+        // Update current page if it was moved
+        if (State.currentPage === fromPage) {
+          State.currentPage = toIdx + 1;
+        } else if (fromPage < State.currentPage && toIdx + 1 >= State.currentPage) {
+          State.currentPage--;
+        } else if (fromPage > State.currentPage && toIdx + 1 <= State.currentPage) {
+          State.currentPage++;
+        }
+        await reloadAfterEdit(newBytes);
+        toast(`Moved page ${fromPage}`, 'success');
+      } catch (err) {
+        console.error('Page reorder failed:', err);
+        toast('Reorder failed: ' + err.message, 'error');
+      } finally {
+        hideLoading();
+      }
+      return;
+    }
+
+    // External file drop — insert pages
     const files = Array.from(e.dataTransfer.files).filter(f =>
       f.name.toLowerCase().endsWith('.pdf') ||
       f.type.startsWith('image/') ||
@@ -3334,19 +3385,14 @@ function wireEvents() {
     );
     if (!files.length || !State.pdfDoc) return;
 
-    // Determine insertion point from drop position
     const target = getDropTarget(e);
     let insertAfter;
     if (target.item) {
       const pageNum = parseInt(target.item.dataset.page);
       insertAfter = target.position === 'before' ? pageNum - 2 : pageNum - 1;
-      // Clamp: -1 means insert at very beginning (before page 1)
       if (insertAfter < -1) insertAfter = -1;
     }
-    // insertAfter === undefined → append at end
-    // insertAfter === -1 → insert before first page (index 0)
     if (insertAfter === -1) {
-      // Special case: insert at the beginning
       handleAddPages(files, -1);
     } else {
       handleAddPages(files, insertAfter);
@@ -3820,7 +3866,7 @@ async function executeExportImage() {
     await exportPagesToImages(State.pdfDoc, pages, {
       format, dpi, quality, fileName: State.fileName,
     }, (done, total) => {
-      $('loading-text').textContent = `Exporting page ${done}/${total}...`;
+      updateLoadingProgress(`Exporting page ${done} of ${total}…`, done, total);
     });
     $('export-image-modal-backdrop').classList.add('hidden');
     toast(`Exported ${pages.length} page(s) as ${format.toUpperCase()}`, 'success');
@@ -3852,7 +3898,7 @@ async function executeCreateFromImages() {
   showLoading('Creating PDF from images…');
   try {
     const pdfBytes = await createPDFFromImages(_imagesToPdf, { pageSize, margin }, (done, total) => {
-      $('loading-text').textContent = `Processing image ${done}/${total}...`;
+      updateLoadingProgress(`Processing image ${done} of ${total}…`, done, total);
     });
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     downloadBlob(blob, 'images_combined.pdf');
@@ -3889,9 +3935,9 @@ async function executeOptimize() {
 
     const newBytes = await optimizePDF(State.pdfDoc, State.pdfBytes, opts, (done, total, label) => {
       if (label === 'recompressing images') {
-        $('loading-text').textContent = `Recompressing image ${done}/${total}…`;
+        updateLoadingProgress(`Recompressing image ${done} of ${total}…`, done, total);
       } else {
-        $('loading-text').textContent = `${label === 'compressing' ? 'Compressing' : 'Copying'} page ${done}/${total}…`;
+        updateLoadingProgress(`${label === 'compressing' ? 'Compressing' : 'Copying'} page ${done} of ${total}…`, done, total);
       }
     });
 
@@ -3944,7 +3990,7 @@ async function executeCompare() {
   showLoading('Comparing documents…');
   try {
     _compareResults = await compareDocuments(State.pdfDoc, _compareDocB, { dpi, threshold }, (page, total) => {
-      $('loading-text').textContent = `Comparing page ${page}/${total}...`;
+      updateLoadingProgress(`Comparing page ${page} of ${total}…`, page, total);
       const bar = $('compare-progress-bar');
       if (bar) bar.style.width = Math.round(page / total * 100) + '%';
     });

@@ -813,6 +813,16 @@ html, body {
   box-shadow: 0 3px 0 0 var(--mb-brand);
   margin-bottom: 3px;
 }
+.thumbnail-item.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+.thumbnail-item[draggable="true"] {
+  cursor: grab;
+}
+.thumbnail-item[draggable="true"]:active {
+  cursor: grabbing;
+}
 
 .thumbnail-placeholder {
   width: 100%;
@@ -1819,6 +1829,22 @@ html[data-theme="dark"] #text-layer {
   letter-spacing: 0.2px;
 }
 
+.loading-progress {
+  width: 240px;
+  height: 6px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.loading-progress.hidden { display: none; }
+.loading-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--mb-accent);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -1979,8 +2005,16 @@ html[data-theme="dark"] #text-layer {
   }
 
   /* Find bar: stack tighter */
+  .find-bar {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+  }
+
   .find-input {
     width: 100px;
+    flex: 1;
+    min-width: 0;
   }
 
   .find-match-count {
@@ -1989,6 +2023,31 @@ html[data-theme="dark"] #text-layer {
 
   .find-case-toggle {
     display: none;
+  }
+
+  .find-replace-row {
+    padding-left: 0;
+  }
+
+  .find-replace-btn {
+    min-width: 44px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* Text edit toolbar: full-width on phone */
+  .text-edit-toolbar {
+    left: 4px;
+    right: 4px;
+    transform: none;
+    max-width: none;
+    flex-wrap: wrap;
+  }
+
+  /* Modals: full-width on phone */
+  .modal {
+    width: 95vw;
+    max-height: 90vh;
   }
 
   /* Welcome screen: tighter */
@@ -2024,6 +2083,11 @@ html[data-theme="dark"] #text-layer {
 
   .page-nav-sep {
     margin: 0 4px;
+  }
+
+  /* Loading progress: wider on phone */
+  .loading-progress {
+    width: 80vw;
   }
 }
 
