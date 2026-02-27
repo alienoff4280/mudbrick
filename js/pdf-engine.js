@@ -16,6 +16,10 @@ export async function initPdfJs() {
   // Configure worker
   pdfjsLib.GlobalWorkerOptions.workerSrc =
     'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.8.69/build/pdf.worker.min.mjs';
+  // Reduce noisy font parser warnings from problematic embedded TrueType hints.
+  if (typeof pdfjsLib.setVerbosityLevel === 'function' && pdfjsLib.VerbosityLevel) {
+    pdfjsLib.setVerbosityLevel(pdfjsLib.VerbosityLevel.ERRORS);
+  }
 
   return pdfjsLib;
 }

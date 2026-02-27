@@ -28,6 +28,101 @@ function escapeHtml(str) {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+function getReadbackContext(canvas) {
+  if (!canvas) return null;
+  return canvas.getContext('2d', { willReadFrequently: true }) || canvas.getContext('2d');
+}
+
+function normalizeInlineHtml(html) {
+  return String(html || '')
+    .replace(/\u00a0/g, ' ')
+    .replace(/<span style=""><\/span>/gi, '')
+    .trim();
+}
+
+function getSelectionRangeInDiv(div) {
+  const sel = window.getSelection ? window.getSelection() : null;
+  if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return null;
+  const range = sel.getRangeAt(0);
+  const ancestor = range.commonAncestorContainer;
+  const host = ancestor.nodeType === 1 ? ancestor : ancestor.parentElement;
+  if (!host || !div.contains(host)) return null;
+  return range;
+}
+
+function toggleInlineStyleOnSelection(div, styleType) {
+  const range = getSelectionRangeInDiv(div);
+  if (!range) return false;
+  if (styleType === 'bold') document.execCommand('bold');
+  else if (styleType === 'italic') document.execCommand('italic');
+  else return false;
+  return true;
+}
+
+function collectTextRuns(node, state, out) {
+  if (!node) return;
+  if (node.nodeType === Node.TEXT_NODE) {
+    const text = node.nodeValue || '';
+    if (!text) return;
+    const last = out[out.length - 1];
+    if (last && last.bold === state.bold && last.italic === state.italic) {
+      last.text += text;
+    } else {
+      out.push({ text, bold: state.bold, italic: state.italic });
+    }
+    return;
+  }
+  if (node.nodeType !== Node.ELEMENT_NODE) return;
+  const el = node;
+  const tag = el.tagName ? el.tagName.toLowerCase() : '';
+  let next = { ...state };
+  if (tag === 'b' || tag === 'strong') next.bold = true;
+  if (tag === 'i' || tag === 'em') next.italic = true;
+  const w = String(el.style?.fontWeight || '').toLowerCase();
+  const s = String(el.style?.fontStyle || '').toLowerCase();
+  if (w === 'bold' || w === '700' || w === '800' || w === '900') next.bold = true;
+  if (w === 'normal' || w === '400') next.bold = false;
+  if (s === 'italic' || s === 'oblique') next.italic = true;
+  if (s === 'normal') next.italic = false;
+  if (tag === 'br') {
+    const last = out[out.length - 1];
+    if (last && last.bold === next.bold && last.italic === next.italic) last.text += '\n';
+    else out.push({ text: '\n', bold: next.bold, italic: next.italic });
+    return;
+  }
+  for (const child of el.childNodes) collectTextRuns(child, next, out);
+}
+
+function extractRunsFromDiv(div) {
+  const base = {
+    bold: div.dataset.bold === 'true',
+    italic: div.dataset.italic === 'true',
+  };
+  const runs = [];
+  for (const child of div.childNodes) collectTextRuns(child, base, runs);
+  return runs.filter(r => r.text.length > 0);
+}
+
+function buildInitialHtmlFromItems(items) {
+  if (!Array.isArray(items) || items.length === 0) return '';
+  return items.map(it => {
+    const style = detectFontStyleWithMeta(it.fontName, it.styleInfo);
+    let open = '';
+    let close = '';
+    if (style.bold && style.italic) {
+      open = '<b><i>';
+      close = '</i></b>';
+    } else if (style.bold) {
+      open = '<b>';
+      close = '</b>';
+    } else if (style.italic) {
+      open = '<i>';
+      close = '</i>';
+    }
+    return `${open}${escapeHtml(it.str || '')}${close}`;
+  }).join('');
+}
+
 /**
  * Sample the background color from the text region itself — the lightest
  * frequent color within the area is the background. Sampling to the LEFT
@@ -35,7 +130,8 @@ function escapeHtml(str) {
  */
 function sampleBackgroundColor(canvas, x, y, width, height) {
   if (!canvas) return '#ffffff';
-  const ctx = canvas.getContext('2d');
+  const ctx = getReadbackContext(canvas);
+  if (!ctx) return '#ffffff';
   const dpr = canvas.width / (parseFloat(canvas.style.width) || canvas.offsetWidth) || 1;
 
   // Read the full text region — background pixels will outnumber text pixels
@@ -81,7 +177,8 @@ function sampleBackgroundColor(canvas, x, y, width, height) {
  */
 function sampleTextColor(canvas, x, y, width, height, bgHex) {
   if (!canvas) return '#000000';
-  const ctx = canvas.getContext('2d');
+  const ctx = getReadbackContext(canvas);
+  if (!ctx) return '#000000';
   const dpr = canvas.width / (parseFloat(canvas.style.width) || canvas.offsetWidth) || 1;
   // Clamp to canvas bounds (convert CSS coords to canvas pixel coords)
   const sx = Math.max(0, Math.round(x * dpr));
@@ -143,7 +240,8 @@ function sampleTextColor(canvas, x, y, width, height, bgHex) {
  */
 function samplePixelColor(canvas, x, y) {
   if (!canvas) return null;
-  const ctx = canvas.getContext('2d');
+  const ctx = getReadbackContext(canvas);
+  if (!ctx) return null;
   const px = Math.round(x), py = Math.round(y);
   if (px < 0 || py < 0 || px >= canvas.width || py >= canvas.height) return null;
   try {
@@ -290,6 +388,7 @@ function captureSnapshot(div) {
   return {
     div,
     text: div.textContent,
+    html: div.innerHTML,
     bold: div.dataset.bold,
     italic: div.dataset.italic,
     fontSizeOverride: div.dataset.fontSizeOverride,
@@ -307,7 +406,7 @@ function captureSnapshot(div) {
 /** Restore a snapshot to a line */
 function restoreSnapshot(snap) {
   const div = snap.div;
-  div.textContent = snap.text;
+  div.innerHTML = snap.html ?? escapeHtml(snap.text || '');
   div.dataset.bold = snap.bold;
   div.dataset.italic = snap.italic;
   div.dataset.fontSizeOverride = snap.fontSizeOverride;
@@ -371,10 +470,13 @@ function handleTextEditKeydown(e) {
     e.stopPropagation();
     applyToFocused(div => {
       pushUndo(div);
-      const isBold = div.style.fontWeight === 'bold';
-      div.style.fontWeight = isBold ? 'normal' : 'bold';
-      div.dataset.bold = isBold ? '' : 'true';
-      if (toolbar) toolbar.querySelector('.text-edit-bold')?.classList.toggle('active', !isBold);
+      const applied = toggleInlineStyleOnSelection(div, 'bold');
+      if (!applied) {
+        const isBold = div.style.fontWeight === 'bold';
+        div.style.fontWeight = isBold ? 'normal' : 'bold';
+        div.dataset.bold = isBold ? '' : 'true';
+        if (toolbar) toolbar.querySelector('.text-edit-bold')?.classList.toggle('active', !isBold);
+      }
     });
     return;
   }
@@ -385,10 +487,13 @@ function handleTextEditKeydown(e) {
     e.stopPropagation();
     applyToFocused(div => {
       pushUndo(div);
-      const isItalic = div.style.fontStyle === 'italic';
-      div.style.fontStyle = isItalic ? 'normal' : 'italic';
-      div.dataset.italic = isItalic ? '' : 'true';
-      if (toolbar) toolbar.querySelector('.text-edit-italic')?.classList.toggle('active', !isItalic);
+      const applied = toggleInlineStyleOnSelection(div, 'italic');
+      if (!applied) {
+        const isItalic = div.style.fontStyle === 'italic';
+        div.style.fontStyle = isItalic ? 'normal' : 'italic';
+        div.dataset.italic = isItalic ? '' : 'true';
+        if (toolbar) toolbar.querySelector('.text-edit-italic')?.classList.toggle('active', !isItalic);
+      }
     });
     return;
   }
@@ -603,6 +708,7 @@ function groupIntoLines(items, viewport, styles) {
 
   return allLines.map(line => {
     const text = line.items.map(i => i.str).join('');
+    const initialHtml = buildInitialHtmlFromItems(line.items);
     const minLeft = Math.min(...line.items.map(i => i.left));
     const maxRight = Math.max(...line.items.map(i => i.left + i.width));
     const fontSize = line.items[0].fontSize;
@@ -613,6 +719,7 @@ function groupIntoLines(items, viewport, styles) {
 
     return {
       text,
+      initialHtml,
       left: minLeft,
       top: line.top,
       width: maxRight - minLeft,
@@ -889,7 +996,9 @@ function activateBlock(paraIdx) {
     div.className = 'text-edit-line';
     div.contentEditable = 'true';
     div.spellcheck = false;
-    div.textContent = saved ? saved.text : line.text;
+    if (saved?.html) div.innerHTML = saved.html;
+    else if (line.initialHtml) div.innerHTML = line.initialHtml;
+    else div.textContent = saved ? saved.text : line.text;
 
     // Position — align text content exactly over original canvas text.
     // CSS has padding: 0 2px, so offset left by 2px to compensate.
@@ -926,6 +1035,7 @@ function activateBlock(paraIdx) {
 
     // Store original data
     div.dataset.original = line.text;
+    div.dataset.originalHtml = saved?.originalHtml || normalizeInlineHtml(line.initialHtml || escapeHtml(line.text));
     div.dataset.pdfX = line.pdfX;
     div.dataset.pdfY = line.pdfY;
     div.dataset.pdfFontSize = line.pdfFontSize;
@@ -1027,8 +1137,9 @@ function deactivateBlock() {
     const initialBold = div.dataset.initialBold === 'true';
     const initialItalic = div.dataset.initialItalic === 'true';
     const hasTextChange = newText !== original;
+    const hasInlineFormatChange = normalizeInlineHtml(div.innerHTML) !== (div.dataset.originalHtml || '');
     const hasFormatChange = fontSizeOverride || colorOverride || fontFamilyOverride ||
-      bold !== initialBold || italic !== initialItalic;
+      bold !== initialBold || italic !== initialItalic || hasInlineFormatChange;
 
     if (hasTextChange || hasFormatChange || isDirty) hasDirty = true;
 
@@ -1051,6 +1162,9 @@ function deactivateBlock() {
       fontFamilyOverride: fontFamilyOverride || '',
       fontNameOverride: fontNameOverride || '',
       dirty: hasTextChange || hasFormatChange || isDirty,
+      html: div.innerHTML,
+      originalHtml: div.dataset.originalHtml || normalizeInlineHtml(escapeHtml(original || '')),
+      runs: extractRunsFromDiv(div),
       // Preserve original PDF data for commit
       pdfX: parseFloat(div.dataset.pdfX),
       pdfY: parseFloat(div.dataset.pdfY),
@@ -1159,7 +1273,7 @@ function createToolbar(container) {
 
   // Build font family options
   const fontFamilyOptions = FONT_FAMILIES.map(f =>
-    `<option value="${f.css}" data-pdf="${f.pdf}">${f.label}</option>`
+    `<option value="${escapeHtml(f.css)}" data-pdf="${escapeHtml(f.pdf)}">${escapeHtml(f.label)}</option>`
   ).join('');
 
   // Include custom font option if one is loaded
@@ -1263,20 +1377,26 @@ function createToolbar(container) {
   toolbar.querySelector('.text-edit-bold').addEventListener('click', () => {
     applyToFocused(div => {
       pushUndo(div);
-      const isBold = div.style.fontWeight === 'bold';
-      div.style.fontWeight = isBold ? 'normal' : 'bold';
-      div.dataset.bold = isBold ? '' : 'true';
-      toolbar.querySelector('.text-edit-bold').classList.toggle('active', !isBold);
+      const applied = toggleInlineStyleOnSelection(div, 'bold');
+      if (!applied) {
+        const isBold = div.style.fontWeight === 'bold';
+        div.style.fontWeight = isBold ? 'normal' : 'bold';
+        div.dataset.bold = isBold ? '' : 'true';
+        toolbar.querySelector('.text-edit-bold').classList.toggle('active', !isBold);
+      }
     });
   });
 
   toolbar.querySelector('.text-edit-italic').addEventListener('click', () => {
     applyToFocused(div => {
       pushUndo(div);
-      const isItalic = div.style.fontStyle === 'italic';
-      div.style.fontStyle = isItalic ? 'normal' : 'italic';
-      div.dataset.italic = isItalic ? '' : 'true';
-      toolbar.querySelector('.text-edit-italic').classList.toggle('active', !isItalic);
+      const applied = toggleInlineStyleOnSelection(div, 'italic');
+      if (!applied) {
+        const isItalic = div.style.fontStyle === 'italic';
+        div.style.fontStyle = isItalic ? 'normal' : 'italic';
+        div.dataset.italic = isItalic ? '' : 'true';
+        toolbar.querySelector('.text-edit-italic').classList.toggle('active', !isItalic);
+      }
     });
   });
 
@@ -1405,9 +1525,10 @@ async function handleFontUpload(fontFamilySelect) {
 /** Mark a line as changed for live preview indication */
 function markDirty(div) {
   const hasTextChange = div.textContent !== div.dataset.original;
+  const hasInlineFormatChange = normalizeInlineHtml(div.innerHTML) !== (div.dataset.originalHtml || '');
   const hasFormatChange = div.dataset.fontSizeOverride || div.dataset.colorOverride ||
     div.dataset.fontFamilyOverride || div.dataset.bold !== (div.dataset.initialBold || '') ||
-    div.dataset.italic !== (div.dataset.initialItalic || '');
+    div.dataset.italic !== (div.dataset.initialItalic || '') || hasInlineFormatChange;
   div.classList.toggle('text-edit-dirty', hasTextChange || !!hasFormatChange);
   updateEditCount();
 }
@@ -1478,12 +1599,13 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     const italic = div.dataset.italic === 'true';
 
     const hasTextChange = newText !== original;
+    const hasInlineFormatChange = normalizeInlineHtml(div.innerHTML) !== (div.dataset.originalHtml || '');
     const initialBold = div.dataset.initialBold === 'true';
     const initialItalic = div.dataset.initialItalic === 'true';
     const userChangedBold = bold !== initialBold;
     const userChangedItalic = italic !== initialItalic;
     const hasFormatChange = fontSizeOverride || colorOverride || fontFamilyOverride ||
-      userChangedBold || userChangedItalic;
+      userChangedBold || userChangedItalic || hasInlineFormatChange;
 
     if (!hasTextChange && !hasFormatChange) continue;
 
@@ -1508,6 +1630,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       colorOverride: effectiveColor,
       bold: commitBold,
       italic: commitItalic,
+      runs: extractRunsFromDiv(div),
       bgColor: div.dataset.bgColor || '#ffffff',
     });
   }
@@ -1529,6 +1652,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
         colorOverride: saved.colorOverride || saved.matchedColor || '',
         bold: saved.bold,
         italic: saved.italic,
+        runs: saved.runs || [],
         bgColor: saved.bgColor || '#ffffff',
       });
     }
@@ -1576,7 +1700,9 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     // Use precise PDF line width when available, fall back to screen-based estimate
     const scale = currentViewport ? currentViewport.scale : 1;
     const rectWidth = (change.pdfLineWidth > 0 ? change.pdfLineWidth : change.screenWidth / scale) + 4;
-    const rectHeight = change.pdfFontSize * 1.3;  // 1.3x covers ascenders/descenders
+    const pdfLineHeight = Math.max(change.screenHeight / scale, change.pdfFontSize);
+    const rectHeight = Math.max(change.pdfFontSize * 1.08, pdfLineHeight * 1.12);
+    const rectY = y - Math.max(change.pdfFontSize * 0.18, pdfLineHeight * 0.18);
 
     // Cover rectangle — match sampled background color so it blends in
     let coverColor = PDFLib.rgb(1, 1, 1);
@@ -1588,7 +1714,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     }
     page.drawRectangle({
       x: x - 1,
-      y: y - change.pdfFontSize * 0.25,  // extend below baseline for descenders
+      y: rectY,
       width: rectWidth,
       height: rectHeight,
       color: coverColor,
@@ -1605,13 +1731,30 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       color = PDFLib.rgb(r, g, b);
     }
 
-    page.drawText(change.newText, {
-      x,
-      y,
-      size: fontSize,
-      font,
-      color,
-    });
+    const runs = Array.isArray(change.runs) ? change.runs : [];
+    if (runs.length > 0) {
+      let cursorX = x;
+      for (const run of runs) {
+        if (!run.text) continue;
+        const runFont = await getFont(change.fontName, !!run.bold, !!run.italic);
+        page.drawText(run.text, {
+          x: cursorX,
+          y,
+          size: fontSize,
+          font: runFont,
+          color,
+        });
+        cursorX += runFont.widthOfTextAtSize(run.text, fontSize);
+      }
+    } else {
+      page.drawText(change.newText, {
+        x,
+        y,
+        size: fontSize,
+        font,
+        color,
+      });
+    }
   }
 
   return doc.save();
