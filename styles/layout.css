@@ -1048,6 +1048,13 @@ html, body {
 #text-layer ::selection {
   background: rgba(0, 100, 255, 0.3);
 }
+/* Dark mode: boost selection visibility since text layer is low opacity */
+html[data-theme="dark"] #text-layer ::selection {
+  background: rgba(80, 160, 255, 0.6);
+}
+html[data-theme="dark"] #text-layer {
+  opacity: 0.35;
+}
 
 /* ── Text Edit Mode ── */
 
@@ -1912,21 +1919,37 @@ html, body {
     bottom: 52px;
   }
 
-  /* Touch targets: increase button sizes */
+  /* Touch targets: increase to 44px minimum for iOS/Android */
   .float-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
   .page-nav-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
   .find-nav-btn,
-  .find-close-btn {
-    width: 36px;
-    height: 36px;
+  .find-close-btn,
+  .find-replace-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+  }
+
+  .ribbon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .text-edit-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sidebar-tab {
+    min-height: 44px;
   }
 }
 
