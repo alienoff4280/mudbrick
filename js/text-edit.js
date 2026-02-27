@@ -675,7 +675,8 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pd
   _blockZones = [];
   _editedBlocks = new Map();
 
-  // Hide existing text layer spans
+  // Hide existing text layer spans and boost opacity for editable overlays
+  container.classList.add('text-edit-active');
   container.querySelectorAll('span').forEach(s => s.style.visibility = 'hidden');
 
   // Group lines into paragraphs — store for single-block editing
@@ -995,6 +996,7 @@ export function exitTextEditMode() {
   if (_activeBlockIdx >= 0) deactivateBlock();
 
   if (editContainer) {
+    editContainer.classList.remove('text-edit-active');
     editContainer.removeEventListener('keydown', handleTextEditKeydown, true);
     editContainer.querySelectorAll('.text-edit-line').forEach(el => el.remove());
     editContainer.querySelectorAll('.text-edit-paragraph').forEach(el => el.remove());
@@ -1033,6 +1035,17 @@ export function exitTextEditMode() {
 
 export function isTextEditActive() {
   return active;
+}
+
+/** Check whether any text lines have been modified (dirty) */
+export function hasTextEditChanges() {
+  if (!editContainer) return false;
+  return editContainer.querySelectorAll('.text-edit-line.text-edit-dirty').length > 0;
+}
+
+/** Check whether any image overlays have pending actions */
+export function hasImageEditChanges() {
+  return imageOverlays.some(o => o.action !== 'none');
 }
 
 /* ═══════════════════ Enhanced Toolbar ═══════════════════ */

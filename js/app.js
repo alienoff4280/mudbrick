@@ -14,7 +14,7 @@ import {
 } from './pdf-engine.js';
 
 import {
-  toast, showLoading, hideLoading, readFileAsArrayBuffer,
+  toast, showLoading, hideLoading, updateLoadingProgress, readFileAsArrayBuffer,
   formatFileSize, initDragDrop, debounce, downloadBlob, parsePageRanges,
 } from './utils.js';
 
@@ -49,7 +49,8 @@ import {
   buildTextIndex, clearTextIndex, searchText, findNext as findNextMatch,
   findPrevious as findPrevMatch, getMatchInfo, renderHighlights,
   scrollToActiveHighlight, isFindOpen, setFindOpen, hasMatches,
-  augmentTextIndex,
+  augmentTextIndex, getCurrentMatchInfo, getAllMatchInfos,
+  removeCurrentMatch, clearMatches,
 } from './find.js';
 
 import { applyBatesNumbers, previewBatesLabel } from './bates.js';
@@ -76,7 +77,7 @@ import {
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
 import { canUndo, canRedo, initPageState } from './history.js';
-import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive } from './text-edit.js';
+import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges } from './text-edit.js';
 import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
 import { setLabelRange, getPageLabel, getLabelRanges, clearLabels, removeLabelRange, previewLabels, LABEL_FORMATS } from './page-labels.js';
 
@@ -477,9 +478,17 @@ async function openPDF(bytes, fileName, fileSize) {
 async function renderCurrentPage() {
   if (!State.pdfDoc) return;
 
-  // Exit edit modes when navigating to a different page
-  if (isTextEditActive()) exitTextEditMode();
-  if (isImageEditActive()) exitImageEditMode();
+  // Exit edit modes when navigating to a different page (warn if unsaved)
+  if (isTextEditActive()) {
+    if (hasTextEditChanges() && !confirm('You have unsaved text edits on this page. Discard changes?')) return;
+    exitTextEditMode();
+    DOM.btnEditText.classList.remove('active');
+  }
+  if (isImageEditActive()) {
+    if (hasImageEditChanges() && !confirm('You have unsaved image edits on this page. Discard changes?')) return;
+    exitImageEditMode();
+    DOM.btnEditImage.classList.remove('active');
+  }
 
   // Save annotations from the page we're leaving
   if (State._prevPage && State._prevPage !== State.currentPage) {
@@ -653,9 +662,10 @@ function generateThumbnails() {
     item.addEventListener('click', () => goToPage(i));
     item.addEventListener('contextmenu', e => showContextMenu(e, i));
 
-    // Drag-to-reorder
+    // Drag-and-drop reordering
+    item.draggable = true;
     item.addEventListener('dragstart', e => {
-      e.dataTransfer.setData('application/x-mudbrick-page', String(i));
+      e.dataTransfer.setData('text/x-mudbrick-page', String(i));
       e.dataTransfer.effectAllowed = 'move';
       item.classList.add('dragging');
     });
@@ -819,6 +829,7 @@ async function handleRedo() {
 function handleEditText() {
   if (!State.pdfDoc) return;
   if (isTextEditActive()) {
+    if (hasTextEditChanges() && !confirm('You have unsaved text edits. Discard changes?')) return;
     exitTextEditMode();
     DOM.btnEditText.classList.remove('active');
     return;
@@ -851,6 +862,7 @@ async function handleCommitTextEdits() {
 }
 
 function handleCancelTextEdits() {
+  if (hasTextEditChanges() && !confirm('Discard text edits? Changes will be lost.')) return;
   exitTextEditMode();
   DOM.btnEditText.classList.remove('active');
 }
@@ -860,6 +872,7 @@ function handleCancelTextEdits() {
 function handleEditImage() {
   if (!State.pdfDoc) return;
   if (isImageEditActive()) {
+    if (hasImageEditChanges() && !confirm('You have unsaved image edits. Discard changes?')) return;
     exitImageEditMode();
     DOM.btnEditImage.classList.remove('active');
     return;
@@ -892,17 +905,20 @@ async function handleCommitImageEdits() {
 }
 
 function handleCancelImageEdits() {
+  if (hasImageEditChanges() && !confirm('Discard image edits? Changes will be lost.')) return;
   exitImageEditMode();
   DOM.btnEditImage.classList.remove('active');
 }
 
 /* ═══════════════════ Find Bar ═══════════════════ */
 
-function openFindBar() {
+function openFindBar(showReplace) {
   const bar = $('find-bar');
   if (!bar || !State.pdfDoc) return;
   bar.classList.remove('hidden');
   setFindOpen(true);
+  const replaceRow = $('find-replace-row');
+  if (showReplace && replaceRow) replaceRow.classList.remove('hidden');
   const input = $('find-input');
   input.focus();
   input.select();
@@ -915,10 +931,134 @@ function closeFindBar() {
   bar.classList.add('hidden');
   setFindOpen(false);
   $('find-input').value = '';
+  $('replace-input').value = '';
   $('find-match-count').textContent = '';
+  const replaceRow = $('find-replace-row');
+  if (replaceRow) replaceRow.classList.add('hidden');
   // Clear search state and highlights
   searchText('', false);
   DOM.textLayer.querySelectorAll('.find-highlight').forEach(el => el.remove());
+}
+
+function toggleReplaceRow() {
+  const row = $('find-replace-row');
+  if (!row) return;
+  row.classList.toggle('hidden');
+  if (!row.classList.contains('hidden')) {
+    $('replace-input').focus();
+  }
+}
+
+async function executeReplace() {
+  const replacement = $('replace-input').value;
+  const matchInfo = getCurrentMatchInfo();
+  if (!matchInfo || !State.pdfBytes) return;
+
+  showLoading('Replacing…');
+  try {
+    const newBytes = await applyTextReplacements(State.pdfBytes, [
+      { ...matchInfo, replacement },
+    ]);
+    removeCurrentMatch();
+    await reloadAfterEdit(newBytes);
+
+    // Re-run search on the updated doc (index was rebuilt by reloadAfterEdit)
+    performSearch();
+    toast('Replaced 1 occurrence', 'success');
+  } catch (err) {
+    console.error('Replace failed:', err);
+    toast('Replace failed: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+async function executeReplaceAll() {
+  const replacement = $('replace-input').value;
+  const allInfos = getAllMatchInfos();
+  if (!allInfos.length || !State.pdfBytes) return;
+
+  showLoading('Replacing all…');
+  try {
+    const items = allInfos.map(m => ({ ...m, replacement }));
+    const newBytes = await applyTextReplacements(State.pdfBytes, items);
+    clearMatches();
+    await reloadAfterEdit(newBytes);
+
+    // Re-run search on the updated doc
+    performSearch();
+    toast(`Replaced ${allInfos.length} occurrence${allInfos.length !== 1 ? 's' : ''}`, 'success');
+  } catch (err) {
+    console.error('Replace all failed:', err);
+    toast('Replace all failed: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
+/**
+ * Apply text replacements to the PDF using pdf-lib (cover-and-replace).
+ * Each item has { pageNum, rects, replacement }.
+ */
+async function applyTextReplacements(pdfBytes, items) {
+  const doc = await ensurePdfLib(pdfBytes);
+  const PDFLib = window.PDFLib;
+  const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+
+  for (const item of items) {
+    const page = doc.getPage(item.pageNum - 1);
+
+    for (const rect of item.rects) {
+      if (!rect.transform) continue;
+
+      const pdfX = rect.transform[4];
+      const pdfY = rect.transform[5];
+      const fontSize = Math.abs(rect.transform[3]) || Math.abs(rect.height) || 12;
+
+      // Calculate character-level positioning for partial item matches
+      const itemLen = rect.str.length;
+      const charWidth = itemLen > 0 ? (rect.width || 0) / itemLen : 0;
+      const clipStart = Math.max(0, item.startOffset - rect.itemStart);
+      const clipEnd = Math.min(itemLen, item.endOffset - rect.itemStart);
+
+      const coverX = pdfX + clipStart * charWidth;
+      const coverW = (clipEnd - clipStart) * charWidth + 2;
+
+      // White cover rectangle
+      page.drawRectangle({
+        x: coverX - 0.5,
+        y: pdfY - fontSize * 0.25,
+        width: coverW,
+        height: fontSize * 1.3,
+        color: PDFLib.rgb(1, 1, 1),
+        borderWidth: 0,
+      });
+    }
+
+    // Draw replacement text at the first rect's position
+    if (item.rects.length > 0 && item.rects[0].transform) {
+      const firstRect = item.rects[0];
+      const pdfX = firstRect.transform[4];
+      const pdfY = firstRect.transform[5];
+      const fontSize = Math.abs(firstRect.transform[3]) || 12;
+
+      // Offset to the match start within the first item
+      const itemLen = firstRect.str.length;
+      const charWidth = itemLen > 0 ? (firstRect.width || 0) / itemLen : 0;
+      const clipStart = Math.max(0, item.startOffset - firstRect.itemStart);
+      const drawX = pdfX + clipStart * charWidth;
+
+      page.drawText(item.replacement, {
+        x: drawX,
+        y: pdfY,
+        size: fontSize,
+        font,
+        color: PDFLib.rgb(0, 0, 0),
+      });
+    }
+  }
+
+  return doc.save();
 }
 
 function performSearch() {
@@ -1206,6 +1346,7 @@ function showContextMenu(e, pageNum) {
           break;
         case 'delete':
           if (State.totalPages <= 1) return;
+          if (!confirm(`Delete page ${pageNum}? This cannot be undone.`)) return;
           newBytes = await deletePage(State.pdfBytes, idx);
           // If we deleted the current page or a page before it, adjust
           if (pageNum <= State.currentPage && State.currentPage > 1) {
@@ -3144,6 +3285,16 @@ function wireEvents() {
   $('find-prev')?.addEventListener('click', () => navigateMatch('prev'));
   $('find-close')?.addEventListener('click', closeFindBar);
   $('find-case-sensitive')?.addEventListener('change', performSearch);
+  $('find-replace-toggle')?.addEventListener('click', toggleReplaceRow);
+  $('replace-one')?.addEventListener('click', executeReplace);
+  $('replace-all')?.addEventListener('click', executeReplaceAll);
+  const replaceInput = $('replace-input');
+  if (replaceInput) {
+    replaceInput.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); executeReplace(); }
+      if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
+    });
+  }
 
   // Window resize: debounced re-render
   window.addEventListener('resize', debounce(() => {
@@ -3176,11 +3327,11 @@ function wireEvents() {
     }
   });
 
-  // Drag-and-drop on sidebar thumbnail list — reorder pages or insert from files
+  // Drag-and-drop on sidebar thumbnail list — reorder pages or insert new ones
   DOM.thumbnailList.addEventListener('dragover', e => {
     e.preventDefault();
-    const isReorder = e.dataTransfer.types.includes('application/x-mudbrick-page');
-    e.dataTransfer.dropEffect = isReorder ? 'move' : 'copy';
+    const isInternal = e.dataTransfer.types.includes('text/x-mudbrick-page');
+    e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy';
     const target = getDropTarget(e);
     clearDropIndicators();
     if (target.item) {
@@ -3197,40 +3348,32 @@ function wireEvents() {
     clearDropIndicators();
 
     // Internal page reorder
-    const pageData = e.dataTransfer.getData('application/x-mudbrick-page');
-    if (pageData && State.pdfDoc) {
-      const fromPage = parseInt(pageData);  // 1-based
+    const draggedPage = e.dataTransfer.getData('text/x-mudbrick-page');
+    if (draggedPage && State.pdfBytes) {
+      const fromPage = parseInt(draggedPage);
       const target = getDropTarget(e);
       if (!target.item) return;
       let toPage = parseInt(target.item.dataset.page);
-      if (target.position === 'after') toPage += 1;
-      // Convert to 0-based indices for reorderPages
+      if (target.position === 'after') toPage++;
       const fromIdx = fromPage - 1;
       let toIdx = toPage - 1;
-      if (fromIdx === toIdx || fromIdx === toIdx - 1) return; // no-op
-      // Adjust toIdx: when moving forward, account for removal shift
-      if (fromIdx < toIdx) toIdx -= 1;
+      if (fromIdx === toIdx || fromIdx === toIdx - 1) return;
+      if (fromIdx < toIdx) toIdx--;
+      showLoading('Reordering pages…');
       try {
-        showLoading('Reordering pages…');
         const newBytes = await reorderPages(State.pdfBytes, fromIdx, toIdx);
-        // Update current page tracking
-        let newCurrent = State.currentPage;
         if (State.currentPage === fromPage) {
-          newCurrent = toIdx + 1;
-        } else {
-          // Shift current page if affected by the move
-          if (fromPage < State.currentPage && toIdx + 1 >= State.currentPage) {
-            newCurrent = State.currentPage - 1;
-          } else if (fromPage > State.currentPage && toIdx + 1 <= State.currentPage) {
-            newCurrent = State.currentPage + 1;
-          }
+          State.currentPage = toIdx + 1;
+        } else if (fromPage < State.currentPage && toIdx + 1 >= State.currentPage) {
+          State.currentPage--;
+        } else if (fromPage > State.currentPage && toIdx + 1 <= State.currentPage) {
+          State.currentPage++;
         }
-        State.currentPage = newCurrent;
         await reloadAfterEdit(newBytes);
-        toast('Page reordered', 'success');
+        toast(`Moved page ${fromPage}`, 'success');
       } catch (err) {
-        console.warn('Page reorder failed:', err);
-        toast('Page reorder failed: ' + err.message, 'error');
+        console.error('Page reorder failed:', err);
+        toast('Reorder failed: ' + err.message, 'error');
       } finally {
         hideLoading();
       }
@@ -3726,7 +3869,7 @@ async function executeExportImage() {
     await exportPagesToImages(State.pdfDoc, pages, {
       format, dpi, quality, fileName: State.fileName,
     }, (done, total) => {
-      $('loading-text').textContent = `Exporting page ${done}/${total}...`;
+      updateLoadingProgress(`Exporting page ${done} of ${total}…`, done, total);
     });
     $('export-image-modal-backdrop').classList.add('hidden');
     toast(`Exported ${pages.length} page(s) as ${format.toUpperCase()}`, 'success');
@@ -3758,7 +3901,7 @@ async function executeCreateFromImages() {
   showLoading('Creating PDF from images…');
   try {
     const pdfBytes = await createPDFFromImages(_imagesToPdf, { pageSize, margin }, (done, total) => {
-      $('loading-text').textContent = `Processing image ${done}/${total}...`;
+      updateLoadingProgress(`Processing image ${done} of ${total}…`, done, total);
     });
     const blob = new Blob([pdfBytes], { type: 'application/pdf' });
     downloadBlob(blob, 'images_combined.pdf');
@@ -3795,9 +3938,9 @@ async function executeOptimize() {
 
     const newBytes = await optimizePDF(State.pdfDoc, State.pdfBytes, opts, (done, total, label) => {
       if (label === 'recompressing images') {
-        $('loading-text').textContent = `Recompressing image ${done}/${total}…`;
+        updateLoadingProgress(`Recompressing image ${done} of ${total}…`, done, total);
       } else {
-        $('loading-text').textContent = `${label === 'compressing' ? 'Compressing' : 'Copying'} page ${done}/${total}…`;
+        updateLoadingProgress(`${label === 'compressing' ? 'Compressing' : 'Copying'} page ${done} of ${total}…`, done, total);
       }
     });
 
@@ -3850,7 +3993,7 @@ async function executeCompare() {
   showLoading('Comparing documents…');
   try {
     _compareResults = await compareDocuments(State.pdfDoc, _compareDocB, { dpi, threshold }, (page, total) => {
-      $('loading-text').textContent = `Comparing page ${page}/${total}...`;
+      updateLoadingProgress(`Comparing page ${page} of ${total}…`, page, total);
       const bar = $('compare-progress-bar');
       if (bar) bar.style.width = Math.round(page / total * 100) + '%';
     });
@@ -4333,6 +4476,13 @@ function handleKeyboard(e) {
   if (mod && e.key === 'f' && State.pdfDoc) {
     e.preventDefault();
     openFindBar();
+    return;
+  }
+
+  // Ctrl+H — open find bar with replace visible
+  if (mod && e.key === 'h' && State.pdfDoc) {
+    e.preventDefault();
+    openFindBar(true);
     return;
   }
 

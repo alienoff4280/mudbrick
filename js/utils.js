@@ -30,6 +30,28 @@ export function showLoading(message = 'Processing…') {
   const txt = document.getElementById('loading-text');
   if (txt) txt.textContent = message;
   el.classList.remove('hidden');
+  // Reset progress bar
+  const prog = document.getElementById('loading-progress');
+  if (prog) prog.classList.add('hidden');
+  const bar = document.getElementById('loading-progress-bar');
+  if (bar) bar.style.width = '0%';
+}
+
+/**
+ * Update the loading overlay with progress info.
+ * @param {string} message — status message
+ * @param {number} current — current step (1-based)
+ * @param {number} total — total steps
+ */
+export function updateLoadingProgress(message, current, total) {
+  const txt = document.getElementById('loading-text');
+  if (txt) txt.textContent = message;
+  const prog = document.getElementById('loading-progress');
+  const bar = document.getElementById('loading-progress-bar');
+  if (prog && bar && total > 0) {
+    prog.classList.remove('hidden');
+    bar.style.width = Math.round((current / total) * 100) + '%';
+  }
 }
 
 export function hideLoading() {
@@ -37,6 +59,8 @@ export function hideLoading() {
   el.classList.add('hidden');
   const txt = document.getElementById('loading-text');
   if (txt) txt.textContent = 'Processing…';
+  const prog = document.getElementById('loading-progress');
+  if (prog) prog.classList.add('hidden');
 }
 
 /* ── File Reading ── */

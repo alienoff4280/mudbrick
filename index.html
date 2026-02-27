@@ -49,7 +49,7 @@
         <div class="drop-text">Drop a PDF or image here</div>
         <div class="drop-or">or</div>
         <button class="btn-primary" id="open-file-btn">Open File</button>
-        <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tiff" hidden>
+        <input type="file" id="file-input" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.bmp,.tiff" hidden aria-label="File Input">
       </div>
 
       <div class="welcome-features">
@@ -67,7 +67,7 @@
         <div class="recent-files-header">
           <span data-icon="clock" data-icon-size="14"></span>
           <span>Recent Files</span>
-          <button id="btn-clear-recent" class="recent-clear-btn" title="Clear recent files">&times;</button>
+          <button id="btn-clear-recent" class="recent-clear-btn" title="Clear recent files" aria-label="Clear recent files">&times;</button>
         </div>
         <ul id="recent-files-list" class="recent-files-list"></ul>
       </div>
@@ -115,11 +115,11 @@
         <!-- File group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-open" class="ribbon-btn ribbon-btn-lg" title="Open PDF (Ctrl+O)">
+            <button id="btn-open" class="ribbon-btn ribbon-btn-lg" title="Open PDF (Ctrl+O)" aria-label="Open PDF">
               <span class="ribbon-icon" data-icon="folder-open" data-icon-size="20"></span>
               <span>Open</span>
             </button>
-            <button id="btn-export" class="ribbon-btn ribbon-btn-lg" title="Export (Ctrl+S)" disabled>
+            <button id="btn-export" class="ribbon-btn ribbon-btn-lg" title="Export (Ctrl+S)" disabled aria-label="Export">
               <span class="ribbon-icon" data-icon="save" data-icon-size="20"></span>
               <span>Export</span>
             </button>
@@ -145,11 +145,11 @@
         <!-- Organize group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-merge" class="ribbon-btn ribbon-btn-lg" title="Merge PDFs" disabled>
+            <button id="btn-merge" class="ribbon-btn ribbon-btn-lg" title="Merge PDFs" disabled aria-label="Merge PDFs">
               <span class="ribbon-icon" data-icon="link" data-icon-size="20"></span>
               <span>Merge</span>
             </button>
-            <button id="btn-split" class="ribbon-btn ribbon-btn-lg" title="Split PDF" disabled>
+            <button id="btn-split" class="ribbon-btn ribbon-btn-lg" title="Split PDF" disabled aria-label="Split PDF">
               <span class="ribbon-icon" data-icon="scissors" data-icon-size="20"></span>
               <span>Split</span>
             </button>
@@ -160,57 +160,57 @@
         <!-- Annotate Quick group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-text" class="ribbon-btn tool-btn" data-tool="text" title="Text (T)" disabled>
+            <button id="btn-text" class="ribbon-btn tool-btn" data-tool="text" title="Text (T)" disabled aria-label="Text">
               <span class="ribbon-icon" data-icon="type"></span>
               <span>Text</span>
             </button>
-            <button id="btn-highlight" class="ribbon-btn tool-btn" data-tool="highlight" title="Highlight" disabled>
+            <button id="btn-highlight" class="ribbon-btn tool-btn" data-tool="highlight" title="Highlight" disabled aria-label="Highlight">
               <span class="ribbon-icon" data-icon="highlighter"></span>
               <span>Highlight</span>
             </button>
-            <button id="btn-underline" class="ribbon-btn tool-btn" data-tool="underline" title="Underline" disabled>
+            <button id="btn-underline" class="ribbon-btn tool-btn" data-tool="underline" title="Underline" disabled aria-label="Underline">
               <span class="ribbon-icon" data-icon="underline"></span>
               <span>Underline</span>
             </button>
-            <button id="btn-strikethrough" class="ribbon-btn tool-btn" data-tool="strikethrough" title="Strikethrough" disabled>
+            <button id="btn-strikethrough" class="ribbon-btn tool-btn" data-tool="strikethrough" title="Strikethrough" disabled aria-label="Strikethrough">
               <span class="ribbon-icon" data-icon="strikethrough"></span>
               <span>Strike</span>
             </button>
-            <button id="btn-draw" class="ribbon-btn tool-btn" data-tool="draw" title="Draw (D)" disabled>
+            <button id="btn-draw" class="ribbon-btn tool-btn" data-tool="draw" title="Draw (D)" disabled aria-label="Draw">
               <span class="ribbon-icon" data-icon="pencil"></span>
               <span>Draw</span>
             </button>
-            <button id="btn-stamp" class="ribbon-btn tool-btn" data-tool="stamp" title="Stamp" disabled>
+            <button id="btn-stamp" class="ribbon-btn tool-btn" data-tool="stamp" title="Stamp" disabled aria-label="Stamp">
               <span class="ribbon-icon" data-icon="stamp"></span>
               <span>Stamp</span>
             </button>
           </div>
           <div class="ribbon-row">
-            <button id="btn-shape" class="ribbon-btn tool-btn" data-tool="shape" title="Shape" disabled>
+            <button id="btn-shape" class="ribbon-btn tool-btn" data-tool="shape" title="Shape" disabled aria-label="Shape">
               <span class="ribbon-icon" data-icon="square"></span>
               <span>Shape</span>
             </button>
-            <button id="btn-cover" class="ribbon-btn tool-btn" data-tool="cover" title="Visual Cover" disabled>
+            <button id="btn-cover" class="ribbon-btn tool-btn" data-tool="cover" title="Visual Cover" disabled aria-label="Visual Cover">
               <span class="ribbon-icon" data-icon="shield"></span>
               <span>Cover</span>
             </button>
-            <button id="btn-redact" class="ribbon-btn tool-btn" data-tool="redact" title="Redact" disabled>
+            <button id="btn-redact" class="ribbon-btn tool-btn" data-tool="redact" title="Redact" disabled aria-label="Redact">
               <span class="ribbon-icon" data-icon="shield-off"></span>
               <span>Redact</span>
             </button>
-            <button id="btn-insert-image" class="ribbon-btn" title="Insert Image" disabled>
+            <button id="btn-insert-image" class="ribbon-btn" title="Insert Image" disabled aria-label="Insert Image">
               <span class="ribbon-icon" data-icon="image"></span>
               <span>Image</span>
             </button>
-            <button id="btn-signature" class="ribbon-btn" title="Signature" disabled>
+            <button id="btn-signature" class="ribbon-btn" title="Signature" disabled aria-label="Signature">
               <span class="ribbon-icon" data-icon="pen-tool"></span>
               <span>Signature</span>
             </button>
-            <button id="btn-sticky-note" class="ribbon-btn tool-btn" data-tool="sticky-note" title="Sticky Note" disabled>
+            <button id="btn-sticky-note" class="ribbon-btn tool-btn" data-tool="sticky-note" title="Sticky Note" disabled aria-label="Sticky Note">
               <span class="ribbon-icon" data-icon="sticky-note"></span>
               <span>Note</span>
             </button>
-            <button id="btn-watermark" class="ribbon-btn" title="Watermark" disabled>
+            <button id="btn-watermark" class="ribbon-btn" title="Watermark" disabled aria-label="Watermark">
               <span class="ribbon-icon" data-icon="droplet"></span>
               <span>Watermark</span>
             </button>
@@ -221,11 +221,11 @@
         <!-- View group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-select" class="ribbon-btn tool-btn active" data-tool="select" title="Select (V)">
+            <button id="btn-select" class="ribbon-btn tool-btn active" data-tool="select" title="Select (V)" aria-label="Select">
               <span class="ribbon-icon" data-icon="mouse-pointer"></span>
               <span>Select</span>
             </button>
-            <button id="btn-hand" class="ribbon-btn tool-btn" data-tool="hand" title="Hand (H)">
+            <button id="btn-hand" class="ribbon-btn tool-btn" data-tool="hand" title="Hand (H)" aria-label="Hand">
               <span class="ribbon-icon" data-icon="hand"></span>
               <span>Hand</span>
             </button>
@@ -254,19 +254,19 @@
         <!-- Page group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-insert-blank" class="ribbon-btn ribbon-btn-lg" title="Insert Blank Page" disabled>
+            <button id="btn-insert-blank" class="ribbon-btn ribbon-btn-lg" title="Insert Blank Page" disabled aria-label="Insert Blank Page">
               <span class="ribbon-icon" data-icon="file-plus" data-icon-size="20"></span>
               <span>Insert Page</span>
             </button>
-            <button id="btn-replace-pages" class="ribbon-btn ribbon-btn-lg" title="Replace Pages" disabled>
+            <button id="btn-replace-pages" class="ribbon-btn ribbon-btn-lg" title="Replace Pages" disabled aria-label="Replace Pages">
               <span class="ribbon-icon" data-icon="replace" data-icon-size="20"></span>
               <span>Replace</span>
             </button>
-            <button id="btn-crop-page" class="ribbon-btn ribbon-btn-lg" title="Crop Page" disabled>
+            <button id="btn-crop-page" class="ribbon-btn ribbon-btn-lg" title="Crop Page" disabled aria-label="Crop Page">
               <span class="ribbon-icon" data-icon="crop" data-icon-size="20"></span>
               <span>Crop</span>
             </button>
-            <button id="btn-page-labels" class="ribbon-btn ribbon-btn-lg" title="Page Labels" disabled>
+            <button id="btn-page-labels" class="ribbon-btn ribbon-btn-lg" title="Page Labels" disabled aria-label="Page Labels">
               <span class="ribbon-icon" data-icon="tag" data-icon-size="20"></span>
               <span>Labels</span>
             </button>
@@ -276,11 +276,11 @@
         <!-- Content group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-edit-text" class="ribbon-btn" title="Edit existing text on this page" disabled>
+            <button id="btn-edit-text" class="ribbon-btn" title="Edit existing text on this page" disabled aria-label="Edit existing text on this page">
               <span class="ribbon-icon" data-icon="type" data-icon-size="20"></span>
               <span>Edit Text</span>
             </button>
-            <button id="btn-edit-image" class="ribbon-btn" title="Edit images on this page" disabled>
+            <button id="btn-edit-image" class="ribbon-btn" title="Edit images on this page" disabled aria-label="Edit images on this page">
               <span class="ribbon-icon" data-icon="image" data-icon-size="20"></span>
               <span>Edit Images</span>
             </button>
@@ -290,11 +290,11 @@
         <!-- Legal group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-bates" class="ribbon-btn ribbon-btn-lg" title="Bates Numbering" disabled>
+            <button id="btn-bates" class="ribbon-btn ribbon-btn-lg" title="Bates Numbering" disabled aria-label="Bates Numbering">
               <span class="ribbon-icon" data-icon="hash" data-icon-size="20"></span>
               <span>Bates</span>
             </button>
-            <button id="btn-headers-footers" class="ribbon-btn ribbon-btn-lg" title="Headers & Footers" disabled>
+            <button id="btn-headers-footers" class="ribbon-btn ribbon-btn-lg" title="Headers & Footers" disabled aria-label="Headers & Footers">
               <span class="ribbon-icon" data-icon="align-justify" data-icon-size="20"></span>
               <span>Header/Footer</span>
             </button>
@@ -304,7 +304,7 @@
         <!-- Tools group -->
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-ocr" class="ribbon-btn ribbon-btn-lg" title="OCR — Recognize text in scanned pages" disabled>
+            <button id="btn-ocr" class="ribbon-btn ribbon-btn-lg" title="OCR — Recognize text in scanned pages" disabled aria-label="OCR — Recognize text in scanned pages">
               <span class="ribbon-icon" data-icon="file-scan" data-icon-size="20"></span>
               <span>OCR</span>
             </button>
@@ -317,45 +317,45 @@
       <div class="ribbon-content" id="ribbon-annotate">
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button class="ribbon-btn tool-btn" data-tool="select" title="Select (V)">
+            <button class="ribbon-btn tool-btn" data-tool="select" title="Select (V)" aria-label="Select">
               <span class="ribbon-icon" data-icon="mouse-pointer"></span>
               <span>Select</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="text" title="Text (T)" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="text" title="Text (T)" disabled aria-label="Text">
               <span class="ribbon-icon" data-icon="type"></span>
               <span>Text</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="highlight" title="Highlight" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="highlight" title="Highlight" disabled aria-label="Highlight">
               <span class="ribbon-icon" data-icon="highlighter"></span>
               <span>Highlight</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="underline" title="Underline" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="underline" title="Underline" disabled aria-label="Underline">
               <span class="ribbon-icon" data-icon="underline"></span>
               <span>Underline</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="strikethrough" title="Strikethrough" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="strikethrough" title="Strikethrough" disabled aria-label="Strikethrough">
               <span class="ribbon-icon" data-icon="strikethrough"></span>
               <span>Strike</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="draw" title="Draw (D)" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="draw" title="Draw (D)" disabled aria-label="Draw">
               <span class="ribbon-icon" data-icon="pencil"></span>
               <span>Draw</span>
             </button>
           </div>
           <div class="ribbon-row">
-            <button class="ribbon-btn tool-btn" data-tool="shape" title="Shape" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="shape" title="Shape" disabled aria-label="Shape">
               <span class="ribbon-icon" data-icon="square"></span>
               <span>Shape</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="stamp" title="Stamp" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="stamp" title="Stamp" disabled aria-label="Stamp">
               <span class="ribbon-icon" data-icon="stamp"></span>
               <span>Stamp</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="cover" title="Visual Cover" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="cover" title="Visual Cover" disabled aria-label="Visual Cover">
               <span class="ribbon-icon" data-icon="shield"></span>
               <span>Cover</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="redact" title="Redact" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="redact" title="Redact" disabled aria-label="Redact">
               <span class="ribbon-icon" data-icon="shield-off"></span>
               <span>Redact</span>
             </button>
@@ -364,15 +364,15 @@
         </div>
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button class="ribbon-btn" id="btn-anno-image" disabled>
+            <button class="ribbon-btn" id="btn-anno-image" aria-label="Insert image" disabled>
               <span class="ribbon-icon" data-icon="image"></span>
               <span>Image</span>
             </button>
-            <button class="ribbon-btn sig-open-btn" title="Signature" disabled>
+            <button class="ribbon-btn sig-open-btn" title="Signature" disabled aria-label="Signature">
               <span class="ribbon-icon" data-icon="pen-tool"></span>
               <span>Signature</span>
             </button>
-            <button class="ribbon-btn tool-btn" data-tool="sticky-note" title="Sticky Note" disabled>
+            <button class="ribbon-btn tool-btn" data-tool="sticky-note" title="Sticky Note" disabled aria-label="Sticky Note">
               <span class="ribbon-icon" data-icon="sticky-note"></span>
               <span>Note</span>
             </button>
@@ -380,7 +380,7 @@
               <span class="ribbon-icon" data-icon="droplet"></span>
               <span>Watermark</span>
             </button>
-            <button id="btn-exhibit-stamp" class="ribbon-btn" title="Exhibit Stamp" disabled>
+            <button id="btn-exhibit-stamp" class="ribbon-btn" title="Exhibit Stamp" disabled aria-label="Exhibit Stamp">
               <span class="ribbon-icon" data-icon="gavel"></span>
               <span>Exhibit</span>
             </button>
@@ -393,27 +393,27 @@
       <div class="ribbon-content" id="ribbon-forms">
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-form-text" class="ribbon-btn" title="Add Text Field" disabled>
+            <button id="btn-form-text" class="ribbon-btn" title="Add Text Field" disabled aria-label="Add Text Field">
               <span class="ribbon-icon" data-icon="form-input"></span>
               <span>Text Field</span>
             </button>
-            <button id="btn-form-checkbox" class="ribbon-btn" title="Add Checkbox" disabled>
+            <button id="btn-form-checkbox" class="ribbon-btn" title="Add Checkbox" disabled aria-label="Add Checkbox">
               <span class="ribbon-icon" data-icon="check-circle"></span>
               <span>Checkbox</span>
             </button>
-            <button id="btn-form-dropdown" class="ribbon-btn" title="Add Dropdown" disabled>
+            <button id="btn-form-dropdown" class="ribbon-btn" title="Add Dropdown" disabled aria-label="Add Dropdown">
               <span class="ribbon-icon" data-icon="chevron-down"></span>
               <span>Dropdown</span>
             </button>
-            <button id="btn-form-radio" class="ribbon-btn" title="Add Radio Button" disabled>
+            <button id="btn-form-radio" class="ribbon-btn" title="Add Radio Button" disabled aria-label="Add Radio Button">
               <span class="ribbon-icon" data-icon="zap"></span>
               <span>Radio</span>
             </button>
-            <button id="btn-form-signature" class="ribbon-btn" title="Add Signature Field" disabled>
+            <button id="btn-form-signature" class="ribbon-btn" title="Add Signature Field" disabled aria-label="Add Signature Field">
               <span class="ribbon-icon" data-icon="pen-tool"></span>
               <span>Signature</span>
             </button>
-            <button id="btn-form-button" class="ribbon-btn" title="Add Push Button" disabled>
+            <button id="btn-form-button" class="ribbon-btn" title="Add Push Button" disabled aria-label="Add Push Button">
               <span class="ribbon-icon" data-icon="square"></span>
               <span>Button</span>
             </button>
@@ -422,19 +422,19 @@
         </div>
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-form-import" class="ribbon-btn" title="Import Form Data" disabled>
+            <button id="btn-form-import" class="ribbon-btn" title="Import Form Data" disabled aria-label="Import Form Data">
               <span class="ribbon-icon" data-icon="upload"></span>
               <span>Import</span>
             </button>
-            <button id="btn-form-export" class="ribbon-btn" title="Export Form Data" disabled>
+            <button id="btn-form-export" class="ribbon-btn" title="Export Form Data" disabled aria-label="Export Form Data">
               <span class="ribbon-icon" data-icon="save"></span>
               <span>Export</span>
             </button>
-            <button id="btn-form-tab-order" class="ribbon-btn" title="Set Tab Order" disabled>
+            <button id="btn-form-tab-order" class="ribbon-btn" title="Set Tab Order" disabled aria-label="Set Tab Order">
               <span class="ribbon-icon" data-icon="list-ordered"></span>
               <span>Tab Order</span>
             </button>
-            <button id="btn-form-flatten" class="ribbon-btn" title="Flatten Form Fields" disabled>
+            <button id="btn-form-flatten" class="ribbon-btn" title="Flatten Form Fields" disabled aria-label="Flatten Form Fields">
               <span class="ribbon-icon" data-icon="layers"></span>
               <span>Flatten</span>
             </button>
@@ -447,15 +447,15 @@
       <div class="ribbon-content" id="ribbon-security">
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-encrypt" class="ribbon-btn ribbon-btn-lg" title="Password Protect PDF" disabled>
+            <button id="btn-encrypt" class="ribbon-btn ribbon-btn-lg" title="Password Protect PDF" disabled aria-label="Password Protect PDF">
               <span class="ribbon-icon" data-icon="key" data-icon-size="20"></span>
               <span>Encrypt</span>
             </button>
-            <button id="btn-metadata" class="ribbon-btn ribbon-btn-lg" title="Edit/Remove Metadata" disabled>
+            <button id="btn-metadata" class="ribbon-btn ribbon-btn-lg" title="Edit/Remove Metadata" disabled aria-label="Edit/Remove Metadata">
               <span class="ribbon-icon" data-icon="file-lock" data-icon-size="20"></span>
               <span>Metadata</span>
             </button>
-            <button id="btn-sanitize" class="ribbon-btn ribbon-btn-lg" title="Full Document Sanitization" disabled>
+            <button id="btn-sanitize" class="ribbon-btn ribbon-btn-lg" title="Full Document Sanitization" disabled aria-label="Full Document Sanitization">
               <span class="ribbon-icon" data-icon="shield-check" data-icon-size="20"></span>
               <span>Sanitize</span>
             </button>
@@ -464,7 +464,7 @@
         </div>
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-redact-search" class="ribbon-btn ribbon-btn-lg" title="Search & Redact Sensitive Data" disabled>
+            <button id="btn-redact-search" class="ribbon-btn ribbon-btn-lg" title="Search & Redact Sensitive Data" disabled aria-label="Search & Redact Sensitive Data">
               <span class="ribbon-icon" data-icon="scan" data-icon-size="20"></span>
               <span>Redact Search</span>
             </button>
@@ -477,15 +477,15 @@
       <div class="ribbon-content" id="ribbon-tools">
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-export-image" class="ribbon-btn ribbon-btn-lg" title="Export Pages to Images" disabled>
+            <button id="btn-export-image" class="ribbon-btn ribbon-btn-lg" title="Export Pages to Images" disabled aria-label="Export Pages to Images">
               <span class="ribbon-icon" data-icon="file-image" data-icon-size="20"></span>
               <span>Export Image</span>
             </button>
-            <button id="btn-create-from-images" class="ribbon-btn ribbon-btn-lg" title="Create PDF from Images" disabled>
+            <button id="btn-create-from-images" class="ribbon-btn ribbon-btn-lg" title="Create PDF from Images" disabled aria-label="Create PDF from Images">
               <span class="ribbon-icon" data-icon="image" data-icon-size="20"></span>
               <span>Images → PDF</span>
             </button>
-            <button id="btn-optimize" class="ribbon-btn ribbon-btn-lg" title="Optimize/Compress PDF" disabled>
+            <button id="btn-optimize" class="ribbon-btn ribbon-btn-lg" title="Optimize/Compress PDF" disabled aria-label="Optimize/Compress PDF">
               <span class="ribbon-icon" data-icon="shrink" data-icon-size="20"></span>
               <span>Optimize</span>
             </button>
@@ -494,7 +494,7 @@
         </div>
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-compare" class="ribbon-btn ribbon-btn-lg" title="Compare Two PDFs" disabled>
+            <button id="btn-compare" class="ribbon-btn ribbon-btn-lg" title="Compare Two PDFs" disabled aria-label="Compare Two PDFs">
               <span class="ribbon-icon" data-icon="git-compare" data-icon-size="20"></span>
               <span>Compare</span>
             </button>
@@ -503,11 +503,11 @@
         </div>
         <div class="ribbon-group">
           <div class="ribbon-row">
-            <button id="btn-comment-summary" class="ribbon-btn ribbon-btn-lg" title="Export Annotation Summary" disabled>
+            <button id="btn-comment-summary" class="ribbon-btn ribbon-btn-lg" title="Export Annotation Summary" disabled aria-label="Export Annotation Summary">
               <span class="ribbon-icon" data-icon="file-text" data-icon-size="20"></span>
               <span>Comments</span>
             </button>
-            <button id="btn-flatten-annotations" class="ribbon-btn ribbon-btn-lg" title="Flatten Annotations into PDF" disabled>
+            <button id="btn-flatten-annotations" class="ribbon-btn ribbon-btn-lg" title="Flatten Annotations into PDF" disabled aria-label="Flatten Annotations into PDF">
               <span class="ribbon-icon" data-icon="layers" data-icon-size="20"></span>
               <span>Flatten</span>
             </button>
@@ -524,15 +524,15 @@
       <!-- Left Sidebar -->
       <aside id="sidebar" aria-label="Document sidebar">
         <div id="sidebar-tabs">
-          <button class="sidebar-tab active" data-sidebar="pages" title="Pages">
+          <button class="sidebar-tab active" data-sidebar="pages" title="Pages" aria-label="Pages">
             <span data-icon="layout-grid" data-icon-size="14"></span>
             <span class="sidebar-tab-label">Pages</span>
           </button>
-          <button class="sidebar-tab" data-sidebar="bookmarks" title="Bookmarks">
+          <button class="sidebar-tab" data-sidebar="bookmarks" title="Bookmarks" aria-label="Bookmarks">
             <span data-icon="bookmark" data-icon-size="14"></span>
             <span class="sidebar-tab-label">Bookmarks</span>
           </button>
-          <button class="sidebar-tab" data-sidebar="notes" title="Notes">
+          <button class="sidebar-tab" data-sidebar="notes" title="Notes" aria-label="Notes">
             <span data-icon="message-square" data-icon-size="14"></span>
             <span class="sidebar-tab-label">Notes</span>
           </button>
@@ -559,24 +559,34 @@
 
       <!-- Canvas Area -->
       <main id="canvas-area" role="main" aria-label="PDF document view">
-        <!-- Find Bar (Ctrl+F) -->
+        <!-- Find & Replace Bar (Ctrl+F / Ctrl+H) -->
         <div id="find-bar" class="find-bar hidden">
-          <span class="find-icon" data-icon="search" data-icon-size="14"></span>
-          <input type="text" id="find-input" class="find-input" placeholder="Find in document… (Ctrl+F)" autocomplete="off" spellcheck="false">
-          <span id="find-match-count" class="find-match-count" aria-live="polite"></span>
-          <button id="find-prev" class="find-nav-btn" title="Previous (Shift+Enter)" aria-label="Previous match">
-            <span data-icon="chevron-up" data-icon-size="14"></span>
-          </button>
-          <button id="find-next" class="find-nav-btn" title="Next (Enter)" aria-label="Next match">
-            <span data-icon="chevron-down" data-icon-size="14"></span>
-          </button>
-          <label class="find-case-toggle" title="Match Case">
-            <input type="checkbox" id="find-case-sensitive">
-            <span>Aa</span>
-          </label>
-          <button id="find-close" class="find-close-btn" title="Close (Esc)" aria-label="Close find bar">
-            <span data-icon="x" data-icon-size="14"></span>
-          </button>
+          <div class="find-bar-row">
+            <span class="find-icon" data-icon="search" data-icon-size="14"></span>
+            <input type="text" id="find-input" class="find-input" placeholder="Find in document… (Ctrl+F)" autocomplete="off" spellcheck="false">
+            <span id="find-match-count" class="find-match-count" aria-live="polite"></span>
+            <button id="find-prev" class="find-nav-btn" title="Previous (Shift+Enter)" aria-label="Previous match">
+              <span data-icon="chevron-up" data-icon-size="14"></span>
+            </button>
+            <button id="find-next" class="find-nav-btn" title="Next (Enter)" aria-label="Next match">
+              <span data-icon="chevron-down" data-icon-size="14"></span>
+            </button>
+            <label class="find-case-toggle" title="Match Case">
+              <input type="checkbox" id="find-case-sensitive" aria-label="Find Case Sensitive">
+              <span>Aa</span>
+            </label>
+            <button id="find-replace-toggle" class="find-nav-btn" title="Toggle Replace (Ctrl+H)" aria-label="Toggle replace">
+              <span data-icon="replace" data-icon-size="14">↔</span>
+            </button>
+            <button id="find-close" class="find-close-btn" title="Close (Esc)" aria-label="Close find bar">
+              <span data-icon="x" data-icon-size="14"></span>
+            </button>
+          </div>
+          <div id="find-replace-row" class="find-replace-row hidden">
+            <input type="text" id="replace-input" class="find-input" placeholder="Replace with…" autocomplete="off" spellcheck="false">
+            <button id="replace-one" class="find-replace-btn" title="Replace current match" aria-label="Replace">Replace</button>
+            <button id="replace-all" class="find-replace-btn" title="Replace all matches" aria-label="Replace all">All</button>
+          </div>
         </div>
 
         <div id="page-container">
@@ -677,7 +687,7 @@
             </div>
             <div class="prop-row">
               <span class="prop-label">Opacity</span>
-              <input type="range" class="prop-slider" id="prop-opacity" min="10" max="100" value="40">
+              <input type="range" class="prop-slider" id="prop-opacity" min="10" max="100" value="40" aria-label="Prop Opacity">
               <span class="prop-slider-value" id="prop-opacity-value">40%</span>
             </div>
           </div>
@@ -695,11 +705,11 @@
             </div>
             <div class="prop-row">
               <span class="prop-label">Pages</span>
-              <input type="text" class="prop-input prop-readonly" id="prop-doc-pages" value="—" readonly>
+              <input type="text" class="prop-input prop-readonly" id="prop-doc-pages" value="—" readonly aria-label="Prop Doc Pages">
             </div>
             <div class="prop-row">
               <span class="prop-label">Size</span>
-              <input type="text" class="prop-input prop-readonly" id="prop-doc-size" value="—" readonly>
+              <input type="text" class="prop-input prop-readonly" id="prop-doc-size" value="—" readonly aria-label="Prop Doc Size">
             </div>
           </div>
 
@@ -708,7 +718,7 @@
             <div class="panel-section-title">Page Settings</div>
             <div class="prop-row">
               <span class="prop-label">Size</span>
-              <select class="prop-select" id="prop-page-size">
+              <select class="prop-select" id="prop-page-size" aria-label="Prop Page Size">
                 <option>Letter (8.5 x 11)</option>
                 <option>A4 (210 x 297mm)</option>
                 <option>Legal (8.5 x 14)</option>
@@ -716,7 +726,7 @@
             </div>
             <div class="prop-row">
               <span class="prop-label">Orientation</span>
-              <select class="prop-select" id="prop-page-orient">
+              <select class="prop-select" id="prop-page-orient" aria-label="Prop Page Orient">
                 <option>Portrait</option>
                 <option>Landscape</option>
               </select>
@@ -727,7 +737,7 @@
           <div class="panel-section hidden" id="panel-note-props">
             <div class="panel-section-title">Note Text</div>
             <textarea id="prop-note-text" rows="4" placeholder="Type note text…"
-              class="note-textarea"></textarea>
+              class="note-textarea" aria-label="Prop Note Text"></textarea>
             <div class="prop-row mt-8">
               <span class="prop-label">Color</span>
               <div class="prop-color-row" id="note-color-swatches">
@@ -823,6 +833,9 @@
   <div id="loading-overlay" class="hidden" role="alert" aria-live="assertive">
     <div class="spinner"></div>
     <span id="loading-text" class="loading-text">Processing...</span>
+    <div id="loading-progress" class="loading-progress hidden">
+      <div id="loading-progress-bar" class="loading-progress-bar"></div>
+    </div>
   </div>
 
   <!-- ═══════════════════ Merge Modal ═══════════════════ -->
@@ -835,7 +848,7 @@
       <div class="modal-body">
         <div id="merge-drop-zone" class="modal-drop-zone modal-form-section">
           <p>Drop PDF files here or click to add</p>
-          <input type="file" id="merge-file-input" accept=".pdf" multiple hidden>
+          <input type="file" id="merge-file-input" accept=".pdf" multiple hidden aria-label="Merge File Input">
         </div>
         <ul class="file-list" id="merge-file-list"></ul>
       </div>
@@ -885,28 +898,28 @@
           <div class="modal-form-grid">
             <div>
               <label class="modal-form-label" for="watermark-size">Font Size</label>
-              <input type="number" id="watermark-size" value="60" min="10" max="200" class="modal-form-input">
+              <input type="number" id="watermark-size" value="60" min="10" max="200" class="modal-form-input" aria-label="Watermark Size">
             </div>
             <div>
               <label class="modal-form-label" for="watermark-rotation">Rotation (&deg;)</label>
-              <input type="number" id="watermark-rotation" value="-45" min="-180" max="180" class="modal-form-input">
+              <input type="number" id="watermark-rotation" value="-45" min="-180" max="180" class="modal-form-input" aria-label="Watermark Rotation">
             </div>
           </div>
           <div class="modal-form-grid">
             <div>
               <label class="modal-form-label" for="watermark-opacity">Opacity</label>
               <input type="range" id="watermark-opacity" min="0.05" max="0.5" step="0.05" value="0.15"
-                class="w-full">
+                class="w-full" aria-label="Watermark Opacity">
               <span id="watermark-opacity-value" class="range-value-label">15%</span>
             </div>
             <div>
               <label class="modal-form-label" for="watermark-color">Color</label>
-              <input type="color" id="watermark-color" value="#888888" class="modal-form-color">
+              <input type="color" id="watermark-color" value="#888888" class="modal-form-color" aria-label="Watermark Color">
             </div>
           </div>
           <div>
             <label class="modal-form-label" for="watermark-pages">Apply to</label>
-            <select id="watermark-pages" class="modal-form-input">
+            <select id="watermark-pages" class="modal-form-input" aria-label="Watermark Pages">
               <option value="all">All Pages</option>
               <option value="current">Current Page Only</option>
             </select>
@@ -945,18 +958,18 @@
             <div>
               <label class="bates-label" for="bates-start">Start Number</label>
               <input type="number" id="bates-start" value="1" min="0"
-                class="bates-field">
+                class="bates-field" aria-label="Bates Start">
             </div>
             <div>
               <label class="bates-label" for="bates-pad">Zero Padding (digits)</label>
               <input type="number" id="bates-pad" value="6" min="1" max="12"
-                class="bates-field">
+                class="bates-field" aria-label="Bates Pad">
             </div>
           </div>
           <div class="modal-form-grid">
             <div>
               <label class="bates-label" for="bates-position">Position</label>
-              <select id="bates-position" class="bates-field">
+              <select id="bates-position" class="bates-field" aria-label="Bates Position">
                 <option value="bottom-center">Bottom Center</option>
                 <option value="bottom-left">Bottom Left</option>
                 <option value="bottom-right">Bottom Right</option>
@@ -968,17 +981,17 @@
             <div>
               <label class="bates-label" for="bates-font-size">Font Size</label>
               <input type="number" id="bates-font-size" value="10" min="6" max="36"
-                class="bates-field">
+                class="bates-field" aria-label="Bates Font Size">
             </div>
           </div>
           <div class="modal-form-grid">
             <div>
               <label class="bates-label" for="bates-color">Color</label>
-              <input type="color" id="bates-color" value="#000000" class="modal-form-color">
+              <input type="color" id="bates-color" value="#000000" class="modal-form-color" aria-label="Bates Color">
             </div>
             <div>
               <label class="bates-label" for="bates-page-range">Page Range</label>
-              <select id="bates-page-range" class="bates-field">
+              <select id="bates-page-range" class="bates-field" aria-label="Bates Page Range">
                 <option value="all">All Pages</option>
                 <option value="custom">Custom Range</option>
               </select>
@@ -1047,7 +1060,7 @@
           <div class="modal-form-grid-3 gap-sm">
             <div>
               <label class="bates-label" for="hf-bottom-left">Left</label>
-              <input id="hf-bottom-left" class="bates-field hf-zone" placeholder="">
+              <input id="hf-bottom-left" class="bates-field hf-zone" placeholder="" aria-label="Hf Bottom Left">
             </div>
             <div>
               <label class="bates-label" for="hf-bottom-center">Center</label>
@@ -1055,7 +1068,7 @@
             </div>
             <div>
               <label class="bates-label" for="hf-bottom-right">Right</label>
-              <input id="hf-bottom-right" class="bates-field hf-zone" placeholder="">
+              <input id="hf-bottom-right" class="bates-field hf-zone" placeholder="" aria-label="Hf Bottom Right">
             </div>
           </div>
         </div>
@@ -1065,15 +1078,15 @@
           <div class="modal-form-grid-3">
             <div>
               <label class="bates-label" for="hf-font-size">Font Size</label>
-              <input id="hf-font-size" type="number" class="bates-field" value="10" min="6" max="36">
+              <input id="hf-font-size" type="number" class="bates-field" value="10" min="6" max="36" aria-label="Hf Font Size">
             </div>
             <div>
               <label class="bates-label" for="hf-color">Color</label>
-              <input id="hf-color" type="color" class="bates-field modal-form-color" value="#000000">
+              <input id="hf-color" type="color" class="bates-field modal-form-color" value="#000000" aria-label="Hf Color">
             </div>
             <div>
               <label class="bates-label" for="hf-page-range">Page Range</label>
-              <select id="hf-page-range" class="bates-field">
+              <select id="hf-page-range" class="bates-field" aria-label="Hf Page Range">
                 <option value="all">All Pages</option>
                 <option value="custom">Custom</option>
               </select>
@@ -1115,7 +1128,7 @@
       <button class="btn-sm btn-secondary crop-preset" data-top="36" data-bottom="36" data-left="36" data-right="36">0.5"</button>
       <button class="btn-sm btn-secondary crop-preset" data-top="72" data-bottom="72" data-left="72" data-right="72">1"</button>
     </div>
-    <select id="crop-scope" class="crop-bar-scope">
+    <select id="crop-scope" class="crop-bar-scope" aria-label="Crop Scope">
       <option value="current">Current Page</option>
       <option value="all">All Pages</option>
     </select>
@@ -1158,7 +1171,7 @@
           <input type="text" id="sig-type-input" class="sig-type-field" placeholder="Your name">
           <div>
             <label class="modal-form-label" for="sig-type-font">Font Style</label>
-            <select id="sig-type-font" class="modal-form-input">
+            <select id="sig-type-font" class="modal-form-input" aria-label="Sig Type Font">
               <option value="Dancing Script">Cursive (Dancing Script)</option>
               <option value="Caveat">Handwritten (Caveat)</option>
               <option value="Great Vibes">Elegant (Great Vibes)</option>
@@ -1173,7 +1186,7 @@
             <label for="sig-upload-input" class="sig-upload-label">
               Choose an image file
             </label>
-            <input type="file" id="sig-upload-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+            <input type="file" id="sig-upload-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden aria-label="Sig Upload Input">
             <p class="drop-hint">PNG with transparent background recommended</p>
           </div>
           <img id="sig-upload-preview" class="hidden sig-upload-img" alt="Preview">
@@ -1194,7 +1207,7 @@
   </div>
 
   <!-- Hidden file input for image insertion -->
-  <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden>
+  <input type="file" id="image-file-input" accept="image/png,image/jpeg,image/gif,image/webp" hidden aria-label="Image File Input">
 
   <!-- OCR Modal -->
   <div id="ocr-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="OCR Text Recognition">
@@ -1264,11 +1277,11 @@
           <div>
             <label class="bates-label">Permissions</label>
             <div class="modal-checkbox-list">
-              <label><input type="checkbox" id="perm-print" checked> Allow Printing</label>
-              <label><input type="checkbox" id="perm-copy" checked> Allow Copying</label>
-              <label><input type="checkbox" id="perm-modify" checked> Allow Modifying</label>
-              <label><input type="checkbox" id="perm-annotate" checked> Allow Annotating</label>
-              <label><input type="checkbox" id="perm-fill-forms"> Allow Form Filling Only</label>
+              <label><input type="checkbox" id="perm-print" checked aria-label="Perm Print"> Allow Printing</label>
+              <label><input type="checkbox" id="perm-copy" checked aria-label="Perm Copy"> Allow Copying</label>
+              <label><input type="checkbox" id="perm-modify" checked aria-label="Perm Modify"> Allow Modifying</label>
+              <label><input type="checkbox" id="perm-annotate" checked aria-label="Perm Annotate"> Allow Annotating</label>
+              <label><input type="checkbox" id="perm-fill-forms" aria-label="Perm Fill Forms"> Allow Form Filling Only</label>
             </div>
           </div>
         </div>
@@ -1307,19 +1320,19 @@
           </div>
           <div>
             <label class="bates-label" for="meta-creator">Creator</label>
-            <input type="text" id="meta-creator" class="bates-field" readonly>
+            <input type="text" id="meta-creator" class="bates-field" readonly aria-label="Meta Creator">
           </div>
           <div>
             <label class="bates-label" for="meta-producer">Producer</label>
-            <input type="text" id="meta-producer" class="bates-field" readonly>
+            <input type="text" id="meta-producer" class="bates-field" readonly aria-label="Meta Producer">
           </div>
           <div>
             <label class="bates-label" for="meta-creation-date">Creation Date</label>
-            <input type="text" id="meta-creation-date" class="bates-field" readonly>
+            <input type="text" id="meta-creation-date" class="bates-field" readonly aria-label="Meta Creation Date">
           </div>
           <div>
             <label class="bates-label" for="meta-mod-date">Modification Date</label>
-            <input type="text" id="meta-mod-date" class="bates-field" readonly>
+            <input type="text" id="meta-mod-date" class="bates-field" readonly aria-label="Meta Mod Date">
           </div>
         </div>
       </div>
@@ -1377,7 +1390,7 @@
         <div class="modal-form-stack">
           <div>
             <label class="bates-label" for="export-img-scope">Pages</label>
-            <select id="export-img-scope" class="bates-field">
+            <select id="export-img-scope" class="bates-field" aria-label="Export Img Scope">
               <option value="current">Current Page</option>
               <option value="all">All Pages</option>
               <option value="custom">Custom Range</option>
@@ -1390,14 +1403,14 @@
           <div class="modal-form-grid">
             <div>
               <label class="bates-label" for="export-img-format">Format</label>
-              <select id="export-img-format" class="bates-field">
+              <select id="export-img-format" class="bates-field" aria-label="Export Img Format">
                 <option value="png">PNG</option>
                 <option value="jpg">JPEG</option>
               </select>
             </div>
             <div>
               <label class="bates-label" for="export-img-dpi">DPI</label>
-              <select id="export-img-dpi" class="bates-field">
+              <select id="export-img-dpi" class="bates-field" aria-label="Export Img Dpi">
                 <option value="72">72 (Screen)</option>
                 <option value="150" selected>150 (Standard)</option>
                 <option value="300">300 (Print)</option>
@@ -1407,7 +1420,7 @@
           </div>
           <div id="export-img-quality-row">
             <label class="bates-label" for="export-img-quality">JPEG Quality</label>
-            <input type="range" id="export-img-quality" min="50" max="100" value="92" class="w-full">
+            <input type="range" id="export-img-quality" min="50" max="100" value="92" class="w-full" aria-label="Export Img Quality">
             <span id="export-img-quality-val" class="range-value-label">92%</span>
           </div>
         </div>
@@ -1430,13 +1443,13 @@
         <div id="images-drop-zone" class="modal-drop-zone modal-form-section">
           <p>Drop image files here or click to add</p>
           <p class="drop-hint">PNG, JPEG, GIF, WebP</p>
-          <input type="file" id="images-file-input" accept="image/*" multiple hidden>
+          <input type="file" id="images-file-input" accept="image/*" multiple hidden aria-label="Images File Input">
         </div>
         <ul class="file-list" id="images-file-list"></ul>
         <div class="modal-form-grid mt-12">
           <div>
             <label class="bates-label" for="images-page-size">Page Size</label>
-            <select id="images-page-size" class="bates-field">
+            <select id="images-page-size" class="bates-field" aria-label="Images Page Size">
               <option value="fit">Fit to Image</option>
               <option value="letter">Letter (8.5 x 11)</option>
               <option value="a4">A4</option>
@@ -1445,7 +1458,7 @@
           </div>
           <div>
             <label class="bates-label" for="images-margin">Margin (pt)</label>
-            <input type="number" id="images-margin" class="bates-field" value="0" min="0" max="144">
+            <input type="number" id="images-margin" class="bates-field" value="0" min="0" max="144" aria-label="Images Margin">
           </div>
         </div>
       </div>
@@ -1467,7 +1480,7 @@
         <div class="modal-form-grid">
           <div>
             <label class="bates-label" for="optimize-mode">Mode</label>
-            <select id="optimize-mode" class="bates-field">
+            <select id="optimize-mode" class="bates-field" aria-label="Optimize Mode">
               <option value="smart" selected>Smart — preserve text, compress images</option>
               <option value="images">Images Only — recompress embedded images</option>
               <option value="aggressive">Aggressive — rasterize all pages</option>
@@ -1475,7 +1488,7 @@
           </div>
           <div>
             <label class="bates-label" for="optimize-preset">Preset</label>
-            <select id="optimize-preset" class="bates-field">
+            <select id="optimize-preset" class="bates-field" aria-label="Optimize Preset">
               <option value="screen">Screen (72 DPI, smaller file)</option>
               <option value="ebook" selected>eBook (150 DPI, balanced)</option>
               <option value="print">Print (200 DPI, higher quality)</option>
@@ -1487,7 +1500,7 @@
         <div id="optimize-custom-opts" class="modal-form-grid hidden mt-8">
           <div>
             <label class="bates-label" for="optimize-dpi">DPI</label>
-            <select id="optimize-dpi" class="bates-field">
+            <select id="optimize-dpi" class="bates-field" aria-label="Optimize Dpi">
               <option value="72">72</option>
               <option value="100">100</option>
               <option value="150" selected>150</option>
@@ -1497,7 +1510,7 @@
           </div>
           <div>
             <label class="bates-label" for="optimize-quality">JPEG Quality</label>
-            <input type="range" id="optimize-quality" min="30" max="95" value="75" class="w-full">
+            <input type="range" id="optimize-quality" min="30" max="95" value="75" class="w-full" aria-label="Optimize Quality">
             <span id="optimize-quality-val" class="range-value-label">75%</span>
           </div>
         </div>
@@ -1528,12 +1541,12 @@
           </p>
           <div id="compare-drop-zone" class="modal-drop-zone">
             <p>Drop the second PDF here or click to select</p>
-            <input type="file" id="compare-file-input" accept=".pdf" hidden>
+            <input type="file" id="compare-file-input" accept=".pdf" hidden aria-label="Compare File Input">
           </div>
           <div class="modal-form-grid mt-12">
             <div>
               <label class="bates-label" for="compare-dpi">Comparison DPI</label>
-              <select id="compare-dpi" class="bates-field">
+              <select id="compare-dpi" class="bates-field" aria-label="Compare Dpi">
                 <option value="72">72 (Fast)</option>
                 <option value="96" selected>96 (Default)</option>
                 <option value="150">150 (Detailed)</option>
@@ -1541,7 +1554,7 @@
             </div>
             <div>
               <label class="bates-label" for="compare-threshold">Sensitivity</label>
-              <select id="compare-threshold" class="bates-field">
+              <select id="compare-threshold" class="bates-field" aria-label="Compare Threshold">
                 <option value="15">High (15)</option>
                 <option value="30" selected>Normal (30)</option>
                 <option value="50">Low (50)</option>
@@ -1554,7 +1567,7 @@
           <div class="compare-results-header">
             <div id="compare-summary" class="modal-form-hint mb-0"></div>
             <div class="compare-nav">
-              <select id="compare-view-mode" class="bates-field w-auto">
+              <select id="compare-view-mode" class="bates-field w-auto" aria-label="Compare View Mode">
                 <option value="side-by-side">Side by Side</option>
                 <option value="overlay">Overlay</option>
                 <option value="diff-only">Diff Only</option>
@@ -1610,7 +1623,7 @@
         </div>
         <div class="modal-form-section">
           <label class="bates-label" for="comment-export-format">Export Format</label>
-          <select id="comment-export-format" class="bates-field w-auto">
+          <select id="comment-export-format" class="bates-field w-auto" aria-label="Comment Export Format">
             <option value="text">Plain Text</option>
             <option value="json">JSON</option>
             <option value="csv">CSV</option>
@@ -1642,7 +1655,7 @@
           <div id="form-import-drop-zone" class="modal-drop-zone">
             <p>Drop file here or click to select</p>
             <p class="drop-hint">JSON, XFDF, or CSV</p>
-            <input type="file" id="form-import-file-input" accept=".json,.xfdf,.csv" hidden>
+            <input type="file" id="form-import-file-input" accept=".json,.xfdf,.csv" hidden aria-label="Form Import File Input">
           </div>
           <div id="form-import-preview" class="hidden modal-preview-box mt-12 modal-text-xs modal-scrollable-list-sm"></div>
         </div>
@@ -1652,7 +1665,7 @@
             Export current form data to a file.
           </p>
           <label class="bates-label" for="form-export-format">Format</label>
-          <select id="form-export-format" class="bates-field">
+          <select id="form-export-format" class="bates-field" aria-label="Form Export Format">
             <option value="json">JSON</option>
             <option value="xfdf">XFDF (Adobe Compatible)</option>
             <option value="csv">CSV</option>
@@ -1675,7 +1688,7 @@
       </div>
       <div class="modal-body">
         <label class="bates-label" for="exhibit-format">Numbering Format</label>
-        <select id="exhibit-format" class="bates-field">
+        <select id="exhibit-format" class="bates-field" aria-label="Exhibit Format">
           <option value="letter">A, B, C...</option>
           <option value="number">1, 2, 3...</option>
           <option value="roman-upper">I, II, III...</option>
@@ -1684,7 +1697,7 @@
         <label class="bates-label mt-12" for="exhibit-prefix">Prefix (optional)</label>
         <input type="text" id="exhibit-prefix" class="bates-field" placeholder="e.g. Plaintiff's ">
         <label class="modal-checkbox-list mt-12">
-          <label><input type="checkbox" id="exhibit-include-date" checked> Include date on stamp</label>
+          <label><input type="checkbox" id="exhibit-include-date" checked aria-label="Exhibit Include Date"> Include date on stamp</label>
         </label>
         <div class="modal-preview-box exhibit-preview-box">
           <p class="modal-preview-title">Preview</p>
@@ -1721,7 +1734,7 @@
           </ul>
         </div>
         <div class="modal-checkbox-list mt-16">
-          <label><input type="checkbox" id="sanitize-confirm"> I understand this cannot be undone</label>
+          <label><input type="checkbox" id="sanitize-confirm" aria-label="Sanitize Confirm"> I understand this cannot be undone</label>
         </div>
       </div>
       <div class="modal-footer">
@@ -1772,7 +1785,7 @@
         <div id="replace-source-drop" class="modal-drop-zone">
           <p>Click to choose source PDF</p>
           <p class="drop-hint">or drag and drop</p>
-          <input type="file" id="replace-file-input" accept=".pdf" hidden>
+          <input type="file" id="replace-file-input" accept=".pdf" hidden aria-label="Replace File Input">
         </div>
         <div id="replace-mapping" class="hidden mt-16">
           <p class="modal-form-hint mb-8">
@@ -1790,7 +1803,7 @@
             </table>
           </div>
           <div class="modal-checkbox-list mt-12 modal-muted-hint">
-            <label><input type="checkbox" id="replace-confirm"> I understand replaced pages cannot be recovered</label>
+            <label><input type="checkbox" id="replace-confirm" aria-label="Replace Confirm"> I understand replaced pages cannot be recovered</label>
           </div>
         </div>
       </div>
@@ -1802,7 +1815,7 @@
   </div>
 
   <!-- Hidden file input for creating PDF from images -->
-  <input type="file" id="create-images-file-input" accept="image/*" multiple hidden>
+  <input type="file" id="create-images-file-input" accept="image/*" multiple hidden aria-label="Create Images File Input">
 
   <!-- ═══════════════════ Keyboard Shortcuts Modal ═══════════════════ -->
   <div id="shortcuts-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts">

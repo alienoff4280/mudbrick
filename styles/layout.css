@@ -819,6 +819,16 @@ html, body {
   box-shadow: 0 3px 0 0 var(--mb-brand);
   margin-bottom: 3px;
 }
+.thumbnail-item.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+.thumbnail-item[draggable="true"] {
+  cursor: grab;
+}
+.thumbnail-item[draggable="true"]:active {
+  cursor: grabbing;
+}
 
 .thumbnail-placeholder {
   width: 100%;
@@ -866,7 +876,7 @@ html, body {
   right: 16px;
   z-index: 75;
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 4px;
   background: var(--mb-surface);
   border: 1px solid var(--mb-border);
@@ -879,6 +889,39 @@ html, body {
 
 .find-bar.hidden {
   display: none;
+}
+
+.find-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.find-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 22px; /* align with search input (past icon) */
+}
+
+.find-replace-row.hidden {
+  display: none;
+}
+
+.find-replace-btn {
+  padding: 3px 8px;
+  border: 1px solid var(--mb-border);
+  border-radius: var(--mb-radius-sm);
+  background: var(--mb-surface);
+  color: var(--mb-text);
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s;
+}
+
+.find-replace-btn:hover {
+  background: var(--mb-surface-hover);
 }
 
 .find-icon {
@@ -1000,6 +1043,10 @@ html, body {
   opacity: 0.25;
   line-height: 1.0;
 }
+/* When text edit mode is active, remove the opacity so editable text is fully visible */
+#text-layer.text-edit-active {
+  opacity: 1;
+}
 
 #text-layer span,
 #text-layer br {
@@ -1016,6 +1063,13 @@ html, body {
 
 #text-layer ::selection {
   background: rgba(0, 100, 255, 0.3);
+}
+/* Dark mode: boost selection visibility since text layer is low opacity */
+html[data-theme="dark"] #text-layer ::selection {
+  background: rgba(80, 160, 255, 0.6);
+}
+html[data-theme="dark"] #text-layer {
+  opacity: 0.35;
 }
 
 /* ── Text Edit Mode ── */
@@ -1046,9 +1100,9 @@ html, body {
 
 .text-edit-line {
   position: absolute;
-  outline: 2px solid rgba(41, 128, 185, 0.35);
-  /* background set inline from sampled PDF background color */
-  padding: 4px 6px;
+  outline: 1px solid transparent;
+  /* background set inline — transparent to preserve PDF canvas appearance */
+  padding: 0 2px;
   cursor: text;
   z-index: 15;
   white-space: pre-wrap;
@@ -1059,11 +1113,11 @@ html, body {
   overflow: hidden;
   resize: both;
   /* font-family is set inline from PDF font detection */
-  color: var(--mb-text);
-  border-radius: 3px;
+  border-radius: 2px;
+  transition: outline-color 0.15s, box-shadow 0.15s;
 }
 .text-edit-line:hover {
-  outline: 2px solid rgba(41, 128, 185, 0.6);
+  outline-color: rgba(41, 128, 185, 0.4);
 }
 .text-edit-line:focus {
   outline: 2px solid var(--mb-accent);
@@ -1805,6 +1859,22 @@ html, body {
   letter-spacing: 0.2px;
 }
 
+.loading-progress {
+  width: 240px;
+  height: 6px;
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.loading-progress.hidden { display: none; }
+.loading-progress-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--mb-accent);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
@@ -1905,21 +1975,37 @@ html, body {
     bottom: 52px;
   }
 
-  /* Touch targets: increase button sizes */
+  /* Touch targets: increase to 44px minimum for iOS/Android */
   .float-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
   .page-nav-btn {
-    width: 40px;
-    height: 40px;
+    width: 44px;
+    height: 44px;
   }
 
   .find-nav-btn,
-  .find-close-btn {
-    width: 36px;
-    height: 36px;
+  .find-close-btn,
+  .find-replace-btn {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+  }
+
+  .ribbon-btn {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  .text-edit-btn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .sidebar-tab {
+    min-height: 44px;
   }
 }
 
@@ -1949,8 +2035,16 @@ html, body {
   }
 
   /* Find bar: stack tighter */
+  .find-bar {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+  }
+
   .find-input {
     width: 100px;
+    flex: 1;
+    min-width: 0;
   }
 
   .find-match-count {
@@ -1959,6 +2053,31 @@ html, body {
 
   .find-case-toggle {
     display: none;
+  }
+
+  .find-replace-row {
+    padding-left: 0;
+  }
+
+  .find-replace-btn {
+    min-width: 44px;
+    font-size: 12px;
+    padding: 6px 10px;
+  }
+
+  /* Text edit toolbar: full-width on phone */
+  .text-edit-toolbar {
+    left: 4px;
+    right: 4px;
+    transform: none;
+    max-width: none;
+    flex-wrap: wrap;
+  }
+
+  /* Modals: full-width on phone */
+  .modal {
+    width: 95vw;
+    max-height: 90vh;
   }
 
   /* Welcome screen: tighter */
@@ -1994,6 +2113,11 @@ html, body {
 
   .page-nav-sep {
     margin: 0 4px;
+  }
+
+  /* Loading progress: wider on phone */
+  .loading-progress {
+    width: 80vw;
   }
 }
 
@@ -2163,17 +2287,8 @@ html, body {
 
 /* PDF pages are always white — edit overlays must be opaque regardless of theme */
 html[data-theme="dark"] .text-edit-line {
-  background: white;
+  /* background stays transparent — canvas shows through */
   color: #000;
-}
-html[data-theme="dark"] .text-edit-line:hover {
-  background: #f0f7ff;
-}
-html[data-theme="dark"] .text-edit-line:focus {
-  background: white;
-}
-html[data-theme="dark"] .text-edit-line.text-edit-dirty {
-  background: #fffde6;
 }
 html[data-theme="dark"] .text-edit-paragraph {
   background: var(--mb-accent);
