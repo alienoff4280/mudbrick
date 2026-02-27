@@ -668,6 +668,12 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pd
   }
   const lines = groupIntoLines(textContent.items, viewport, textContent.styles);
 
+  // Debug: log resolved font names for first few lines
+  for (const line of lines.slice(0, 5)) {
+    const style = detectFontStyle(line.fontName);
+    console.log(`[Mudbrick edit] text="${line.text.substring(0, 40)}" fontName="${line.fontName}" bold=${style.bold} italic=${style.italic}`);
+  }
+
   if (lines.length === 0) {
     // Try OCR results for scanned pages
     const { hasOCRResults, getOCRResults } = await import('./ocr.js');
@@ -1494,6 +1500,8 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     const fontSize = change.fontSizeOverride || change.pdfFontSize;
     const x = change.pdfX;
     const y = change.pdfY;
+
+    console.log(`[Mudbrick commit] text="${change.newText.substring(0, 30)}" font="${change.fontName}" bold=${change.bold} color="${change.colorOverride}" bg="${change.bgColor}" size=${fontSize}`);
 
     // Use precise PDF line width when available, fall back to screen-based estimate
     const scale = currentViewport ? currentViewport.scale : 1;
