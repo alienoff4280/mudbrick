@@ -29,51 +29,45 @@ function escapeHtml(str) {
 }
 
 /**
- * Sample the dominant background color from a rendered PDF canvas at the given region.
- * Returns the most common light/bright color as a hex string, or '#ffffff' if not found.
- * Expands the sample region slightly beyond the text to get surrounding background.
+ * Sample the exact background color from a rendered PDF canvas near the given region.
+ * Reads a vertical strip just left of the text area and picks the most frequent
+ * exact color. Used only for the commit-time cover rectangle, not for the overlay.
  */
 function sampleBackgroundColor(canvas, x, y, width, height) {
   if (!canvas) return '#ffffff';
   const ctx = canvas.getContext('2d');
-  // Expand region to sample surrounding background, not just text pixels
-  const pad = 4;
-  const sx = Math.max(0, Math.round(x) - pad);
-  const sy = Math.max(0, Math.round(y) - pad);
-  const sw = Math.min(Math.round(width) + pad * 2, canvas.width - sx);
-  const sh = Math.min(Math.round(height) + pad * 2, canvas.height - sy);
-  if (sw <= 0 || sh <= 0) return '#ffffff';
+  const dpr = canvas.width / (parseFloat(canvas.style.width) || canvas.offsetWidth) || 1;
+
+  // Read a 1px-wide vertical strip just left of the text — pure background
+  const sx = Math.max(0, Math.round((x - 3) * dpr));
+  const sy = Math.max(0, Math.round(y * dpr));
+  const sh = Math.min(Math.round(height * dpr), canvas.height - sy);
+  if (sh <= 0) return '#ffffff';
 
   let data;
   try {
-    data = ctx.getImageData(sx, sy, sw, sh).data;
+    data = ctx.getImageData(sx, sy, 1, sh).data;
   } catch (_) {
     return '#ffffff';
   }
 
-  // Count light pixel colors (the background), skip dark pixels (text/lines)
-  const colorCounts = {};
+  // Count exact pixel colors (no quantization), skip dark pixels (borders/text)
+  const counts = {};
   for (let i = 0; i < data.length; i += 4) {
-    const r = data[i], g = data[i + 1], b = data[i + 2], a = data[i + 3];
-    if (a < 128) continue;
+    const r = data[i], g = data[i + 1], b = data[i + 2];
     const lum = r * 0.299 + g * 0.587 + b * 0.114;
-    if (lum < 180) continue; // skip dark pixels (text, borders)
-    // Quantize to reduce noise
-    const qr = (r >> 3) << 3, qg = (g >> 3) << 3, qb = (b >> 3) << 3;
-    const key = `${qr},${qg},${qb}`;
-    colorCounts[key] = (colorCounts[key] || 0) + 1;
+    if (lum < 150) continue; // skip dark pixels
+    const key = `${r},${g},${b}`;
+    counts[key] = (counts[key] || 0) + 1;
   }
 
-  let maxCount = 0, bestColor = null;
-  for (const [key, count] of Object.entries(colorCounts)) {
-    if (count > maxCount) {
-      maxCount = count;
-      bestColor = key;
-    }
+  let maxCount = 0, best = null;
+  for (const [key, count] of Object.entries(counts)) {
+    if (count > maxCount) { maxCount = count; best = key; }
   }
 
-  if (!bestColor) return '#ffffff';
-  const [r, g, b] = bestColor.split(',').map(Number);
+  if (!best) return '#ffffff';
+  const [r, g, b] = best.split(',').map(Number);
   return '#' + [r, g, b].map(c => c.toString(16).padStart(2, '0')).join('');
 }
 
@@ -85,11 +79,12 @@ function sampleBackgroundColor(canvas, x, y, width, height) {
 function sampleTextColor(canvas, x, y, width, height) {
   if (!canvas) return '#000000';
   const ctx = canvas.getContext('2d');
-  // Clamp to canvas bounds
-  const sx = Math.max(0, Math.round(x));
-  const sy = Math.max(0, Math.round(y));
-  const sw = Math.min(Math.round(width), canvas.width - sx);
-  const sh = Math.min(Math.round(height), canvas.height - sy);
+  const dpr = canvas.width / (parseFloat(canvas.style.width) || canvas.offsetWidth) || 1;
+  // Clamp to canvas bounds (convert CSS coords to canvas pixel coords)
+  const sx = Math.max(0, Math.round(x * dpr));
+  const sy = Math.max(0, Math.round(y * dpr));
+  const sw = Math.min(Math.round(width * dpr), canvas.width - sx);
+  const sh = Math.min(Math.round(height * dpr), canvas.height - sy);
   if (sw <= 0 || sh <= 0) return '#000000';
 
   let data;
@@ -168,6 +163,7 @@ let _paragraphData = [];    // computed paragraphs (arrays of line objects)
 let _activeBlockIdx = -1;   // index into _paragraphData of currently edited block
 let _blockZones = [];       // click-zone DOM elements for each paragraph
 let _editedBlocks = new Map(); // paraIdx -> array of dirty line data from deactivated blocks
+let _canvasSnapshot = null;    // { imageData, x, y } — saved canvas pixels for active block
 
 // Undo/redo stacks — stores snapshots per line
 let undoStack = []; // array of { div, text, dataset snapshot }
@@ -774,6 +770,37 @@ function activateBlock(paraIdx) {
   shield.addEventListener('mousedown', e => e.stopPropagation());
   editContainer.appendChild(shield);
 
+  // Save canvas snapshot for this block area and erase original text from canvas
+  // so the transparent overlay doesn't create ghost/double text
+  _canvasSnapshot = null;
+  if (_pdfCanvas) {
+    try {
+      const ctx = _pdfCanvas.getContext('2d');
+      const ratio = _pdfCanvas.width / (parseFloat(_pdfCanvas.style.width) || _pdfCanvas.offsetWidth) || 1;
+      const snapX = Math.max(0, Math.floor((paraLeft - 6) * ratio));
+      const snapY = Math.max(0, Math.floor((paraTop - 6) * ratio));
+      const snapW = Math.min(Math.ceil((paraRight - paraLeft + 12) * ratio), _pdfCanvas.width - snapX);
+      const snapH = Math.min(Math.ceil((paraBottom - paraTop + 12) * ratio), _pdfCanvas.height - snapY);
+      if (snapW > 0 && snapH > 0) {
+        _canvasSnapshot = {
+          imageData: ctx.getImageData(snapX, snapY, snapW, snapH),
+          x: snapX, y: snapY,
+        };
+        // Paint over each line's text on the canvas with sampled background color
+        for (const line of para) {
+          const bg = sampleBackgroundColor(_pdfCanvas, line.left, line.top, line.width, line.height);
+          ctx.fillStyle = bg;
+          ctx.fillRect(
+            Math.floor((line.left - 1) * ratio),
+            Math.floor((line.top - 1) * ratio),
+            Math.ceil((line.width + 2) * ratio),
+            Math.ceil((line.height + 2) * ratio)
+          );
+        }
+      }
+    } catch (_) { /* canvas security or other error */ }
+  }
+
   // Check if this block has previously saved edits
   const savedEdits = _editedBlocks.get(paraIdx);
 
@@ -809,11 +836,12 @@ function activateBlock(paraIdx) {
     div.style.color = saved?.colorOverride || matchedColor;
     div.dataset.matchedColor = matchedColor;
 
-    // Background — sample actual PDF background so we don't paint white over gray cells
+    // Background — transparent so the original PDF canvas shows through unchanged
+    div.style.background = 'transparent';
+    // Sample bg color for commit-time cover rectangle (exact pixel from edge)
     const bgColor = saved?.bgColor || sampleBackgroundColor(
       _pdfCanvas, line.left, line.top, line.width, line.height
     );
-    div.style.background = bgColor;
     div.dataset.bgColor = bgColor;
 
     // Store original data
@@ -938,6 +966,15 @@ function deactivateBlock() {
     _editedBlocks.set(_activeBlockIdx, savedLines);
   }
 
+  // Restore canvas pixels (bring back original text rendering)
+  if (_canvasSnapshot && _pdfCanvas) {
+    try {
+      const ctx = _pdfCanvas.getContext('2d');
+      ctx.putImageData(_canvasSnapshot.imageData, _canvasSnapshot.x, _canvasSnapshot.y);
+    } catch (_) { /* ignore */ }
+  }
+  _canvasSnapshot = null;
+
   // Re-show the click zone
   const zone = _blockZones[_activeBlockIdx];
   if (zone) {
@@ -989,6 +1026,7 @@ export function exitTextEditMode() {
   _activeBlockIdx = -1;
   _blockZones = [];
   _editedBlocks = new Map();
+  _canvasSnapshot = null;
   undoStack = [];
   redoStack = [];
 }
