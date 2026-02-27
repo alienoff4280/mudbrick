@@ -777,27 +777,33 @@ function activateBlock(paraIdx) {
   if (_pdfCanvas) {
     try {
       const ctx = _pdfCanvas.getContext('2d');
-      const ratio = _pdfCanvas.width / (parseFloat(_pdfCanvas.style.width) || _pdfCanvas.offsetWidth) || 1;
-      const snapX = Math.max(0, Math.floor((paraLeft - 6) * ratio));
-      const snapY = Math.max(0, Math.floor((paraTop - 6) * ratio));
-      const snapW = Math.min(Math.ceil((paraRight - paraLeft + 12) * ratio), _pdfCanvas.width - snapX);
-      const snapH = Math.min(Math.ceil((paraBottom - paraTop + 12) * ratio), _pdfCanvas.height - snapY);
+      const dpr = _pdfCanvas.width / (parseFloat(_pdfCanvas.style.width) || _pdfCanvas.offsetWidth) || 1;
+      // getImageData/putImageData work in raw canvas pixels (ignoring transform)
+      const snapX = Math.max(0, Math.floor((paraLeft - 6) * dpr));
+      const snapY = Math.max(0, Math.floor((paraTop - 6) * dpr));
+      const snapW = Math.min(Math.ceil((paraRight - paraLeft + 12) * dpr), _pdfCanvas.width - snapX);
+      const snapH = Math.min(Math.ceil((paraBottom - paraTop + 12) * dpr), _pdfCanvas.height - snapY);
       if (snapW > 0 && snapH > 0) {
         _canvasSnapshot = {
           imageData: ctx.getImageData(snapX, snapY, snapW, snapH),
           x: snapX, y: snapY,
         };
-        // Paint over each line's text on the canvas with sampled background color
+        // Paint over each line's text on the canvas with sampled background color.
+        // Reset transform to identity so fillRect uses raw pixel coords directly,
+        // avoiding double-scaling from the DPR transform left by renderPage.
+        ctx.save();
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         for (const line of para) {
           const bg = sampleBackgroundColor(_pdfCanvas, line.left, line.top, line.width, line.height);
           ctx.fillStyle = bg;
           ctx.fillRect(
-            Math.floor((line.left - 1) * ratio),
-            Math.floor((line.top - 1) * ratio),
-            Math.ceil((line.width + 2) * ratio),
-            Math.ceil((line.height + 2) * ratio)
+            Math.floor((line.left - 1) * dpr),
+            Math.floor((line.top - 1) * dpr),
+            Math.ceil((line.width + 2) * dpr),
+            Math.ceil((line.height + 2) * dpr)
           );
         }
+        ctx.restore();
       }
     } catch (_) { /* canvas security or other error */ }
   }
@@ -815,11 +821,12 @@ function activateBlock(paraIdx) {
     div.spellcheck = false;
     div.textContent = saved ? saved.text : line.text;
 
-    // Position & size — use min-height so box can grow when editing
-    div.style.left = (line.left - 4) + 'px';
-    div.style.top = (line.top - 4) + 'px';
-    div.style.minWidth = (line.width + 24) + 'px';
-    div.style.minHeight = (line.height + 8) + 'px';
+    // Position — align text content exactly over original canvas text.
+    // CSS has padding: 0 2px, so offset left by 2px to compensate.
+    div.style.left = (line.left - 2) + 'px';
+    div.style.top = line.top + 'px';
+    div.style.minWidth = (line.width + 8) + 'px';
+    div.style.minHeight = line.height + 'px';
     div.style.fontSize = (saved?.fontSizeOverride || line.fontSize) + 'px';
     div.style.lineHeight = (line.height + 4) + 'px';
 
