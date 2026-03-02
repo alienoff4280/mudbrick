@@ -541,8 +541,8 @@ function groupIntoLines(items, viewport, styles) {
   const seen = new Map(); // key -> index in deduped
   for (const item of mapped) {
     if (!item.str.trim()) continue;
-    // Key by approximate position (round to 1px)
-    const key = `${Math.round(item.left)},${Math.round(item.top)}`;
+    // Key by approximate position (round to 2px grid for sub-pixel tolerance)
+    const key = `${Math.round(item.left / 2) * 2},${Math.round(item.top / 2) * 2}`;
     if (seen.has(key)) {
       // Replace earlier item with this one (later in PDF = drawn on top)
       deduped[seen.get(key)] = item;
@@ -1566,17 +1566,29 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     return fontCache[stdName];
   }
 
+  // Check if low-level CTM operators are available for horizontal text scaling
+  const hasCTM = typeof PDFLib.pushGraphicsState === 'function' &&
+    typeof PDFLib.popGraphicsState === 'function' &&
+    typeof PDFLib.concatTransformationMatrix === 'function';
+
   for (const change of changes) {
     const font = await getFont(change.fontName, change.bold, change.italic);
     const fontSize = change.fontSizeOverride || change.pdfFontSize;
     const x = change.pdfX;
     const y = change.pdfY;
 
+    // Measure natural width of new text in the standard font
+    const naturalWidth = font.widthOfTextAtSize(change.newText, fontSize);
 
     // Use precise PDF line width when available, fall back to screen-based estimate
     const scale = currentViewport ? currentViewport.scale : 1;
-    const rectWidth = (change.pdfLineWidth > 0 ? change.pdfLineWidth : change.screenWidth / scale) + 4;
-    const rectHeight = change.pdfFontSize * 1.3;  // 1.3x covers ascenders/descenders
+    const originalWidth = change.pdfLineWidth > 0 ? change.pdfLineWidth : change.screenWidth / scale;
+
+    // Cover rectangle — wide enough for both original and new text
+    const coverWidth = Math.max(originalWidth, naturalWidth) + 6;
+    const descenderDepth = change.pdfFontSize * 0.30;
+    const ascenderHeight = change.pdfFontSize * 1.10;
+    const rectHeight = descenderDepth + ascenderHeight;
 
     // Cover rectangle — match sampled background color so it blends in
     let coverColor = PDFLib.rgb(1, 1, 1);
@@ -1588,8 +1600,8 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     }
     page.drawRectangle({
       x: x - 1,
-      y: y - change.pdfFontSize * 0.25,  // extend below baseline for descenders
-      width: rectWidth,
+      y: y - descenderDepth,
+      width: coverWidth,
       height: rectHeight,
       color: coverColor,
       borderWidth: 0,
@@ -1605,13 +1617,24 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       color = PDFLib.rgb(r, g, b);
     }
 
-    page.drawText(change.newText, {
-      x,
-      y,
-      size: fontSize,
-      font,
-      color,
-    });
+    // Compute horizontal scale to match original text width
+    const scaleX = (originalWidth > 0 && naturalWidth > 0)
+      ? originalWidth / naturalWidth
+      : 1;
+    const applyScale = hasCTM && scaleX !== 1 && scaleX > 0.5 && scaleX < 2.0;
+
+    if (applyScale) {
+      // Wrap drawText in a CTM that scales horizontally while preserving position.
+      // CTM [scaleX, 0, 0, 1, x*(1-scaleX), 0] maps (x,y) → (x,y) but stretches glyphs.
+      page.pushOperators(PDFLib.pushGraphicsState());
+      page.pushOperators(PDFLib.concatTransformationMatrix(
+        scaleX, 0, 0, 1, x * (1 - scaleX), 0,
+      ));
+      page.drawText(change.newText, { x, y, size: fontSize, font, color });
+      page.pushOperators(PDFLib.popGraphicsState());
+    } else {
+      page.drawText(change.newText, { x, y, size: fontSize, font, color });
+    }
   }
 
   return doc.save();

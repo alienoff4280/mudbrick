@@ -726,7 +726,7 @@ function highlightActiveThumbnail() {
  * After pdf-lib modifies the document and returns new bytes,
  * reload into PDF.js so the user sees the changes.
  */
-async function reloadAfterEdit(newBytes, { skipHistory = false } = {}) {
+async function reloadAfterEdit(newBytes, { skipHistory = false, editedPage = 0 } = {}) {
   // Save current bytes for document-level undo (unless this IS an undo/redo)
   if (!skipHistory && State.pdfBytes) {
     pushDocState(State.pdfBytes);
@@ -768,9 +768,29 @@ async function reloadAfterEdit(newBytes, { skipHistory = false } = {}) {
   updatePageNav();
   await renderCurrentPage();
 
-  // Defer thumbnail generation so it doesn't race with the main canvas render
-  // (renderThumbnail calls page.cleanup() which could interfere)
-  setTimeout(() => generateThumbnails(), 50);
+  // Defer thumbnail refresh so it doesn't race with the main canvas render.
+  // When only a single page was edited and page count is unchanged, refresh
+  // just that thumbnail to avoid a full sidebar flash.
+  setTimeout(() => {
+    if (editedPage > 0 && State.totalPages === pdfDoc.numPages) {
+      const item = DOM.thumbnailList.querySelector(`.thumbnail-item[data-page="${editedPage}"]`);
+      if (item) {
+        // Replace existing canvas with placeholder so renderThumbnailForItem re-renders
+        const canvas = item.querySelector('canvas');
+        if (canvas) {
+          const placeholder = document.createElement('div');
+          placeholder.className = 'thumbnail-placeholder';
+          placeholder.textContent = editedPage;
+          item.replaceChild(placeholder, canvas);
+        }
+        renderThumbnailForItem(item, editedPage);
+      } else {
+        generateThumbnails();
+      }
+    } else {
+      generateThumbnails();
+    }
+  }, 50);
 
   // Rebuild text index for Find
   buildTextIndex(State.pdfDoc);
@@ -846,7 +866,7 @@ async function handleCommitTextEdits() {
     showLoading('Applying text edits…');
     const newBytes = await commitTextEdits(State.pdfBytes, State.currentPage);
     if (newBytes) {
-      await reloadAfterEdit(newBytes);
+      await reloadAfterEdit(newBytes, { editedPage: State.currentPage });
       toast('Text edits applied');
     } else {
       toast('No changes to apply', 'info');
