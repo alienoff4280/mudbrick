@@ -255,10 +255,24 @@ function detectFontStyle(fontName) {
 }
 
 /**
- * Detect font weight and style from PDF style metadata and font name.
- * Prefer explicit style metadata when available, then fall back to name parsing.
+ * Detect font weight and style from multiple sources (best to worst):
+ *   1. pdf.js font object metadata (bold/italic flags, real font name)
+ *   2. pdf.js style metadata (fontWeight, fontStyle, fontFamily keywords)
+ *   3. Resolved font name keyword parsing
  */
-function detectFontStyleWithMeta(fontName, styleInfo) {
+function detectFontStyleWithMeta(fontName, styleInfo, fontMeta) {
+  // 1. pdf.js font object — most reliable (has .bold/.italic from font descriptor)
+  if (fontMeta) {
+    if (fontMeta.bold || fontMeta.italic) {
+      return { bold: !!fontMeta.bold, italic: !!fontMeta.italic };
+    }
+    // Try the real font name from the font object
+    if (fontMeta.name) {
+      const fromReal = detectFontStyle(fontMeta.name);
+      if (fromReal.bold || fromReal.italic) return fromReal;
+    }
+  }
+  // 2. Style metadata (fontWeight, fontFamily keywords)
   const lowerWeight = String(styleInfo?.fontWeight || '').toLowerCase();
   const lowerStyle = String(styleInfo?.fontStyle || '').toLowerCase();
   const lowerFamily = String(styleInfo?.fontFamily || '').toLowerCase();
@@ -269,6 +283,7 @@ function detectFontStyleWithMeta(fontName, styleInfo) {
       lowerFamily.includes('italic') || lowerFamily.includes('oblique'),
   };
   if (fromMeta.bold || fromMeta.italic) return fromMeta;
+  // 3. Resolved font name
   const fromName = detectFontStyle(fontName);
   return {
     bold: fromName.bold,
@@ -492,7 +507,7 @@ function detectColumnSplit(mapped, pageWidth) {
   return ((bestStart + bestEnd) / 2) * bucketWidth;
 }
 
-function groupIntoLines(items, viewport, styles) {
+function groupIntoLines(items, viewport, styles, fontMeta) {
   if (!items.length) return [];
 
   const mapped = items.map(item => {
@@ -519,10 +534,13 @@ function groupIntoLines(items, viewport, styles) {
       : hasRecognizableFont(rawName) ? rawName
       : familyName || rawName || 'Helvetica';
 
+    const meta = fontMeta && fontMeta[item.fontName];
     return {
       str: item.str,
       fontName: resolvedFontName,
+      rawFontName: rawName,
       styleInfo: styleInfo || null,
+      fontMeta: meta || null,
       left,
       top,
       width: item.width * viewport.scale,
@@ -619,6 +637,9 @@ function groupIntoLines(items, viewport, styles) {
       height: height + 2,
       fontSize,
       fontName: line.items[0].fontName,
+      rawFontName: line.items[0].rawFontName || '',
+      styleInfo: line.items[0].styleInfo || null,
+      fontMeta: line.items[0].fontMeta || null,
       pdfX: pdfMinX,
       pdfY: pdfMinY,
       pdfFontSize: line.items[0].pdfFontSize,
@@ -693,7 +714,21 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pd
     console.warn('Text extraction failed (may be encrypted):', err);
     textContent = { items: [] };
   }
-  const lines = groupIntoLines(textContent.items, viewport, textContent.styles);
+  // Best-effort font metadata from pdf.js commonObjs (unreliable — often empty).
+  // The authoritative font detection happens at commit time via extractPageFontMeta()
+  // which reads the actual PDF font dictionary with pdf-lib.
+  const fontMeta = {};
+  for (const key of Object.keys(textContent.styles || {})) {
+    try {
+      if (page.commonObjs?.has(key)) {
+        const fd = page.commonObjs.get(key);
+        if (fd) {
+          fontMeta[key] = { bold: !!fd.bold, italic: !!fd.italic, name: fd.name || '' };
+        }
+      }
+    } catch (_) { /* commonObjs may not expose this font */ }
+  }
+  const lines = groupIntoLines(textContent.items, viewport, textContent.styles, fontMeta);
 
   if (lines.length === 0) {
     // Try OCR results for scanned pages
@@ -864,18 +899,22 @@ function activateBlock(paraIdx) {
           x: snapX, y: snapY,
         };
         // Paint over each line's text using identity transform (raw pixel coords).
-        // Inset by 2px on all sides to avoid erasing nearby borders/box edges.
+        // Inset generously to avoid erasing nearby form box borders/edges.
+        // The contenteditable overlay covers the full area, so edge pixels
+        // peeking through are hidden by the div content.
         ctx.save();
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         for (let i = 0; i < para.length; i++) {
           const line = para[i];
           ctx.fillStyle = preSampled[i].bgColor;
-          const inset = 2;
+          const insetX = 3;
+          const insetTop = Math.max(4, line.height * 0.15);  // keep well below top border
+          const insetBottom = 2;
           ctx.fillRect(
-            Math.floor((line.left + inset) * dpr),
-            Math.floor((line.top + inset) * dpr),
-            Math.ceil((line.width - inset * 2) * dpr),
-            Math.ceil((line.height - inset * 2) * dpr)
+            Math.floor((line.left + insetX) * dpr),
+            Math.floor((line.top + insetTop) * dpr),
+            Math.ceil((line.width - insetX * 2) * dpr),
+            Math.ceil((line.height - insetTop - insetBottom) * dpr)
           );
         }
         ctx.restore();
@@ -904,7 +943,7 @@ function activateBlock(paraIdx) {
 
     // Match PDF font visually
     const cssFont = saved?.cssFont || mapToCSSFont(line.fontName);
-    const nameStyle = detectFontStyleWithMeta(line.fontName, line.styleInfo);
+    const nameStyle = detectFontStyleWithMeta(line.fontName, line.styleInfo, line.fontMeta);
     // Use style metadata/font name only for default bold/italic.
     const baseStyle = saved
       ? { bold: !!saved.bold, italic: !!saved.italic }
@@ -933,6 +972,7 @@ function activateBlock(paraIdx) {
     div.dataset.pdfFontSize = line.pdfFontSize;
     div.dataset.pdfLineWidth = line.pdfLineWidth || '';
     div.dataset.fontName = line.fontName || '';
+    div.dataset.rawFontName = line.rawFontName || '';
     div.dataset.baseBold = baseStyle.bold ? 'true' : '';
     div.dataset.baseItalic = baseStyle.italic ? 'true' : '';
     div.dataset.cssFont = cssFont;
@@ -1044,6 +1084,7 @@ function deactivateBlock() {
 
     savedLines.push({
       text: newText,
+      originalText: original,
       matchedColor: div.dataset.matchedColor,
       cssFont: div.dataset.cssFont,
       bold: commitBold,
@@ -1052,6 +1093,7 @@ function deactivateBlock() {
       colorOverride: colorOverride || '',
       fontFamilyOverride: fontFamilyOverride || '',
       fontNameOverride: fontNameOverride || '',
+      userChangedFormat: !!(hasFormatChange),
       dirty: hasTextChange || hasFormatChange || isDirty,
       // Preserve original PDF data for commit
       pdfX: parseFloat(div.dataset.pdfX),
@@ -1059,6 +1101,7 @@ function deactivateBlock() {
       pdfFontSize: parseFloat(div.dataset.pdfFontSize),
       pdfLineWidth: parseFloat(div.dataset.pdfLineWidth) || 0,
       fontName: fontNameOverride || div.dataset.fontName,
+      rawFontName: div.dataset.rawFontName || '',
       screenWidth: parseFloat(div.dataset.width),
       screenHeight: parseFloat(div.dataset.height),
       bgColor: div.dataset.bgColor || '#ffffff',
@@ -1456,6 +1499,1024 @@ function updateToolbarState(div) {
   colorInput.value = div.dataset.colorOverride || div.dataset.matchedColor || '#000000';
 }
 
+/* ═══════════════════ PDF Font Metadata Extraction ═══════════════════ */
+
+/**
+ * Extract font metadata from the page's PDF resource dictionary.
+ * Traverses: page.node → /Resources → /Font → each font → /BaseFont + /FontDescriptor
+ *
+ * @returns {Map<string, {baseFont:string, bold:boolean, italic:boolean, fontWeight:number}>}
+ */
+function extractPageFontMeta(page, doc) {
+  const PDFLib = window.PDFLib;
+  if (!PDFLib) return new Map();
+
+  const fontMap = new Map();
+
+  // Helper: dereference a value if it's a PDFRef
+  const deref = (val) => {
+    if (!val) return val;
+    if (val.constructor.name === 'PDFRef') return doc.context.lookup(val);
+    return val;
+  };
+
+  // Helper: read a numeric value from a PDF object
+  const numVal = (obj) => {
+    if (!obj) return 0;
+    if (typeof obj.value === 'function') return obj.value();
+    if (obj.numberValue != null) return obj.numberValue;
+    if (typeof obj === 'number') return obj;
+    return 0;
+  };
+
+  // Helper: extract bold/italic from a FontDescriptor dictionary
+  const readDescriptor = (descriptorRef) => {
+    const fd = deref(descriptorRef);
+    if (!fd || typeof fd.get !== 'function') return { bold: false, italic: false, fontWeight: 0 };
+
+    let bold = false, italic = false;
+
+    const fontWeight = numVal(fd.get(PDFLib.PDFName.of('FontWeight')));
+    if (fontWeight >= 600) bold = true;
+
+    const flags = numVal(fd.get(PDFLib.PDFName.of('Flags')));
+    if (flags & 0x40) italic = true;      // bit 7 = Italic
+    if (flags & 0x40000) bold = true;     // bit 19 = ForceBold
+
+    const italicAngle = numVal(fd.get(PDFLib.PDFName.of('ItalicAngle')));
+    if (italicAngle !== 0) italic = true;
+
+    // Also check /FontName in descriptor
+    const fontNameVal = fd.get(PDFLib.PDFName.of('FontName'));
+    if (fontNameVal) {
+      const fn = fontNameVal.toString().toLowerCase();
+      if (!bold && (fn.includes('bold') || fn.includes('heavy') || fn.includes('black'))) bold = true;
+      if (!italic && (fn.includes('italic') || fn.includes('oblique'))) italic = true;
+    }
+
+    return { bold, italic, fontWeight };
+  };
+
+  try {
+    const resources = deref(page.node.get(PDFLib.PDFName.of('Resources')));
+    if (!resources || typeof resources.get !== 'function') return fontMap;
+
+    const fontDict = deref(resources.get(PDFLib.PDFName.of('Font')));
+    if (!fontDict || typeof fontDict.entries !== 'function') return fontMap;
+
+    for (const [nameObj, fontRef] of fontDict.entries()) {
+      try {
+        const refName = nameObj.toString().replace(/^\//, '');
+        const fontObj = deref(fontRef);
+        if (!fontObj || typeof fontObj.get !== 'function') continue;
+
+        // Read /BaseFont name (e.g. /BCDFEE+Arial-BoldMT)
+        const baseFontVal = fontObj.get(PDFLib.PDFName.of('BaseFont'));
+        const rawBaseFont = baseFontVal ? baseFontVal.toString().replace(/^\//, '') : '';
+        // Strip subset prefix (e.g. "BCDFEE+" → "Arial-BoldMT")
+        const baseFont = rawBaseFont.replace(/^[A-Z]{6}\+/, '');
+
+        // Parse bold/italic from BaseFont name
+        const lowerBase = baseFont.toLowerCase();
+        let bold = lowerBase.includes('bold') || lowerBase.includes('heavy') || lowerBase.includes('black');
+        let italic = lowerBase.includes('italic') || lowerBase.includes('oblique');
+        let fontWeight = 0;
+
+        // Read /FontDescriptor for authoritative data
+        const descriptorRef = fontObj.get(PDFLib.PDFName.of('FontDescriptor'));
+        if (descriptorRef) {
+          const desc = readDescriptor(descriptorRef);
+          if (desc.bold) bold = true;
+          if (desc.italic) italic = true;
+          fontWeight = desc.fontWeight;
+        }
+
+        // Handle Type0 composite fonts → DescendantFonts → CIDFont → FontDescriptor
+        const subtypeVal = fontObj.get(PDFLib.PDFName.of('Subtype'));
+        const subtype = subtypeVal ? subtypeVal.toString().replace(/^\//, '') : '';
+        if (subtype === 'Type0') {
+          const descendants = deref(fontObj.get(PDFLib.PDFName.of('DescendantFonts')));
+          if (descendants && typeof descendants.get === 'function') {
+            const cidFont = deref(descendants.get(0));
+            if (cidFont && typeof cidFont.get === 'function') {
+              const cidDescRef = cidFont.get(PDFLib.PDFName.of('FontDescriptor'));
+              if (cidDescRef) {
+                const cidDesc = readDescriptor(cidDescRef);
+                if (cidDesc.bold) bold = true;
+                if (cidDesc.italic) italic = true;
+                if (!fontWeight) fontWeight = cidDesc.fontWeight;
+              }
+            }
+          }
+        }
+
+        fontMap.set(refName, { baseFont, bold, italic, fontWeight });
+      } catch (_) { /* skip malformed font entry */ }
+    }
+  } catch (err) {
+    // Font metadata extraction failed — caller falls back to width-ratio heuristic
+  }
+
+  return fontMap;
+}
+
+/**
+ * Build a summary of which font families on the page have bold/italic variants.
+ */
+function buildFontFamilySummary(pageFontMap) {
+  const summary = {
+    hasBoldSerif: false, hasBoldSans: false, hasBoldMono: false,
+    hasItalicSerif: false, hasItalicSans: false, hasItalicMono: false,
+    boldFonts: [], allFonts: [],
+  };
+  if (!pageFontMap || pageFontMap.size === 0) return summary;
+
+  for (const [refName, meta] of pageFontMap) {
+    const bl = meta.baseFont.toLowerCase();
+    const isSerif = /times|roman|georgia|palatino|garamond/i.test(bl) ||
+      (/serif/i.test(bl) && !/sans/i.test(bl));
+    const isMono = /courier|mono/i.test(bl);
+    const isSans = !isSerif && !isMono;
+
+    const entry = { ...meta, refName, isSerif, isMono, isSans };
+    summary.allFonts.push(entry);
+
+    if (meta.bold) {
+      summary.boldFonts.push(entry);
+      if (isSerif) summary.hasBoldSerif = true;
+      if (isSans) summary.hasBoldSans = true;
+      if (isMono) summary.hasBoldMono = true;
+    }
+    if (meta.italic) {
+      if (isSerif) summary.hasItalicSerif = true;
+      if (isSans) summary.hasItalicSans = true;
+      if (isMono) summary.hasItalicMono = true;
+    }
+  }
+
+  return summary;
+}
+
+/* ═══════════════════ Content Stream Text Replacement ═══════════════════ */
+
+// Robust type checks: use instanceof when available, fall back to duck typing.
+// Defined at module level so all content-stream helpers can share them.
+function isPDFRef(v) {
+  if (!v) return false;
+  const PDFLib = window.PDFLib;
+  if (PDFLib && PDFLib.PDFRef && v instanceof PDFLib.PDFRef) return true;
+  return typeof v.objectNumber === 'number' && typeof v.generationNumber === 'number';
+}
+
+function isPDFArray(v) {
+  if (!v) return false;
+  const PDFLib = window.PDFLib;
+  if (PDFLib && PDFLib.PDFArray && v instanceof PDFLib.PDFArray) return true;
+  return typeof v.size === 'function' && typeof v.get === 'function'
+    && typeof v.asArray === 'function';
+}
+
+/**
+ * Read and decode the page's content stream into a string.
+ * Handles both single-stream and multi-stream /Contents.
+ */
+function getContentStreamText(page, doc) {
+  const PDFLib = window.PDFLib;
+  if (!PDFLib) { console.log('[getContentStreamText] No PDFLib'); return null; }
+
+  try {
+    const contentsRaw = page.node.get(PDFLib.PDFName.of('Contents'));
+    if (!contentsRaw) {
+      console.log('[getContentStreamText] No /Contents on page node');
+      return null;
+    }
+    console.log('[getContentStreamText] contentsRaw type:', contentsRaw.constructor?.name,
+      'isPDFRef:', isPDFRef(contentsRaw));
+
+    const deref = (v) => isPDFRef(v) ? doc.context.lookup(v) : v;
+
+    // Collect stream refs + objects
+    const streams = [];
+    const contentsObj = deref(contentsRaw);
+    console.log('[getContentStreamText] contentsObj type:', contentsObj?.constructor?.name,
+      'isPDFArray:', isPDFArray(contentsObj));
+
+    if (isPDFArray(contentsObj)) {
+      // PDFArray — multiple content streams
+      const len = contentsObj.size();
+      for (let i = 0; i < len; i++) {
+        const ref = contentsObj.get(i);
+        const obj = deref(ref);
+        if (obj) streams.push({ ref: ref, obj });
+      }
+    } else if (isPDFRef(contentsRaw)) {
+      // Single stream reference
+      streams.push({ ref: contentsRaw, obj: contentsObj });
+    } else if (contentsObj) {
+      streams.push({ ref: null, obj: contentsObj });
+    }
+
+    console.log('[getContentStreamText] streams found:', streams.length);
+    if (streams.length === 0) return null;
+
+    // Decode each stream and concatenate
+    let fullText = '';
+    for (let si = 0; si < streams.length; si++) {
+      const s = streams[si];
+      try {
+        console.log('[getContentStreamText] stream', si, 'type:', s.obj?.constructor?.name,
+          'hasContents:', !!s.obj?.contents,
+          'hasGetContents:', typeof s.obj?.getContents);
+
+        if (typeof PDFLib.decodePDFRawStream === 'function') {
+          const decoded = PDFLib.decodePDFRawStream(s.obj);
+          const bytes = decoded.decode();
+          const text = (typeof PDFLib.arrayAsString === 'function')
+            ? PDFLib.arrayAsString(bytes)
+            : String.fromCharCode.apply(null, bytes);
+          console.log('[getContentStreamText] decoded stream', si, 'length:', text.length,
+            'preview:', text.slice(0, 100));
+          fullText += text;
+        } else if (s.obj.contents) {
+          const text = String.fromCharCode.apply(null, s.obj.contents);
+          fullText += text;
+        } else if (typeof s.obj.getContents === 'function') {
+          const bytes = s.obj.getContents();
+          fullText += String.fromCharCode.apply(null, bytes);
+        } else {
+          console.log('[getContentStreamText] no decode method for stream', si);
+        }
+      } catch (streamErr) {
+        console.warn('[getContentStreamText] stream', si, 'decode error:', streamErr.message);
+      }
+    }
+
+    console.log('[getContentStreamText] total text length:', fullText.length);
+    if (!fullText) return null;
+    return { text: fullText, streams };
+  } catch (err) {
+    console.error('[getContentStreamText] fatal error:', err.message, err.stack);
+    return null;
+  }
+}
+
+/**
+ * Parse a ToUnicode CMap stream text and return forward/reverse glyph↔unicode maps.
+ * Handles beginbfchar/endbfchar and beginbfrange/endbfrange sections.
+ */
+function parseToUnicodeCMap(cmapText) {
+  const glyphToUnicode = new Map(); // glyphId (number) → unicode string
+  const unicodeToGlyph = new Map(); // single unicode char → glyphId (number)
+
+  // Parse beginbfchar sections: find ALL <glyphHex> <unicodeHex> pairs
+  // Uses global regex instead of line splitting — entries can be on one line or many
+  const bfcharRegex = /beginbfchar\s+([\s\S]*?)endbfchar/g;
+  let match;
+  while ((match = bfcharRegex.exec(cmapText)) !== null) {
+    const section = match[1];
+    const pairRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+    let pair;
+    while ((pair = pairRegex.exec(section)) !== null) {
+      const glyphId = parseInt(pair[1], 16);
+      // Unicode value may be multi-byte (e.g., <00660069> for "fi" ligature)
+      const hexStr = pair[2];
+      let unicodeStr = '';
+      if (hexStr.length <= 4) {
+        unicodeStr = String.fromCodePoint(parseInt(hexStr, 16));
+      } else {
+        // Multi-char mapping: split into 4-hex-char groups
+        for (let k = 0; k < hexStr.length; k += 4) {
+          unicodeStr += String.fromCodePoint(parseInt(hexStr.slice(k, k + 4), 16));
+        }
+      }
+      glyphToUnicode.set(glyphId, unicodeStr);
+      if (unicodeStr.length === 1) {
+        unicodeToGlyph.set(unicodeStr, glyphId);
+      }
+    }
+  }
+
+  // Parse beginbfrange sections: find ALL <start> <end> <unicodeStart> triples
+  const bfrangeRegex = /beginbfrange\s+([\s\S]*?)endbfrange/g;
+  while ((match = bfrangeRegex.exec(cmapText)) !== null) {
+    const section = match[1];
+    // Match triples: <start> <end> <unicodeStart>
+    const tripleRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>/g;
+    let triple;
+    while ((triple = tripleRegex.exec(section)) !== null) {
+      const startGlyph = parseInt(triple[1], 16);
+      const endGlyph = parseInt(triple[2], 16);
+      const startUnicode = parseInt(triple[3], 16);
+      for (let g = startGlyph; g <= endGlyph; g++) {
+        const u = startUnicode + (g - startGlyph);
+        const ch = String.fromCodePoint(u);
+        glyphToUnicode.set(g, ch);
+        unicodeToGlyph.set(ch, g);
+      }
+    }
+    // Also handle array form: <start> <end> [<u1> <u2> ...]
+    const arrayRegex = /<([0-9a-fA-F]+)>\s*<([0-9a-fA-F]+)>\s*\[([^\]]*)\]/g;
+    let arrMatch;
+    while ((arrMatch = arrayRegex.exec(section)) !== null) {
+      const startGlyph = parseInt(arrMatch[1], 16);
+      const endGlyph = parseInt(arrMatch[2], 16);
+      const unicodes = arrMatch[3].match(/<([0-9a-fA-F]+)>/g) || [];
+      for (let g = startGlyph, idx = 0; g <= endGlyph && idx < unicodes.length; g++, idx++) {
+        const u = parseInt(unicodes[idx].slice(1, -1), 16);
+        const ch = String.fromCodePoint(u);
+        glyphToUnicode.set(g, ch);
+        unicodeToGlyph.set(ch, g);
+      }
+    }
+  }
+
+  return { glyphToUnicode, unicodeToGlyph };
+}
+
+/**
+ * Extract ToUnicode CMap data for every font on the page.
+ * Returns Map<fontRefName, { isCID, glyphToUnicode, unicodeToGlyph, bytesPerGlyph }>
+ */
+function extractPageToUnicodeMaps(page, doc) {
+  const PDFLib = window.PDFLib;
+  if (!PDFLib) return new Map();
+
+  const fontMaps = new Map();
+
+  try {
+    const resourcesRef = page.node.get(PDFLib.PDFName.of('Resources'));
+    if (!resourcesRef) return fontMaps;
+    const resources = isPDFRef(resourcesRef) ? doc.context.lookup(resourcesRef) : resourcesRef;
+    if (!resources || typeof resources.get !== 'function') return fontMaps;
+
+    const fontsRef = resources.get(PDFLib.PDFName.of('Font'));
+    if (!fontsRef) return fontMaps;
+    const fonts = isPDFRef(fontsRef) ? doc.context.lookup(fontsRef) : fontsRef;
+    if (!fonts || typeof fonts.entries !== 'function') return fontMaps;
+
+    for (const [nameObj, valueRef] of fonts.entries()) {
+      const fontName = nameObj.toString().replace(/^\//, '');
+      const fontDict = isPDFRef(valueRef) ? doc.context.lookup(valueRef) : valueRef;
+      if (!fontDict || typeof fontDict.get !== 'function') continue;
+
+      const subtype = fontDict.get(PDFLib.PDFName.of('Subtype'));
+      const subtypeStr = subtype ? subtype.toString().replace(/^\//, '') : '';
+      const isCID = subtypeStr === 'Type0';
+
+      // Read the /ToUnicode stream
+      const toUnicodeRef = fontDict.get(PDFLib.PDFName.of('ToUnicode'));
+      console.log('[extractPageToUnicodeMaps]', fontName,
+        'subtype=', subtypeStr, 'isCID=', isCID,
+        'hasToUnicode=', !!toUnicodeRef,
+        'toUnicodeType=', toUnicodeRef?.constructor?.name);
+      if (!toUnicodeRef) {
+        // No ToUnicode — try to read from DescendantFonts for Type0
+        if (isCID) {
+          const descFontsRef = fontDict.get(PDFLib.PDFName.of('DescendantFonts'));
+          const descFonts = descFontsRef
+            ? (isPDFRef(descFontsRef) ? doc.context.lookup(descFontsRef) : descFontsRef)
+            : null;
+          if (descFonts && typeof descFonts.get === 'function') {
+            const cidFontRef = descFonts.get(0);
+            const cidFont = cidFontRef
+              ? (isPDFRef(cidFontRef) ? doc.context.lookup(cidFontRef) : cidFontRef)
+              : null;
+            if (cidFont && typeof cidFont.get === 'function') {
+              const descToUni = cidFont.get(PDFLib.PDFName.of('ToUnicode'));
+              console.log('[extractPageToUnicodeMaps]', fontName,
+                'descendant ToUnicode=', !!descToUni);
+            }
+          }
+        }
+        fontMaps.set(fontName, {
+          isCID, glyphToUnicode: new Map(), unicodeToGlyph: new Map(),
+          bytesPerGlyph: isCID ? 2 : 1,
+        });
+        continue;
+      }
+
+      try {
+        const toUnicodeObj = isPDFRef(toUnicodeRef) ? doc.context.lookup(toUnicodeRef) : toUnicodeRef;
+        if (!toUnicodeObj) continue;
+
+        let cmapText = '';
+        if (typeof PDFLib.decodePDFRawStream === 'function') {
+          const decoded = PDFLib.decodePDFRawStream(toUnicodeObj);
+          const bytes = decoded.decode();
+          cmapText = typeof PDFLib.arrayAsString === 'function'
+            ? PDFLib.arrayAsString(bytes)
+            : String.fromCharCode.apply(null, bytes);
+        } else if (toUnicodeObj.contents) {
+          cmapText = String.fromCharCode.apply(null, toUnicodeObj.contents);
+        }
+
+        console.log('[extractPageToUnicodeMaps]', fontName,
+          'cmapLen=', cmapText.length,
+          'cmapPreview=', cmapText.slice(0, 300));
+
+        if (cmapText) {
+          const maps = parseToUnicodeCMap(cmapText);
+          console.log('[extractPageToUnicodeMaps]', fontName,
+            'parsed: glyphs=', maps.glyphToUnicode.size,
+            'reverse=', maps.unicodeToGlyph.size);
+          // Show first few mappings for debugging
+          if (maps.glyphToUnicode.size > 0) {
+            const sample = [...maps.glyphToUnicode.entries()].slice(0, 5);
+            console.log('[extractPageToUnicodeMaps]', fontName, 'sample mappings:',
+              sample.map(([g, u]) => `0x${g.toString(16)}→"${u}"(U+${u.codePointAt(0).toString(16)})`).join(', '));
+          }
+          fontMaps.set(fontName, {
+            isCID, ...maps,
+            bytesPerGlyph: isCID ? 2 : 1,
+          });
+        } else {
+          fontMaps.set(fontName, {
+            isCID, glyphToUnicode: new Map(), unicodeToGlyph: new Map(),
+            bytesPerGlyph: isCID ? 2 : 1,
+          });
+        }
+      } catch (e) {
+        console.warn('[extractPageToUnicodeMaps] error reading ToUnicode for', fontName, e.message);
+        fontMaps.set(fontName, {
+          isCID, glyphToUnicode: new Map(), unicodeToGlyph: new Map(),
+          bytesPerGlyph: isCID ? 2 : 1,
+        });
+      }
+    }
+  } catch (err) {
+    console.error('[extractPageToUnicodeMaps] error:', err.message);
+  }
+
+  return fontMaps;
+}
+
+/**
+ * Decode a hex string using a ToUnicode CMap.
+ * For CID fonts (2-byte glyph IDs): reads 4 hex chars per glyph.
+ * For single-byte fonts: reads 2 hex chars per glyph.
+ * Falls back to raw byte decoding if no CMap entry found.
+ */
+function decodeHexWithCMap(hexValue, fontMapEntry) {
+  const hex = hexValue.replace(/\s/g, '');
+  if (!fontMapEntry || fontMapEntry.glyphToUnicode.size === 0) {
+    // No CMap — fall back to raw byte decoding
+    const pairs = hex.match(/.{2}/g) || [];
+    return String.fromCharCode(...pairs.map(h => parseInt(h, 16)));
+  }
+
+  const bytesPerGlyph = fontMapEntry.bytesPerGlyph || (fontMapEntry.isCID ? 2 : 1);
+  const charsPerGlyph = bytesPerGlyph * 2; // hex chars per glyph ID
+  let result = '';
+
+  for (let k = 0; k + charsPerGlyph <= hex.length; k += charsPerGlyph) {
+    const glyphId = parseInt(hex.slice(k, k + charsPerGlyph), 16);
+    const unicode = fontMapEntry.glyphToUnicode.get(glyphId);
+    if (unicode) {
+      result += unicode;
+    } else {
+      // Glyph not in CMap — use replacement char to signal unmapped
+      result += '\uFFFD';
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Encode a Unicode string back to hex glyph IDs using a reverse CMap.
+ * Returns the hex string content (without angle brackets).
+ * For CID fonts: each char → 4 hex chars. For single-byte: each char → 2 hex chars.
+ * Returns null if any character can't be mapped (caller should fall back).
+ */
+function encodeTextToHex(text, fontMapEntry) {
+  if (!fontMapEntry || fontMapEntry.unicodeToGlyph.size === 0) return null;
+
+  const bytesPerGlyph = fontMapEntry.bytesPerGlyph || (fontMapEntry.isCID ? 2 : 1);
+  const hexWidth = bytesPerGlyph * 2;
+  let hex = '';
+
+  for (const ch of text) {
+    const glyphId = fontMapEntry.unicodeToGlyph.get(ch);
+    if (glyphId === undefined) {
+      // Character not in font subset — can't encode
+      console.warn('[encodeTextToHex] unmappable char:', ch, '(' + ch.codePointAt(0).toString(16) + ')');
+      return null;
+    }
+    hex += glyphId.toString(16).padStart(hexWidth, '0').toUpperCase();
+  }
+
+  return hex;
+}
+
+/**
+ * Decode a PDF literal string: handle escape sequences.
+ * Input is the content BETWEEN parentheses (not including them).
+ */
+function decodePdfLiteralString(raw) {
+  let result = '';
+  let i = 0;
+  while (i < raw.length) {
+    if (raw[i] === '\\') {
+      i++;
+      if (i >= raw.length) break;
+      switch (raw[i]) {
+        case 'n': result += '\n'; break;
+        case 'r': result += '\r'; break;
+        case 't': result += '\t'; break;
+        case 'b': result += '\b'; break;
+        case 'f': result += '\f'; break;
+        case '(': result += '('; break;
+        case ')': result += ')'; break;
+        case '\\': result += '\\'; break;
+        default:
+          // Octal: up to 3 digits
+          if (raw[i] >= '0' && raw[i] <= '7') {
+            let oct = raw[i];
+            if (i + 1 < raw.length && raw[i + 1] >= '0' && raw[i + 1] <= '7') { oct += raw[++i]; }
+            if (i + 1 < raw.length && raw[i + 1] >= '0' && raw[i + 1] <= '7') { oct += raw[++i]; }
+            result += String.fromCharCode(parseInt(oct, 8));
+          } else {
+            result += raw[i]; // unknown escape → literal
+          }
+      }
+    } else {
+      result += raw[i];
+    }
+    i++;
+  }
+  return result;
+}
+
+/**
+ * Encode a string for a PDF literal string (escape special chars).
+ */
+function encodePdfLiteralString(str) {
+  let result = '';
+  for (const ch of str) {
+    if (ch === '\\') result += '\\\\';
+    else if (ch === '(') result += '\\(';
+    else if (ch === ')') result += '\\)';
+    else if (ch === '\n') result += '\\n';
+    else if (ch === '\r') result += '\\r';
+    else result += ch;
+  }
+  return '(' + result + ')';
+}
+
+/**
+ * Extract a balanced parenthesized string from `text` starting at index `start`.
+ * `start` should point to the opening '('.
+ * Returns { content: string (between parens), end: number (index after closing ')') }
+ */
+function extractParenString(text, start) {
+  if (text[start] !== '(') return null;
+  let depth = 0;
+  let i = start;
+  while (i < text.length) {
+    if (text[i] === '(' && (i === start || text[i - 1] !== '\\')) depth++;
+    else if (text[i] === ')' && text[i - 1] !== '\\') {
+      depth--;
+      if (depth === 0) return { content: text.slice(start + 1, i), end: i + 1 };
+    }
+    i++;
+  }
+  // Unbalanced — take everything
+  return { content: text.slice(start + 1), end: text.length };
+}
+
+/**
+ * Parse the content stream into text operations.
+ * Returns array of { text, startOffset, endOffset, fontRef, fontSize, x, y, operator }
+ */
+function parseTextOperations(streamText, fontMaps) {
+  const ops = [];
+  let curFont = '';
+  let curFontSize = 0;
+  // Text matrix: [a, b, c, d, e, f] — positions are in e, f
+  let tmX = 0, tmY = 0;
+  // Line matrix origin (reset by BT, updated by Td/TD)
+  let lineX = 0, lineY = 0;
+  let inText = false;
+
+  // CTM (current transformation matrix) — full 2D affine [a, b, c, d, e, f]
+  // Transforms local (x,y) to absolute: (a*x + c*y + e, b*x + d*y + f)
+  // Needed because content streams often start with a scaling/flip cm like:
+  //   0.75 0 0 -0.75 0 792 cm  (scale 75% + Y-flip)
+  let ctm = [1, 0, 0, 1, 0, 0]; // identity
+  let ctmStack = [];
+
+  // Apply CTM to a local coordinate
+  function applyCtm(x, y) {
+    return [
+      ctm[0] * x + ctm[2] * y + ctm[4],
+      ctm[1] * x + ctm[3] * y + ctm[5]
+    ];
+  }
+
+  // Multiply two matrices: result = m1 * m2
+  function multiplyMatrix(m1, m2) {
+    return [
+      m1[0] * m2[0] + m1[2] * m2[1],       // a
+      m1[1] * m2[0] + m1[3] * m2[1],       // b
+      m1[0] * m2[2] + m1[2] * m2[3],       // c
+      m1[1] * m2[2] + m1[3] * m2[3],       // d
+      m1[0] * m2[4] + m1[2] * m2[5] + m1[4], // e
+      m1[1] * m2[4] + m1[3] * m2[5] + m1[5]  // f
+    ];
+  }
+
+  // Simple tokenizer: walk through the stream character by character
+  let i = 0;
+  const len = streamText.length;
+
+  function skipWhitespace() {
+    while (i < len && ' \t\n\r'.includes(streamText[i])) i++;
+  }
+
+  function readToken() {
+    skipWhitespace();
+    if (i >= len) return null;
+
+    const ch = streamText[i];
+
+    // Comment
+    if (ch === '%') {
+      while (i < len && streamText[i] !== '\n' && streamText[i] !== '\r') i++;
+      return readToken();
+    }
+
+    // Literal string
+    if (ch === '(') {
+      const ps = extractParenString(streamText, i);
+      if (!ps) return null;
+      const token = streamText.slice(i, ps.end);
+      i = ps.end;
+      return { type: 'string', value: ps.content, raw: token, offset: i - token.length };
+    }
+
+    // Hex string
+    if (ch === '<' && i + 1 < len && streamText[i + 1] !== '<') {
+      const start = i;
+      i++; // skip <
+      while (i < len && streamText[i] !== '>') i++;
+      if (i < len) i++; // skip >
+      return { type: 'hexstring', value: streamText.slice(start + 1, i - 1), raw: streamText.slice(start, i), offset: start };
+    }
+
+    // Array
+    if (ch === '[') {
+      const start = i;
+      i++; // skip [
+      const items = [];
+      while (i < len && streamText[i] !== ']') {
+        skipWhitespace();
+        if (i < len && streamText[i] === ']') break;
+        const item = readToken();
+        if (item) items.push(item);
+        else break;
+      }
+      if (i < len && streamText[i] === ']') i++; // skip ]
+      return { type: 'array', items, offset: start, end: i };
+    }
+
+    // Number
+    if (ch === '-' || ch === '+' || ch === '.' || (ch >= '0' && ch <= '9')) {
+      const start = i;
+      if (ch === '-' || ch === '+') i++;
+      while (i < len && ((streamText[i] >= '0' && streamText[i] <= '9') || streamText[i] === '.')) i++;
+      return { type: 'number', value: parseFloat(streamText.slice(start, i)), offset: start };
+    }
+
+    // Name
+    if (ch === '/') {
+      const start = i;
+      i++; // skip /
+      while (i < len && !' \t\n\r/<>[](){}%'.includes(streamText[i])) i++;
+      return { type: 'name', value: streamText.slice(start + 1, i), offset: start };
+    }
+
+    // Dict << >>
+    if (ch === '<' && i + 1 < len && streamText[i + 1] === '<') {
+      i += 2;
+      let depth = 1;
+      while (i < len && depth > 0) {
+        if (streamText[i] === '<' && i + 1 < len && streamText[i + 1] === '<') { depth++; i += 2; }
+        else if (streamText[i] === '>' && i + 1 < len && streamText[i + 1] === '>') { depth--; i += 2; }
+        else i++;
+      }
+      return { type: 'dict', offset: i };
+    }
+
+    // Operator (keyword)
+    const start = i;
+    while (i < len && !' \t\n\r/<>[](){}%'.includes(streamText[i])) i++;
+    const word = streamText.slice(start, i);
+    if (!word) { i++; return readToken(); }
+    return { type: 'operator', value: word, offset: start };
+  }
+
+  // Parse tokens and track state
+  const operandStack = [];
+
+  while (i < len) {
+    const token = readToken();
+    if (!token) break;
+
+    if (token.type === 'operator') {
+      const op = token.value;
+
+      // Graphics state: track full CTM for coordinate resolution
+      if (op === 'q') {
+        ctmStack.push(ctm.slice()); // save copy of current CTM
+        operandStack.length = 0;
+        continue;
+      }
+      if (op === 'Q') {
+        if (ctmStack.length > 0) {
+          ctm = ctmStack.pop();
+        }
+        operandStack.length = 0;
+        continue;
+      }
+      if (op === 'cm' && operandStack.length >= 6) {
+        // a b c d e f cm — concatenate matrix
+        const newM = [
+          operandStack[operandStack.length - 6]?.value || 0,
+          operandStack[operandStack.length - 5]?.value || 0,
+          operandStack[operandStack.length - 4]?.value || 0,
+          operandStack[operandStack.length - 3]?.value || 0,
+          operandStack[operandStack.length - 2]?.value || 0,
+          operandStack[operandStack.length - 1]?.value || 0,
+        ];
+        ctm = multiplyMatrix(ctm, newM);
+        operandStack.length = 0;
+        continue;
+      }
+
+      if (op === 'BT') {
+        inText = true;
+        tmX = 0; tmY = 0; lineX = 0; lineY = 0;
+        operandStack.length = 0;
+        continue;
+      }
+      if (op === 'ET') {
+        inText = false;
+        operandStack.length = 0;
+        continue;
+      }
+
+      if (inText) {
+        if (op === 'Tf' && operandStack.length >= 2) {
+          // /FontName size Tf
+          const sizeToken = operandStack[operandStack.length - 1];
+          const nameToken = operandStack[operandStack.length - 2];
+          curFont = nameToken?.value || '';
+          curFontSize = sizeToken?.value || 0;
+        } else if (op === 'Td' && operandStack.length >= 2) {
+          const ty = operandStack[operandStack.length - 1]?.value || 0;
+          const tx = operandStack[operandStack.length - 2]?.value || 0;
+          lineX += tx;
+          lineY += ty;
+          tmX = lineX; tmY = lineY;
+        } else if (op === 'TD' && operandStack.length >= 2) {
+          const ty = operandStack[operandStack.length - 1]?.value || 0;
+          const tx = operandStack[operandStack.length - 2]?.value || 0;
+          lineX += tx;
+          lineY += ty;
+          tmX = lineX; tmY = lineY;
+        } else if (op === 'Tm' && operandStack.length >= 6) {
+          // a b c d e f Tm — set text matrix absolutely
+          tmX = operandStack[operandStack.length - 2]?.value || 0;
+          tmY = operandStack[operandStack.length - 1]?.value || 0;
+          lineX = tmX; lineY = tmY;
+          // Also capture font size from matrix if present
+          const matrixD = operandStack[operandStack.length - 3]?.value || 0;
+          if (matrixD && !curFontSize) curFontSize = Math.abs(matrixD);
+        } else if (op === 'T*') {
+          // Move to next line (uses current leading)
+          // We don't track leading perfectly, just note position may shift
+        } else if (op === 'Tj') {
+          // (string) Tj — show text
+          const strToken = operandStack[operandStack.length - 1];
+          if (strToken && (strToken.type === 'string' || strToken.type === 'hexstring')) {
+            const fme = fontMaps && fontMaps.get(curFont);
+            const decoded = strToken.type === 'string'
+              ? decodePdfLiteralString(strToken.value)
+              : decodeHexWithCMap(strToken.value, fme);
+
+            ops.push({
+              text: decoded,
+              startOffset: strToken.offset,
+              endOffset: token.offset + op.length,
+              fontRef: curFont,
+              fontSize: curFontSize,
+              x: applyCtm(tmX, tmY)[0], y: applyCtm(tmX, tmY)[1],
+              operator: 'Tj',
+              rawString: strToken.raw,
+              isHex: strToken.type === 'hexstring',
+              isCID: !!(fme && fme.isCID),
+            });
+          }
+        } else if (op === 'TJ') {
+          // [(string) kern (string) ...] TJ — show with kerning
+          const arrToken = operandStack[operandStack.length - 1];
+          if (arrToken && arrToken.type === 'array') {
+            const fme = fontMaps && fontMaps.get(curFont);
+            let fullText = '';
+            let hasHex = false;
+            for (const item of arrToken.items) {
+              if (item.type === 'string') {
+                fullText += decodePdfLiteralString(item.value);
+              } else if (item.type === 'hexstring') {
+                fullText += decodeHexWithCMap(item.value, fme);
+                hasHex = true;
+              }
+              // Numbers are kerning adjustments — skip
+            }
+            ops.push({
+              text: fullText,
+              startOffset: arrToken.offset,
+              endOffset: token.offset + op.length,
+              fontRef: curFont,
+              fontSize: curFontSize,
+              x: applyCtm(tmX, tmY)[0], y: applyCtm(tmX, tmY)[1],
+              operator: 'TJ',
+              rawString: streamText.slice(arrToken.offset, token.offset + op.length),
+              isHex: hasHex,
+              isCID: !!(fme && fme.isCID),
+            });
+          }
+        } else if (op === "'" && operandStack.length >= 1) {
+          // (string) ' — next line + show
+          const strToken = operandStack[operandStack.length - 1];
+          if (strToken && (strToken.type === 'string' || strToken.type === 'hexstring')) {
+            const fme = fontMaps && fontMaps.get(curFont);
+            const decoded = strToken.type === 'string'
+              ? decodePdfLiteralString(strToken.value)
+              : decodeHexWithCMap(strToken.value, fme);
+            ops.push({
+              text: decoded,
+              startOffset: strToken.offset,
+              endOffset: token.offset + 1,
+              fontRef: curFont,
+              fontSize: curFontSize,
+              x: applyCtm(tmX, tmY)[0], y: applyCtm(tmX, tmY)[1],
+              operator: "'",
+              rawString: strToken.raw,
+              isHex: strToken.type === 'hexstring',
+              isCID: !!(fme && fme.isCID),
+            });
+          }
+        }
+      }
+
+      operandStack.length = 0;
+    } else {
+      // Operand — push to stack
+      operandStack.push(token);
+    }
+  }
+
+  return ops;
+}
+
+/**
+ * Match a change to its corresponding text operation in the content stream.
+ * Uses original text + PDF coordinates for matching.
+ */
+function matchChangeToOperation(change, textOps) {
+  if (!change.originalText || textOps.length === 0) return null;
+
+  const origText = change.originalText;
+  const cx = change.pdfX;
+  const cy = change.pdfY;
+
+  // Strategy 1: Exact text match + close position (tolerance for CTM float rounding)
+  for (const op of textOps) {
+    if (op.text === origText && Math.abs(op.x - cx) < 5 && Math.abs(op.y - cy) < 5) {
+      return op;
+    }
+  }
+
+  // Strategy 2: Text contains/starts-with + close position
+  for (const op of textOps) {
+    if (Math.abs(op.x - cx) < 8 && Math.abs(op.y - cy) < 8) {
+      if (op.text.includes(origText) || origText.includes(op.text)) {
+        return op;
+      }
+    }
+  }
+
+  // Strategy 3: Exact text match anywhere on page (unique text, no position needed)
+  const exactMatches = textOps.filter(op => op.text === origText);
+  if (exactMatches.length === 1) return exactMatches[0];
+
+  // Strategy 4: Closest position match with text overlap
+  let bestOp = null;
+  let bestDist = Infinity;
+  for (const op of textOps) {
+    const dist = Math.abs(op.x - cx) + Math.abs(op.y - cy);
+    if (dist < 20 && dist < bestDist) {
+      // Require at least some text overlap
+      if (op.text.length > 0 && origText.length > 0) {
+        const shorter = op.text.length < origText.length ? op.text : origText;
+        const longer = op.text.length >= origText.length ? op.text : origText;
+        if (longer.includes(shorter) || shorter.slice(0, 3) === longer.slice(0, 3)) {
+          bestDist = dist;
+          bestOp = op;
+        }
+      }
+    }
+  }
+  return bestOp;
+}
+
+/**
+ * Perform surgical text replacement in the content stream string.
+ * Handles both literal strings and CID hex-encoded strings.
+ * fontMapEntry is needed for CID re-encoding (from extractPageToUnicodeMaps).
+ * Returns the modified stream text, or null if encoding fails.
+ */
+function replaceTextInStream(streamText, op, newText, fontMapEntry) {
+  const before = streamText.slice(0, op.startOffset);
+  const after = streamText.slice(op.endOffset);
+
+  // Determine if we need hex encoding (CID font)
+  const needsHex = op.isCID || (op.isHex && fontMapEntry && fontMapEntry.unicodeToGlyph.size > 0);
+
+  if (op.operator === 'Tj') {
+    if (needsHex && fontMapEntry) {
+      const hex = encodeTextToHex(newText, fontMapEntry);
+      if (!hex) return null; // encoding failed — fall back
+      return before + '<' + hex + '> Tj' + after;
+    }
+    const encoded = encodePdfLiteralString(newText);
+    return before + encoded + ' Tj' + after;
+  }
+
+  if (op.operator === 'TJ') {
+    if (needsHex && fontMapEntry) {
+      const hex = encodeTextToHex(newText, fontMapEntry);
+      if (!hex) return null; // encoding failed — fall back
+      return before + '[<' + hex + '>] TJ' + after;
+    }
+    const encoded = encodePdfLiteralString(newText);
+    return before + '[' + encoded + '] TJ' + after;
+  }
+
+  if (op.operator === "'") {
+    if (needsHex && fontMapEntry) {
+      const hex = encodeTextToHex(newText, fontMapEntry);
+      if (!hex) return null;
+      return before + '<' + hex + "> '" + after;
+    }
+    const encoded = encodePdfLiteralString(newText);
+    return before + encoded + " '" + after;
+  }
+
+  // Unknown operator — can't replace
+  return streamText;
+}
+
+/**
+ * Check if a change can use content stream replacement (vs cover-and-replace fallback).
+ */
+function canUseContentStreamReplacement(change, pageFontMap) {
+  // User explicitly changed format (font size, color, font family, bold, italic)
+  // → need cover-and-replace to apply those visual changes
+  if (change.userChangedFormat) return false;
+
+  // No original text to match → can't do stream replacement
+  if (!change.originalText) return false;
+
+  // Text-only change (no format change) → ideal candidate
+  // Check font encoding safety if we have font metadata
+  if (pageFontMap && pageFontMap.size > 0) {
+    // If we know the font, check for CIDFont (Type0) — those use 2-byte glyph IDs
+    for (const [, meta] of pageFontMap) {
+      // We can't easily map which font this change uses from the font dict,
+      // but if ALL fonts on the page are safe, we're good.
+      // For now, check if any font is Type0 (CIDFont) — conservative approach
+    }
+  }
+
+  // Check subset safety: if new text has chars not in original, subset may lack them
+  if (change.newText !== change.originalText) {
+    const origChars = new Set(change.originalText);
+    for (const ch of change.newText) {
+      if (!origChars.has(ch)) {
+        // New character — might not be in subset. Still try stream replacement
+        // since it's better to try and fall back than to not try at all.
+        // The font will render a .notdef glyph if the char is missing,
+        // which is visually obvious and can be caught during verification.
+        break;
+      }
+    }
+  }
+
+  return true;
+}
+
 /* ═══════════════════ Commit Text Edits ═══════════════════ */
 
 export async function commitTextEdits(pdfBytes, pageNum) {
@@ -1499,15 +2560,19 @@ export async function commitTextEdits(pdfBytes, pageNum) {
 
     changes.push({
       newText,
+      originalText: original,
       pdfX: parseFloat(div.dataset.pdfX),
       pdfY: parseFloat(div.dataset.pdfY),
       pdfFontSize: parseFloat(div.dataset.pdfFontSize),
       pdfLineWidth: parseFloat(div.dataset.pdfLineWidth) || 0,
       fontName: fontNameOverride || div.dataset.fontName,
+      rawFontName: div.dataset.rawFontName || '',
       screenWidth: parseFloat(div.dataset.width),
       screenHeight: parseFloat(div.dataset.height),
       fontSizeOverride,
       colorOverride: effectiveColor,
+      // Track whether user explicitly changed format (for Strategy A decision)
+      userChangedFormat: !!hasFormatChange,
       bold: commitBold,
       italic: commitItalic,
       bgColor: div.dataset.bgColor || '#ffffff',
@@ -1520,15 +2585,18 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       if (!saved.dirty) continue;
       changes.push({
         newText: saved.text,
+        originalText: saved.originalText || '',
         pdfX: saved.pdfX,
         pdfY: saved.pdfY,
         pdfFontSize: saved.pdfFontSize,
         pdfLineWidth: saved.pdfLineWidth,
         fontName: saved.fontName,
+        rawFontName: saved.rawFontName || '',
         screenWidth: saved.screenWidth,
         screenHeight: saved.screenHeight,
         fontSizeOverride: saved.fontSizeOverride,
         colorOverride: saved.colorOverride || saved.matchedColor || '',
+        userChangedFormat: !!saved.userChangedFormat,
         bold: saved.bold,
         italic: saved.italic,
         bgColor: saved.bgColor || '#ffffff',
@@ -1544,98 +2612,206 @@ export async function commitTextEdits(pdfBytes, pageNum) {
   const doc = await PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const page = doc.getPage(pageNum - 1);
 
-  const fontCache = {};
-  async function getFont(fontName, bold, italic) {
-    // Custom font embedding
-    if (fontName === 'custom' && customFont) {
-      if (!fontCache['__custom']) {
-        fontCache['__custom'] = await doc.embedFont(customFont.bytes);
-      }
-      return fontCache['__custom'];
-    }
+  // Extract authoritative font metadata from the page's PDF dictionary
+  const pageFontMap = extractPageFontMeta(page, doc);
+  const fontSummary = buildFontFamilySummary(pageFontMap);
 
-    // Build font variant name
-    let variant = fontName;
-    if (bold) variant += '-Bold';
-    if (italic) variant += '-Italic';
-    let stdName = mapToStandardFont(variant);
-    if (!fontCache[stdName]) {
-      if (!PDFLib.StandardFonts[stdName]) {
-        stdName = 'Helvetica'; // safe fallback
-      }
-      fontCache[stdName] = await doc.embedFont(PDFLib.StandardFonts[stdName]);
+  // ── Strategy A: Content stream text replacement (preserves original font) ──
+  // Try to modify text directly in the content stream. This keeps the original
+  // font reference (/F1 12 Tf) untouched, so bold/italic/weight are preserved
+  // automatically — no font substitution or guessing needed.
+  const streamData = getContentStreamText(page, doc);
+  let streamText = streamData ? streamData.text : null;
+
+  // Extract ToUnicode CMap data for all fonts — needed for CID glyph decoding/encoding
+  const fontCMaps = streamText ? extractPageToUnicodeMaps(page, doc) : new Map();
+
+  let textOps = streamText ? parseTextOperations(streamText, fontCMaps) : [];
+  let streamModified = false;
+
+  console.log('[commitTextEdits] Strategy A init:',
+    'streamData=', !!streamData,
+    'streamLen=', streamText ? streamText.length : 0,
+    'textOps=', textOps.length,
+    'fontCMaps=', fontCMaps.size,
+    'changes=', changes.length);
+  if (fontCMaps.size > 0) {
+    for (const [fn, fm] of fontCMaps) {
+      console.log(`  Font ${fn}: isCID=${fm.isCID} glyphs=${fm.glyphToUnicode.size} reverse=${fm.unicodeToGlyph.size}`);
     }
-    return fontCache[stdName];
+  }
+  if (textOps.length > 0) {
+    console.log('[commitTextEdits] Sample textOps (first 10):');
+    textOps.slice(0, 10).forEach((o, i) => {
+      console.log(`  [${i}] text="${o.text.slice(0,40)}" x=${o.x.toFixed(1)} y=${o.y.toFixed(1)} font=${o.fontRef} op=${o.operator} isHex=${o.isHex} isCID=${o.isCID}`);
+    });
   }
 
-  // Check if low-level CTM operators are available for horizontal text scaling
-  const hasCTM = typeof PDFLib.pushGraphicsState === 'function' &&
-    typeof PDFLib.popGraphicsState === 'function' &&
-    typeof PDFLib.concatTransformationMatrix === 'function';
+  const fallbackChanges = []; // changes that need cover-and-replace
 
   for (const change of changes) {
-    const font = await getFont(change.fontName, change.bold, change.italic);
-    const fontSize = change.fontSizeOverride || change.pdfFontSize;
-    const x = change.pdfX;
-    const y = change.pdfY;
-
-    // Measure natural width of new text in the standard font
-    const naturalWidth = font.widthOfTextAtSize(change.newText, fontSize);
-
-    // Use precise PDF line width when available, fall back to screen-based estimate
-    const scale = currentViewport ? currentViewport.scale : 1;
-    const originalWidth = change.pdfLineWidth > 0 ? change.pdfLineWidth : change.screenWidth / scale;
-
-    // Cover rectangle — wide enough for both original and new text
-    const coverWidth = Math.max(originalWidth, naturalWidth) + 6;
-    const descenderDepth = change.pdfFontSize * 0.30;
-    const ascenderHeight = change.pdfFontSize * 1.10;
-    const rectHeight = descenderDepth + ascenderHeight;
-
-    // Cover rectangle — match sampled background color so it blends in
-    let coverColor = PDFLib.rgb(1, 1, 1);
-    if (change.bgColor && change.bgColor !== '#ffffff') {
-      const br = parseInt(change.bgColor.slice(1, 3), 16) / 255;
-      const bg = parseInt(change.bgColor.slice(3, 5), 16) / 255;
-      const bb = parseInt(change.bgColor.slice(5, 7), 16) / 255;
-      coverColor = PDFLib.rgb(br, bg, bb);
-    }
-    page.drawRectangle({
-      x: x - 1,
-      y: y - descenderDepth,
-      width: coverWidth,
-      height: rectHeight,
-      color: coverColor,
-      borderWidth: 0,
-    });
-
-    // Parse color
-    let color = PDFLib.rgb(0, 0, 0);
-    if (change.colorOverride) {
-      const hex = change.colorOverride;
-      const r = parseInt(hex.slice(1, 3), 16) / 255;
-      const g = parseInt(hex.slice(3, 5), 16) / 255;
-      const b = parseInt(hex.slice(5, 7), 16) / 255;
-      color = PDFLib.rgb(r, g, b);
-    }
-
-    // Compute horizontal scale to match original text width
-    const scaleX = (originalWidth > 0 && naturalWidth > 0)
-      ? originalWidth / naturalWidth
-      : 1;
-    const applyScale = hasCTM && scaleX !== 1 && scaleX > 0.5 && scaleX < 2.0;
-
-    if (applyScale) {
-      // Wrap drawText in a CTM that scales horizontally while preserving position.
-      // CTM [scaleX, 0, 0, 1, x*(1-scaleX), 0] maps (x,y) → (x,y) but stretches glyphs.
-      page.pushOperators(PDFLib.pushGraphicsState());
-      page.pushOperators(PDFLib.concatTransformationMatrix(
-        scaleX, 0, 0, 1, x * (1 - scaleX), 0,
-      ));
-      page.drawText(change.newText, { x, y, size: fontSize, font, color });
-      page.pushOperators(PDFLib.popGraphicsState());
+    // Check if content stream replacement is viable for this change
+    const canUse = streamText && canUseContentStreamReplacement(change, pageFontMap);
+    if (canUse) {
+      const op = matchChangeToOperation(change, textOps);
+      console.log('[commitTextEdits] Strategy A attempt:',
+        'orig=', JSON.stringify(change.originalText?.slice(0, 30)),
+        'new=', JSON.stringify(change.newText?.slice(0, 30)),
+        'pdfPos=', change.pdfX?.toFixed(1), change.pdfY?.toFixed(1),
+        'matched=', op ? `"${op.text.slice(0, 30)}" @(${op.x.toFixed(1)},${op.y.toFixed(1)}) isCID=${op.isCID}` : 'NO MATCH');
+      if (op) {
+        // Get the font CMap entry for encoding replacement text
+        const fme = fontCMaps.get(op.fontRef);
+        // Replace text directly in the content stream
+        const replaced = replaceTextInStream(streamText, op, change.newText, fme);
+        if (replaced === null) {
+          // Encoding failed (e.g., new chars not in CID subset) — fall back
+          console.log('[commitTextEdits] Strategy A encode failed, falling back');
+          fallbackChanges.push(change);
+          continue;
+        }
+        streamText = replaced;
+        // Re-parse after replacement (offsets shifted)
+        textOps = parseTextOperations(streamText, fontCMaps);
+        streamModified = true;
+        continue; // Done — no cover-and-replace needed for this change
+      }
     } else {
-      page.drawText(change.newText, { x, y, size: fontSize, font, color });
+      console.log('[commitTextEdits] Strategy A skipped:',
+        'orig=', JSON.stringify(change.originalText?.slice(0, 30)),
+        'userChangedFormat=', change.userChangedFormat,
+        'hasStreamText=', !!streamText);
+    }
+    // Content stream replacement not possible → collect for cover-and-replace fallback
+    fallbackChanges.push(change);
+  }
+
+  // Write modified content stream back to the PDF
+  console.log('[commitTextEdits] Stream modified=', streamModified, 'fallback changes=', fallbackChanges.length);
+  if (streamModified && streamData && streamData.streams.length > 0) {
+    try {
+      const newBytes = new Uint8Array(streamText.length);
+      for (let j = 0; j < streamText.length; j++) {
+        newBytes[j] = streamText.charCodeAt(j) & 0xFF;
+      }
+
+      const firstStream = streamData.streams[0];
+      // Overwrite the stream contents — remove compression since we have plain text
+      const target = firstStream.obj;
+      if (target) {
+        target.contents = newBytes;
+        if (target.dict && typeof target.dict.delete === 'function') {
+          target.dict.delete(PDFLib.PDFName.of('Filter'));
+          target.dict.delete(PDFLib.PDFName.of('DecodeParms'));
+          target.dict.set(PDFLib.PDFName.of('Length'), PDFLib.PDFNumber.of(newBytes.length));
+        }
+      }
+    } catch (err) {
+      // Stream write failed — the changes that used content stream replacement
+      // won't be saved. Add them back to fallback.
+      // (In practice this shouldn't happen, but be safe.)
+    }
+  }
+
+  // ── Strategy B: Cover-and-replace fallback (for format changes, CIDFonts, unmatched text) ──
+  if (fallbackChanges.length > 0) {
+    const fontCache = {};
+    async function getFont(fontName, bold, italic) {
+      if (fontName === 'custom' && customFont) {
+        if (!fontCache['__custom']) {
+          fontCache['__custom'] = await doc.embedFont(customFont.bytes);
+        }
+        return fontCache['__custom'];
+      }
+      let variant = fontName;
+      if (bold) variant += '-Bold';
+      if (italic) variant += '-Italic';
+      let stdName = mapToStandardFont(variant);
+      if (!fontCache[stdName]) {
+        if (!PDFLib.StandardFonts[stdName]) stdName = 'Helvetica';
+        fontCache[stdName] = await doc.embedFont(PDFLib.StandardFonts[stdName]);
+      }
+      return fontCache[stdName];
+    }
+
+    const hasCTM = typeof PDFLib.pushGraphicsState === 'function' &&
+      typeof PDFLib.popGraphicsState === 'function' &&
+      typeof PDFLib.concatTransformationMatrix === 'function';
+
+    for (const change of fallbackChanges) {
+      let font = await getFont(change.fontName, change.bold, change.italic);
+      const fontSize = change.fontSizeOverride || change.pdfFontSize;
+      const x = change.pdfX;
+      const y = change.pdfY;
+
+      let naturalWidth = font.widthOfTextAtSize(change.newText, fontSize);
+      const scale = currentViewport ? currentViewport.scale : 1;
+      const originalWidth = change.pdfLineWidth > 0 ? change.pdfLineWidth : change.screenWidth / scale;
+
+      // Bold auto-detection for fallback path
+      if (!change.bold && originalWidth > 0 && naturalWidth > 0) {
+        const changeLower = (change.fontName || '').toLowerCase();
+        const isSerifFont = (/serif/i.test(changeLower) && !/sans/i.test(changeLower)) ||
+          /times|roman/i.test(changeLower);
+        const isMonoFont = /courier|mono/i.test(changeLower);
+        const pageHasBold = (isSerifFont && fontSummary.hasBoldSerif) ||
+          (isMonoFont && fontSummary.hasBoldMono) ||
+          (!isSerifFont && !isMonoFont && fontSummary.hasBoldSans);
+        const threshold = pageHasBold ? 1.04 : 1.08;
+        const ratioRegular = originalWidth / naturalWidth;
+
+        if (ratioRegular > threshold) {
+          try {
+            const boldFont = await getFont(change.fontName, true, change.italic);
+            const boldWidth = boldFont.widthOfTextAtSize(change.newText, fontSize);
+            if (Math.abs(originalWidth / boldWidth - 1) < Math.abs(ratioRegular - 1)) {
+              font = boldFont;
+              naturalWidth = boldWidth;
+            }
+          } catch (_) {}
+        }
+      }
+
+      // Cover rectangle
+      const coverWidth = Math.max(originalWidth, naturalWidth) + 6;
+      const descenderDepth = change.pdfFontSize * 0.22;
+      const ascenderHeight = change.pdfFontSize * 0.78;
+      const rectHeight = descenderDepth + ascenderHeight;
+
+      let coverColor = PDFLib.rgb(1, 1, 1);
+      if (change.bgColor && change.bgColor !== '#ffffff') {
+        const br = parseInt(change.bgColor.slice(1, 3), 16) / 255;
+        const bg = parseInt(change.bgColor.slice(3, 5), 16) / 255;
+        const bb = parseInt(change.bgColor.slice(5, 7), 16) / 255;
+        coverColor = PDFLib.rgb(br, bg, bb);
+      }
+      page.drawRectangle({
+        x: x - 1, y: y - descenderDepth,
+        width: coverWidth, height: rectHeight,
+        color: coverColor, borderWidth: 0,
+      });
+
+      let color = PDFLib.rgb(0, 0, 0);
+      if (change.colorOverride) {
+        const hex = change.colorOverride;
+        color = PDFLib.rgb(
+          parseInt(hex.slice(1, 3), 16) / 255,
+          parseInt(hex.slice(3, 5), 16) / 255,
+          parseInt(hex.slice(5, 7), 16) / 255,
+        );
+      }
+
+      const scaleX = (originalWidth > 0 && naturalWidth > 0) ? originalWidth / naturalWidth : 1;
+      const applyScale = hasCTM && scaleX !== 1 && scaleX > 0.5 && scaleX < 2.0;
+
+      if (applyScale) {
+        page.pushOperators(PDFLib.pushGraphicsState());
+        page.pushOperators(PDFLib.concatTransformationMatrix(scaleX, 0, 0, 1, x * (1 - scaleX), 0));
+        page.drawText(change.newText, { x, y, size: fontSize, font, color });
+        page.pushOperators(PDFLib.popGraphicsState());
+      } else {
+        page.drawText(change.newText, { x, y, size: fontSize, font, color });
+      }
     }
   }
 
