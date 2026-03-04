@@ -2093,6 +2093,172 @@ function extractParenString(text, start) {
 }
 
 /**
+ * Parse the content stream for underline-like drawing operations.
+ * Returns array of { type, x, y, width, height, startOffset, endOffset, rawX, rawY, rawW, rawH }
+ *
+ * Underlines in PDFs are thin rectangles (`X Y W H re f`) or horizontal lines
+ * (`X1 Y1 m X2 Y2 l S`) drawn outside BT/ET text blocks.
+ */
+function parseUnderlineOps(streamText) {
+  const ops = [];
+  let ctm = [1, 0, 0, 1, 0, 0];
+  let ctmStack = [];
+
+  function applyCtm(x, y) {
+    return [
+      ctm[0] * x + ctm[2] * y + ctm[4],
+      ctm[1] * x + ctm[3] * y + ctm[5]
+    ];
+  }
+  function multiplyMatrix(m1, m2) {
+    return [
+      m1[0] * m2[0] + m1[2] * m2[1],
+      m1[1] * m2[0] + m1[3] * m2[1],
+      m1[0] * m2[2] + m1[2] * m2[3],
+      m1[1] * m2[2] + m1[3] * m2[3],
+      m1[0] * m2[4] + m1[2] * m2[5] + m1[4],
+      m1[1] * m2[4] + m1[3] * m2[5] + m1[5]
+    ];
+  }
+
+  // Simple tokenizer — same approach as parseTextOperations
+  let i = 0;
+  const len = streamText.length;
+  function skipWS() { while (i < len && ' \t\n\r'.includes(streamText[i])) i++; }
+  function readTok() {
+    skipWS();
+    if (i >= len) return null;
+    const ch = streamText[i];
+    if (ch === '%') { while (i < len && streamText[i] !== '\n') i++; return readTok(); }
+    if (ch === '(') { let d = 1; i++; while (i < len && d > 0) { if (streamText[i] === '\\') i++; else if (streamText[i] === '(') d++; else if (streamText[i] === ')') d--; i++; } return { type: 'skip' }; }
+    if (ch === '<' && i + 1 < len && streamText[i + 1] === '<') { let d = 1; i += 2; while (i < len && d > 0) { if (streamText[i] === '<' && streamText[i + 1] === '<') { d++; i += 2; } else if (streamText[i] === '>' && streamText[i + 1] === '>') { d--; i += 2; } else i++; } return { type: 'skip' }; }
+    if (ch === '<') { i++; while (i < len && streamText[i] !== '>') i++; if (i < len) i++; return { type: 'skip' }; }
+    if (ch === '[') { let d = 1; i++; while (i < len && d > 0) { if (streamText[i] === '[') d++; else if (streamText[i] === ']') d--; i++; } return { type: 'skip' }; }
+    if (ch === '-' || ch === '+' || ch === '.' || (ch >= '0' && ch <= '9')) {
+      const s = i; if (ch === '-' || ch === '+') i++;
+      while (i < len && ((streamText[i] >= '0' && streamText[i] <= '9') || streamText[i] === '.')) i++;
+      return { type: 'num', value: parseFloat(streamText.slice(s, i)), offset: s };
+    }
+    if (ch === '/') { i++; while (i < len && !' \t\n\r/<>[](){}%'.includes(streamText[i])) i++; return { type: 'skip' }; }
+    const s = i;
+    while (i < len && !' \t\n\r/<>[](){}%'.includes(streamText[i])) i++;
+    return { type: 'op', value: streamText.slice(s, i), offset: s };
+  }
+
+  const stk = []; // number stack
+  let pendingRect = null; // { x, y, w, h, startOffset }
+  let pendingMove = null; // { x, y, offset }
+  let lineWidth = 1;
+
+  while (i < len) {
+    const tok = readTok();
+    if (!tok) break;
+    if (tok.type === 'num') { stk.push(tok); continue; }
+    if (tok.type === 'skip') { stk.length = 0; continue; }
+    if (tok.type !== 'op') { stk.length = 0; continue; }
+
+    const op = tok.value;
+    if (op === 'q') { ctmStack.push(ctm.slice()); }
+    else if (op === 'Q') { if (ctmStack.length) ctm = ctmStack.pop(); }
+    else if (op === 'cm' && stk.length >= 6) {
+      const m = stk.slice(-6).map(t => t.value);
+      ctm = multiplyMatrix(ctm, m);
+    }
+    else if (op === 'w' && stk.length >= 1) {
+      lineWidth = stk[stk.length - 1].value;
+    }
+    else if (op === 're' && stk.length >= 4) {
+      const sx = stk[stk.length - 4];
+      pendingRect = {
+        rawX: sx.value, rawY: stk[stk.length - 3].value,
+        rawW: stk[stk.length - 2].value, rawH: stk[stk.length - 1].value,
+        startOffset: sx.offset,
+      };
+    }
+    else if ((op === 'f' || op === 'F' || op === 'f*') && pendingRect) {
+      const r = pendingRect;
+      // Only collect thin rectangles (height < 3) — likely underlines
+      if (Math.abs(r.rawH) < 3 && Math.abs(r.rawW) > 5) {
+        const [tx, ty] = applyCtm(r.rawX, r.rawY);
+        ops.push({
+          type: 'rect', x: tx, y: ty,
+          width: r.rawW * Math.abs(ctm[0]), // scale width by CTM X-scale
+          height: r.rawH,
+          rawX: r.rawX, rawY: r.rawY, rawW: r.rawW, rawH: r.rawH,
+          fillOp: op, // 'f', 'F', or 'f*'
+          startOffset: r.startOffset,
+          endOffset: tok.offset + op.length,
+        });
+      }
+      pendingRect = null;
+    }
+    else if (op === 'm' && stk.length >= 2) {
+      pendingMove = {
+        x: stk[stk.length - 2].value,
+        y: stk[stk.length - 1].value,
+        offset: stk[stk.length - 2].offset,
+      };
+    }
+    else if (op === 'l' && stk.length >= 2 && pendingMove) {
+      const lx = stk[stk.length - 2].value;
+      const ly = stk[stk.length - 1].value;
+      // Check for horizontal line (potential underline)
+      if (Math.abs(ly - pendingMove.y) < 1 && Math.abs(lx - pendingMove.x) > 5 && lineWidth < 3) {
+        const [tx, ty] = applyCtm(pendingMove.x, pendingMove.y);
+        pendingMove._line = {
+          type: 'line', x: tx, y: ty,
+          width: (lx - pendingMove.x) * Math.abs(ctm[0]),
+          height: lineWidth,
+          rawX1: pendingMove.x, rawY1: pendingMove.y,
+          rawX2: lx, rawY2: ly,
+          startOffset: pendingMove.offset,
+          lineEndOffset: tok.offset + op.length,
+        };
+      }
+    }
+    else if (op === 'S' && pendingMove && pendingMove._line) {
+      const line = pendingMove._line;
+      line.endOffset = tok.offset + op.length;
+      ops.push(line);
+      pendingMove = null;
+    }
+    else if (op === 'BT' || op === 'ET') {
+      // Text blocks — skip but don't clear pending state
+    }
+    else {
+      pendingRect = null; // non-fill after re → not an underline rect
+    }
+
+    stk.length = 0;
+  }
+
+  return ops;
+}
+
+/**
+ * Adjust the width of an underline operation in the content stream.
+ * Returns the modified stream text.
+ */
+function adjustUnderlineWidth(streamText, ulOp, scaleFactor) {
+  const before = streamText.slice(0, ulOp.startOffset);
+  const after = streamText.slice(ulOp.endOffset);
+
+  if (ulOp.type === 'rect') {
+    const newW = (ulOp.rawW * scaleFactor).toFixed(4);
+    const fill = ulOp.fillOp || 'f';
+    return before + `${ulOp.rawX} ${ulOp.rawY} ${newW} ${ulOp.rawH} re ${fill}` + after;
+  }
+  if (ulOp.type === 'line') {
+    const newX2 = (ulOp.rawX1 + (ulOp.rawX2 - ulOp.rawX1) * scaleFactor).toFixed(4);
+    // Reconstruct: X1 Y1 m X2 Y2 l S
+    return before +
+      `${ulOp.rawX1} ${ulOp.rawY1} m\n${newX2} ${ulOp.rawY2} l\nS` +
+      after;
+  }
+  return streamText;
+}
+
+/**
  * Parse the content stream into text operations.
  * Returns array of { text, startOffset, endOffset, fontRef, fontSize, x, y, operator }
  */
@@ -2672,6 +2838,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
   }
 
   const fallbackChanges = []; // changes that need cover-and-replace
+  const appliedStrategyA = []; // track Strategy A replacements for underline adjustment
 
   for (const change of changes) {
     // Check if content stream replacement is viable for this change
@@ -2723,6 +2890,12 @@ export async function commitTextEdits(pdfBytes, pageNum) {
         // Re-parse after replacement (offsets shifted)
         textOps = parseTextOperations(streamText, fontCMaps);
         streamModified = true;
+        // Track for underline adjustment
+        appliedStrategyA.push({
+          originalText: change.originalText,
+          newText: change.newText,
+          x: op.x, y: op.y,
+        });
         continue; // Done — no cover-and-replace needed for this change
       }
     } else {
@@ -2733,6 +2906,44 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     }
     // Content stream replacement not possible → collect for cover-and-replace fallback
     fallbackChanges.push(change);
+  }
+
+  // ── Adjust underline widths for Strategy A replacements ──
+  if (streamModified && appliedStrategyA.length > 0) {
+    try {
+      const ulOps = parseUnderlineOps(streamText);
+      console.log('[commitTextEdits] Underline ops found:', ulOps.length);
+      if (ulOps.length > 0) {
+        // Process underline adjustments from end to start so offsets stay valid
+        const adjustments = [];
+        for (const sa of appliedStrategyA) {
+          if (sa.originalText.length === 0) continue;
+          const scaleFactor = sa.newText.length / sa.originalText.length;
+          if (Math.abs(scaleFactor - 1.0) < 0.001) continue; // no change needed
+
+          // Find underline ops near this text's Y position and X position
+          for (const ul of ulOps) {
+            const yDist = Math.abs(ul.y - sa.y);
+            const xDist = Math.abs(ul.x - sa.x);
+            if (yDist < 8 && xDist < 20) {
+              console.log(`[commitTextEdits] Adjusting underline: type=${ul.type} x=${ul.x.toFixed(1)} y=${ul.y.toFixed(1)} width=${ul.width.toFixed(1)} scale=${scaleFactor.toFixed(3)}`);
+              adjustments.push({ ulOp: ul, scaleFactor });
+            }
+          }
+        }
+
+        // Sort adjustments by startOffset descending so we replace from end to start
+        adjustments.sort((a, b) => b.ulOp.startOffset - a.ulOp.startOffset);
+        for (const adj of adjustments) {
+          streamText = adjustUnderlineWidth(streamText, adj.ulOp, adj.scaleFactor);
+        }
+        if (adjustments.length > 0) {
+          console.log('[commitTextEdits] Applied', adjustments.length, 'underline adjustments');
+        }
+      }
+    } catch (err) {
+      console.warn('[commitTextEdits] Underline adjustment error:', err);
+    }
   }
 
   // Write modified content stream back to the PDF
