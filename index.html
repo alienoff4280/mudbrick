@@ -3,8 +3,37 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Mudbrick — Free PDF Editor</title>
-  <meta name="description" content="Free, open-source PDF editor. No subscription. No dark patterns. Runs entirely in your browser.">
+  <title>Mudbrick — Free PDF Editor | No Subscription, No Uploads</title>
+  <meta name="description" content="Free, open-source PDF editor that runs entirely in your browser. Annotate, merge, split, fill forms, sign, redact, and OCR — no subscription, no uploads, no server.">
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Mudbrick — Free PDF Editor">
+  <meta property="og:description" content="Annotate, merge, split, fill forms, sign, redact, and OCR your PDFs — free, open-source, runs entirely in your browser.">
+  <meta property="og:image" content="/icons/icon.svg">
+
+  <!-- Twitter Card -->
+  <meta name="twitter:card" content="summary">
+  <meta name="twitter:title" content="Mudbrick — Free PDF Editor">
+  <meta name="twitter:description" content="Free, open-source PDF editor. No subscription, no uploads, 100% client-side.">
+  <meta name="twitter:image" content="/icons/icon.svg">
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Mudbrick",
+    "description": "Free, open-source PDF editor that runs entirely in your browser.",
+    "applicationCategory": "ProductivityApplication",
+    "operatingSystem": "Web",
+    "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+    "license": "https://opensource.org/licenses/MIT"
+  }
+  </script>
+
+  <!-- Preconnect to CDN for faster loading -->
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
 
   <!-- Styles -->
   <link rel="stylesheet" href="styles/variables.css">
@@ -27,10 +56,11 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="application-name" content="Mudbrick">
   <link rel="manifest" href="manifest.json">
-  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧱</text></svg>">
+  <link rel="apple-touch-icon" href="/icons/icon.svg">
 
-  <!-- Favicon (brick emoji) -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧱</text></svg>">
+  <!-- Favicon -->
+  <link rel="icon" href="/icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧱</text></svg>" type="image/svg+xml">
 </head>
 <body>
 
