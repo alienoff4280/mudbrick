@@ -10,6 +10,7 @@
   <link rel="stylesheet" href="styles/variables.css">
   <link rel="stylesheet" href="styles/layout.css">
   <link rel="stylesheet" href="styles/components.css">
+  <link rel="stylesheet" href="styles/print.css" media="print">
 
   <!-- CDN: Google Fonts for signature cursive styles (lazy-loaded) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -32,6 +33,12 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧱</text></svg>">
 </head>
 <body>
+
+  <!-- Skip link for keyboard/screen reader users -->
+  <a href="#canvas-area" class="skip-link">Skip to content</a>
+
+  <!-- ARIA live region for dynamic announcements (screen reader only) -->
+  <div id="a11y-announcer" aria-live="polite" aria-atomic="true" class="sr-only"></div>
 
   <!-- ═══════════════════ Welcome Screen ═══════════════════ -->
   <div id="welcome-screen">
@@ -83,13 +90,13 @@
         <div class="brand-icon">M</div>
         <span class="brand-name">Mudbrick</span>
       </div>
-      <div class="menu-items">
-        <button class="menu-item">File</button>
-        <button class="menu-item">Edit</button>
-        <button class="menu-item">View</button>
-        <button class="menu-item">Insert</button>
-        <button class="menu-item">Tools</button>
-        <button class="menu-item">Help</button>
+      <div class="menu-items" role="menubar" aria-label="Application menu">
+        <button class="menu-item" aria-haspopup="true" aria-expanded="false">File</button>
+        <button class="menu-item" aria-haspopup="true" aria-expanded="false">Edit</button>
+        <button class="menu-item" aria-haspopup="true" aria-expanded="false">View</button>
+        <button class="menu-item" aria-haspopup="true" aria-expanded="false">Insert</button>
+        <button class="menu-item" aria-haspopup="true" aria-expanded="false">Tools</button>
+        <button class="menu-item" aria-haspopup="true" aria-expanded="false">Help</button>
       </div>
       <span id="status-filename" class="title-filename">No file loaded</span>
       <div class="titlebar-right">
@@ -539,7 +546,7 @@
           <button id="btn-toggle-sidebar" class="sidebar-collapse" title="Toggle Sidebar" aria-label="Toggle Sidebar" data-icon="panel-left-close"></button>
         </div>
         <div class="sidebar-panel active" id="sidebar-pages">
-          <div id="thumbnail-list"></div>
+          <div id="thumbnail-list" role="listbox" aria-label="Document pages" aria-multiselectable="false"></div>
         </div>
         <div class="sidebar-panel" id="sidebar-bookmarks">
           <div class="sidebar-empty">
@@ -558,7 +565,7 @@
       </aside>
 
       <!-- Canvas Area -->
-      <main id="canvas-area" role="main" aria-label="PDF document view">
+      <main id="canvas-area" role="main" aria-label="PDF document view" tabindex="-1">
         <!-- Find & Replace Bar (Ctrl+F / Ctrl+H) -->
         <div id="find-bar" class="find-bar hidden">
           <div class="find-bar-row">
@@ -783,7 +790,7 @@
         <span data-icon="chevron-left" data-icon-size="14"></span>
       </button>
       <input id="page-input" class="page-nav-input" type="number" min="1" value="1" aria-label="Current page number">
-      <span class="page-nav-text">of <span id="total-pages">0</span></span>
+      <span class="page-nav-text" aria-live="polite" aria-atomic="true">of <span id="total-pages">0</span></span>
       <button id="btn-next-page" class="page-nav-btn" title="Next Page (→)" aria-label="Next Page" disabled>
         <span data-icon="chevron-right" data-icon-size="14"></span>
       </button>
@@ -795,7 +802,7 @@
     </nav>
 
     <!-- ── Status Bar ── -->
-    <footer id="status-bar">
+    <footer id="status-bar" aria-live="polite" aria-label="Status bar">
       <span id="statusbar-filename">No file loaded</span>
       <div class="status-sep"></div>
       <span id="status-pages-size"></span>
@@ -827,7 +834,7 @@
   </div>
 
   <!-- ═══════════════════ Toast Container ═══════════════════ -->
-  <div id="toast-container"></div>
+  <div id="toast-container" role="alert" aria-live="assertive" aria-atomic="false"></div>
 
   <!-- ═══════════════════ Recovery Banner ═══════════════════ -->
   <div id="recovery-banner" class="recovery-banner hidden" role="alert">
@@ -1838,15 +1845,33 @@
           <div class="shortcuts-section">
             <h3 class="shortcuts-section-title">File</h3>
             <div class="shortcut-row"><span>Open file</span><kbd>Ctrl+O</kbd></div>
-            <div class="shortcut-row"><span>Export / Save</span><kbd>Ctrl+S</kbd></div>
+            <div class="shortcut-row"><span>Save / Export</span><kbd>Ctrl+S</kbd></div>
             <div class="shortcut-row"><span>Print</span><kbd>Ctrl+P</kbd></div>
           </div>
           <div class="shortcuts-section">
             <h3 class="shortcuts-section-title">Edit</h3>
             <div class="shortcut-row"><span>Undo</span><kbd>Ctrl+Z</kbd></div>
-            <div class="shortcut-row"><span>Redo</span><kbd>Ctrl+Y</kbd></div>
-            <div class="shortcut-row"><span>Find in PDF</span><kbd>Ctrl+F</kbd></div>
+            <div class="shortcut-row"><span>Redo</span><kbd>Ctrl+Shift+Z</kbd></div>
+            <div class="shortcut-row"><span>Cut</span><kbd>Ctrl+X</kbd></div>
+            <div class="shortcut-row"><span>Copy</span><kbd>Ctrl+C</kbd></div>
+            <div class="shortcut-row"><span>Paste</span><kbd>Ctrl+V</kbd></div>
             <div class="shortcut-row"><span>Delete selection</span><kbd>Delete</kbd></div>
+            <div class="shortcut-row"><span>Select All</span><kbd>Ctrl+A</kbd></div>
+            <div class="shortcut-row"><span>Find &amp; Replace</span><kbd>Ctrl+F</kbd></div>
+          </div>
+          <div class="shortcuts-section">
+            <h3 class="shortcuts-section-title">Navigation</h3>
+            <div class="shortcut-row"><span>Previous page</span><kbd>Ctrl+[</kbd></div>
+            <div class="shortcut-row"><span>Next page</span><kbd>Ctrl+]</kbd></div>
+            <div class="shortcut-row"><span>First page</span><kbd>Home</kbd></div>
+            <div class="shortcut-row"><span>Last page</span><kbd>End</kbd></div>
+          </div>
+          <div class="shortcuts-section">
+            <h3 class="shortcuts-section-title">View</h3>
+            <div class="shortcut-row"><span>Zoom in</span><kbd>Ctrl+=</kbd></div>
+            <div class="shortcut-row"><span>Zoom out</span><kbd>Ctrl+&minus;</kbd></div>
+            <div class="shortcut-row"><span>Actual Size</span><kbd>Ctrl+0</kbd></div>
+            <div class="shortcut-row"><span>Full Screen</span><kbd>F11</kbd></div>
           </div>
           <div class="shortcuts-section">
             <h3 class="shortcuts-section-title">Tools</h3>
@@ -1854,13 +1879,6 @@
             <div class="shortcut-row"><span>Hand / Pan</span><kbd>H</kbd></div>
             <div class="shortcut-row"><span>Text tool</span><kbd>T</kbd></div>
             <div class="shortcut-row"><span>Draw tool</span><kbd>D</kbd></div>
-          </div>
-          <div class="shortcuts-section">
-            <h3 class="shortcuts-section-title">View</h3>
-            <div class="shortcut-row"><span>Zoom in</span><kbd>+</kbd></div>
-            <div class="shortcut-row"><span>Zoom out</span><kbd>−</kbd></div>
-            <div class="shortcut-row"><span>Previous page</span><kbd>Ctrl+[</kbd></div>
-            <div class="shortcut-row"><span>Next page</span><kbd>Ctrl+]</kbd></div>
           </div>
           <div class="shortcuts-section">
             <h3 class="shortcuts-section-title">Text Editing</h3>
@@ -1874,8 +1892,155 @@
             <h3 class="shortcuts-section-title">General</h3>
             <div class="shortcut-row"><span>Show shortcuts</span><kbd>?</kbd></div>
             <div class="shortcut-row"><span>Close modal / Deselect</span><kbd>Esc</kbd></div>
+            <div class="shortcut-row"><span>Dark Mode</span><kbd>Toggle in View menu</kbd></div>
+            <div class="shortcut-row"><span>Cycle app regions</span><kbd>F6</kbd></div>
+            <div class="shortcut-row"><span>Page context menu</span><kbd>Shift+F10</kbd></div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- ═══════════════════ Print Options Modal ═══════════════════ -->
+  <div id="print-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Print Options">
+    <div class="modal modal-w420">
+      <div class="modal-header">
+        <h2>Print</h2>
+        <button type="button" class="modal-close" aria-label="Close" data-close-modal="print">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="modal-form-stack">
+          <div>
+            <label class="bates-label" for="print-scope">Pages</label>
+            <select id="print-scope" class="bates-field" aria-label="Print scope">
+              <option value="all">All Pages</option>
+              <option value="current">Current Page</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+          <div id="print-range-row" class="hidden">
+            <label class="bates-label" for="print-range">Page Range (e.g. 1-5, 8)</label>
+            <input type="text" id="print-range" class="bates-field" placeholder="1-5, 8, 10-12" aria-label="Print page range">
+          </div>
+          <div>
+            <label class="bates-label" for="print-quality">Quality</label>
+            <select id="print-quality" class="bates-field" aria-label="Print quality">
+              <option value="1.5" selected>Standard (150 DPI equivalent)</option>
+              <option value="2.0">High (200 DPI equivalent)</option>
+              <option value="3.0">Best (300 DPI equivalent)</option>
+            </select>
+          </div>
+          <p class="modal-form-hint">Annotations will be baked into the printed output.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close-modal="print">Cancel</button>
+        <button class="btn-primary" id="btn-print-execute">Print</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════ Unified Export Modal ═══════════════════ -->
+  <div id="export-modal-backdrop" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-label="Export Document">
+    <div class="modal modal-w480">
+      <div class="modal-header">
+        <h2>Export</h2>
+        <button type="button" class="modal-close" aria-label="Close" data-close-modal="export">&times;</button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Tab Strip -->
+        <div class="export-tab-strip" role="tablist" aria-label="Export format tabs">
+          <button class="export-tab active" data-export-tab="pdf" role="tab" aria-selected="true">PDF</button>
+          <button class="export-tab" data-export-tab="images" role="tab" aria-selected="false">Images</button>
+          <button class="export-tab" data-export-tab="formdata" role="tab" aria-selected="false">Form Data</button>
+        </div>
+
+        <!-- PDF Tab -->
+        <div class="export-tab-panel active" id="export-tab-pdf">
+          <div class="modal-form-stack">
+            <div>
+              <label class="bates-label" for="export-pdf-type">Type</label>
+              <select id="export-pdf-type" class="bates-field" aria-label="PDF export type">
+                <option value="annotated">Annotated — bake annotations into PDF</option>
+                <option value="original">Original — no changes</option>
+              </select>
+            </div>
+            <div>
+              <label class="bates-label" for="export-pdf-filename">Filename</label>
+              <input type="text" id="export-pdf-filename" class="bates-field" placeholder="document_edited.pdf" aria-label="Export filename">
+            </div>
+            <p id="export-pdf-size-hint" class="modal-form-hint"></p>
+          </div>
+        </div>
+
+        <!-- Images Tab -->
+        <div class="export-tab-panel hidden" id="export-tab-images">
+          <div class="modal-form-stack">
+            <div>
+              <label class="bates-label" for="export-imgs-scope">Pages</label>
+              <select id="export-imgs-scope" class="bates-field" aria-label="Image export pages">
+                <option value="current">Current Page</option>
+                <option value="all">All Pages</option>
+                <option value="custom">Custom Range</option>
+              </select>
+            </div>
+            <div id="export-imgs-range-row" class="hidden">
+              <label class="bates-label" for="export-imgs-range">Page Range (e.g. 1-5, 8)</label>
+              <input type="text" id="export-imgs-range" class="bates-field" placeholder="1-5, 8, 10-12" aria-label="Image export range">
+            </div>
+            <div class="modal-form-grid">
+              <div>
+                <label class="bates-label" for="export-imgs-format">Format</label>
+                <select id="export-imgs-format" class="bates-field" aria-label="Image format">
+                  <option value="png">PNG</option>
+                  <option value="jpg">JPEG</option>
+                </select>
+              </div>
+              <div>
+                <label class="bates-label" for="export-imgs-dpi">DPI</label>
+                <select id="export-imgs-dpi" class="bates-field" aria-label="Image DPI">
+                  <option value="72">72 — Screen</option>
+                  <option value="150" selected>150 — Standard</option>
+                  <option value="300">300 — Print</option>
+                  <option value="600">600 — High Quality</option>
+                </select>
+              </div>
+            </div>
+            <div id="export-imgs-quality-row">
+              <label class="bates-label" for="export-imgs-quality">JPEG Quality</label>
+              <input type="range" id="export-imgs-quality" min="50" max="100" value="92" class="w-full" aria-label="JPEG quality">
+              <span id="export-imgs-quality-val" class="range-value-label">92%</span>
+            </div>
+            <p id="export-imgs-size-hint" class="modal-form-hint"></p>
+          </div>
+        </div>
+
+        <!-- Form Data Tab -->
+        <div class="export-tab-panel hidden" id="export-tab-formdata">
+          <div class="modal-form-stack">
+            <div id="export-formdata-no-form" class="hidden">
+              <p class="modal-form-hint">No form fields detected in this document.</p>
+            </div>
+            <div id="export-formdata-fields">
+              <div>
+                <label class="bates-label" for="export-formdata-format">Format</label>
+                <select id="export-formdata-format" class="bates-field" aria-label="Form data format">
+                  <option value="json">JSON</option>
+                  <option value="xfdf">XFDF (Adobe Compatible)</option>
+                  <option value="csv">CSV</option>
+                </select>
+              </div>
+              <p class="modal-form-hint mt-8">Exports all filled form field values from the current document.</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary" data-close-modal="export">Cancel</button>
+        <button class="btn-primary" id="btn-export-execute">Export</button>
       </div>
     </div>
   </div>
@@ -1888,14 +2053,27 @@
         <button type="button" class="modal-close" aria-label="Close" data-close-modal="about">&times;</button>
       </div>
       <div class="modal-body modal-body-centered">
-        <div class="about-emoji">🧱</div>
-        <h3 class="about-title">Mudbrick</h3>
-        <p class="about-subtitle">Free, open-source PDF editor</p>
+        <div class="about-logo">🧱</div>
+        <h3 class="about-title">Mudbrick — Free PDF Editor</h3>
+        <p class="about-version">Version 1.0.0</p>
         <p class="about-body">
-          No subscription. No dark patterns.<br>
-          Runs entirely in your browser.<br>
-          Your files never leave your device.
+          Free, open-source PDF editor that runs entirely in your browser.<br>
+          No subscription. No uploads. No dark patterns.
         </p>
+        <div class="about-credits">
+          <h4>Built with</h4>
+          <ul>
+            <li>PDF.js 4.8.69 (Mozilla, Apache 2.0)</li>
+            <li>pdf-lib 1.17.1 (MIT)</li>
+            <li>Fabric.js 5.3.0 (MIT)</li>
+          </ul>
+        </div>
+        <div class="about-links">
+          <a href="https://github.com/NovoLegalGroup/mudbrick" target="_blank" rel="noopener">GitHub</a>
+          <span>·</span>
+          <a href="https://github.com/NovoLegalGroup/mudbrick/issues" target="_blank" rel="noopener">Report Bug</a>
+        </div>
+        <p class="about-license">Licensed under MIT</p>
       </div>
     </div>
   </div>
