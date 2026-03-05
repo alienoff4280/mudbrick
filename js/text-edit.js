@@ -170,6 +170,7 @@ let _activeBlockIdx = -1;   // index into _paragraphData of currently edited blo
 let _blockZones = [];       // click-zone DOM elements for each paragraph
 let _editedBlocks = new Map(); // paraIdx -> array of dirty line data from deactivated blocks
 let _canvasSnapshot = null;    // { imageData, x, y } — saved canvas pixels for active block
+let _clickOutsideHandler = null; // document listener to deactivate block on outside click
 
 // Undo/redo stacks — stores snapshots per line
 let undoStack = []; // array of { div, text, dataset snapshot }
@@ -826,6 +827,23 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pd
   // Create enhanced floating toolbar
   createToolbar(container);
 
+  // Click-outside handler: deactivate the active block when clicking outside it
+  if (_clickOutsideHandler) document.removeEventListener('mousedown', _clickOutsideHandler, true);
+  _clickOutsideHandler = (e) => {
+    if (_activeBlockIdx < 0) return; // no active block
+    // Ignore clicks inside toolbar
+    if (toolbar && toolbar.contains(e.target)) return;
+    // Ignore clicks inside active text-edit lines
+    if (e.target.closest && e.target.closest('.text-edit-line')) return;
+    // Ignore clicks inside block shield (it covers the active block area)
+    if (e.target.closest && e.target.closest('.text-edit-block-shield')) return;
+    // Clicking on another block zone is fine — activateBlock handles it
+    if (e.target.closest && e.target.closest('.text-edit-block-zone')) return;
+    // Click was outside — deactivate the current block
+    deactivateBlock();
+  };
+  document.addEventListener('mousedown', _clickOutsideHandler, true);
+
   return true;
 }
 
@@ -1170,6 +1188,12 @@ export function exitTextEditMode() {
   if (toolbar) {
     toolbar.remove();
     toolbar = null;
+  }
+
+  // Remove click-outside handler
+  if (_clickOutsideHandler) {
+    document.removeEventListener('mousedown', _clickOutsideHandler, true);
+    _clickOutsideHandler = null;
   }
 
   editContainer = null;
