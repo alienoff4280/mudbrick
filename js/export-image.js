@@ -28,33 +28,40 @@ export async function exportPageToImage(pdfDoc, pageNum, opts = {}) {
   } = opts;
 
   const page = await pdfDoc.getPage(pageNum);
-  const viewport = page.getViewport({ scale: 1.0 });
 
-  // Scale factor: PDF default is 72 DPI
+  // Scale factor: PDF default is 72 DPI.
+  // Use a DPI-scaled viewport so the canvas pixel size is correct.
   const scale = dpi / 72;
+  const viewport = page.getViewport({ scale });
 
   const canvas = document.createElement('canvas');
-  canvas.width = Math.floor(viewport.width * scale);
-  canvas.height = Math.floor(viewport.height * scale);
+  canvas.width = Math.floor(viewport.width);
+  canvas.height = Math.floor(viewport.height);
 
   const ctx = canvas.getContext('2d');
-  ctx.scale(scale, scale);
 
   await page.render({
     canvasContext: ctx,
-    viewport: page.getViewport({ scale: 1.0 }),
+    viewport,
   }).promise;
 
   // Convert to blob
   const mimeType = format === 'jpg' ? 'image/jpeg' : 'image/png';
   const blob = await new Promise((resolve, reject) => {
-    canvas.toBlob(b => b ? resolve(b) : reject(new Error('Failed to render page image')), mimeType, quality);
+    canvas.toBlob(
+      b => b ? resolve(b) : reject(new Error('Failed to render page image')),
+      mimeType,
+      quality
+    );
   });
+
+  // Release canvas memory
+  canvas.width = canvas.height = 0;
 
   return {
     blob,
-    width: canvas.width,
-    height: canvas.height,
+    width: Math.floor(viewport.width),
+    height: Math.floor(viewport.height),
   };
 }
 
@@ -70,24 +77,26 @@ export async function exportPageToImage(pdfDoc, pageNum, opts = {}) {
 export async function exportPagesToImages(pdfDoc, pages, opts = {}, onProgress) {
   const { fileName = 'page', format = 'png' } = opts;
   const ext = format === 'jpg' ? 'jpg' : 'png';
+  const baseName = fileName.replace(/\.pdf$/i, '');
 
   if (pages.length === 1) {
     // Single page — download directly
+    onProgress?.(0, 1);
     const { blob } = await exportPageToImage(pdfDoc, pages[0], opts);
-    const baseName = fileName.replace(/\.pdf$/i, '');
     downloadBlob(blob, `${baseName}_page${pages[0]}.${ext}`);
     onProgress?.(1, 1);
     return;
   }
 
-  // Multiple pages — download as zip if available, otherwise individual files
+  // Multiple pages — download each file individually with a small delay
+  // to prevent browser download throttling.
   for (let i = 0; i < pages.length; i++) {
+    onProgress?.(i, pages.length);
     const { blob } = await exportPageToImage(pdfDoc, pages[i], opts);
-    const baseName = fileName.replace(/\.pdf$/i, '');
     downloadBlob(blob, `${baseName}_page${pages[i]}.${ext}`);
     onProgress?.(i + 1, pages.length);
-    // Small delay to prevent browser download throttling
-    if (pages.length > 1) await new Promise(r => setTimeout(r, 200));
+    // Brief pause between downloads so the browser does not suppress them
+    await new Promise(r => setTimeout(r, 150));
   }
 }
 

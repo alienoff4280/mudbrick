@@ -1,5 +1,17 @@
 # Mudbrick — Revised Implementation Plan (v2)
 
+## Status: All 8 phases COMPLETE + Polish Pass COMPLETE (March 2026)
+
+All original implementation phases (1-8) are done. A comprehensive polish pass added:
+- **WS1**: Automated testing (Vitest, 75 unit tests, CI workflow)
+- **WS2**: Full menu bar with dropdowns, keyboard nav, submenu support
+- **WS3**: Centralized error handling, IndexedDB crash recovery, PDF validation
+- **WS4**: WCAG 2.1 AA accessibility (focus trapping, ARIA, skip links, F6 region cycling)
+- **WS5**: Performance (render cancellation, debounced nav, lazy text indexing, thumbnail concurrency)
+- **WS6**: Print support (print.css, print dialog), unified export modal with tabs
+- **WS7**: Service worker polish (stale-while-revalidate, update notifications, proper PWA icons)
+- **WS8**: Onboarding tour, contextual tips, About modal
+
 ## Context
 
 Adobe Acrobat Pro costs $22.99/month, uses dark-pattern cancellation flows, and locks basic PDF operations behind a paywall. Mudbrick is a free, open-source, client-side PDF editor that runs entirely in the browser with no server dependencies. Hosted on Vercel as a static site. The name "Mudbrick" is a jab at Adobe (which literally means sun-dried mud brick in Spanish).

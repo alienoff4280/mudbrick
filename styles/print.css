@@ -1,0 +1,94 @@
+/* Mudbrick — Print Stylesheet
+ * Applied only during window.print() or Ctrl+P.
+ * Hides app chrome and shows only the rendered PDF pages.
+ */
+
+@media print {
+
+  /* ── Hide all app chrome ── */
+  #titlebar,
+  #ribbon-tabs,
+  #ribbon-panel,
+  #sidebar,
+  #properties-panel,
+  #page-nav,
+  #status-bar,
+  .modal-backdrop,
+  #toast-container,
+  #welcome-screen,
+  #find-bar,
+  #floating-toolbar,
+  #loading-overlay,
+  #recovery-banner,
+  .page-nav { display: none !important; }
+
+  /* ── Reset body so the page-container fills the sheet ── */
+  html, body {
+    height: auto;
+    overflow: visible;
+    background: white;
+  }
+
+  /* ── App wrapper: remove flex layout so pages stack ── */
+  #app {
+    display: block !important;
+    height: auto;
+    overflow: visible;
+  }
+
+  /* ── Main container: full width, no sidebar space ── */
+  #main-container {
+    display: block !important;
+    height: auto;
+  }
+
+  /* ── Canvas area: stretch full width, no scroll ── */
+  #canvas-area {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: white;
+  }
+
+  /* ── Each page container gets a page break ── */
+  #page-container {
+    page-break-after: always;
+    break-after: page;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    border: none !important;
+  }
+
+  /* ── Ensure PDF canvas is visible and full width ── */
+  #pdf-canvas {
+    display: block !important;
+    width: 100% !important;
+    height: auto !important;
+    max-width: 100%;
+  }
+
+  /* ── Hide the Fabric.js overlay canvas:
+        annotations are baked into the PDF canvas for print ── */
+  #fabric-canvas-wrapper,
+  .canvas-container .upper-canvas {
+    display: none !important;
+  }
+
+  /* ── Hide text selection layer ── */
+  #text-layer {
+    display: none !important;
+  }
+
+  /* ── Remove crop overlay ── */
+  .crop-overlay {
+    display: none !important;
+  }
+
+  /* ── Page margins ── */
+  @page {
+    margin: 0;
+  }
+}

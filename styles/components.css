@@ -1,7 +1,61 @@
 /* Mudbrick — UI Components */
 
+/* ── Accessibility: Screen Reader Only utility ── */
+
+/**
+ * .sr-only — visually hidden but accessible to screen readers.
+ * Apply to elements that provide context for AT but should not be visible.
+ */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Accessibility: Skip Link ── */
+
+/**
+ * .skip-link — visually hidden until focused.
+ * Appears at the top of the viewport when Tab is pressed on page load,
+ * allowing keyboard users to jump past navigation directly to the content area.
+ */
+.skip-link {
+  position: fixed;
+  top: -100%;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: calc(var(--z-modal) + 200);
+  background: var(--mb-accent);
+  color: var(--mb-text-inverse);
+  padding: 10px 24px;
+  border-radius: 0 0 var(--mb-radius-md) var(--mb-radius-md);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  box-shadow: var(--mb-shadow-md);
+  transition: top 150ms ease;
+}
+
+.skip-link:focus {
+  top: 0;
+  outline: 2px solid var(--mb-text-inverse);
+  outline-offset: -4px;
+}
+
 /* ── Focus Visible (Accessibility) ── */
 
+/**
+ * Global :focus-visible rule — applies to ALL interactive elements.
+ * Uses the --mb-focus-ring box-shadow so it works on dark surfaces too.
+ * outline provides the visible ring; box-shadow adds an offset layer for contrast.
+ */
 :focus-visible {
   outline: 2px solid var(--mb-accent);
   outline-offset: 2px;
@@ -10,6 +64,40 @@
 /* Remove default outline for mouse clicks, keep for keyboard */
 :focus:not(:focus-visible) {
   outline: none;
+}
+
+/* ── Thumbnail items (listbox options) — focus ring ── */
+.thumbnail-item:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: -2px;
+  border-radius: var(--mb-radius-xs);
+}
+
+/* ── Context menu and dropdown buttons — explicit focus ring ── */
+.context-menu button:focus-visible,
+.dropdown-menu button:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: -2px;
+  background: var(--mb-surface-hover);
+}
+
+/* ── Range inputs — thumb focus ring ── */
+input[type="range"]:focus-visible {
+  outline: none;
+}
+
+/* ── Modal form inputs and signature inputs — focus ring via border + shadow ── */
+.modal-form-input:focus-visible,
+.bates-field:focus-visible,
+.hf-zone:focus-visible,
+.prop-input:focus-visible,
+.prop-select:focus-visible,
+.sig-type-field:focus-visible,
+.note-textarea:focus-visible,
+.find-input:focus-visible {
+  outline: none;
+  border-color: var(--mb-accent);
+  box-shadow: 0 0 0 2px rgba(41, 128, 185, 0.25);
 }
 
 /* ── Buttons ── */
@@ -632,6 +720,44 @@ button:disabled {
   to { transform: translateX(100%); opacity: 0; }
 }
 
+/* ── Recovery Banner ── */
+
+.recovery-banner {
+  position: fixed;
+  top: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--z-toast);
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-border);
+  border-left: 4px solid var(--mb-toast-warning);
+  border-radius: var(--mb-radius-md);
+  box-shadow: var(--mb-shadow-lg);
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 13px;
+  color: var(--mb-text);
+  max-width: 600px;
+  animation: toastIn 300ms ease;
+}
+
+.recovery-banner.hidden {
+  display: none;
+}
+
+.recovery-message {
+  flex: 1;
+  line-height: 1.4;
+}
+
+.recovery-actions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
 /* ── Drop zone file list (merge modal) ── */
 
 .file-list {
@@ -774,6 +900,35 @@ button:disabled {
 .menu-item.active {
   background: var(--mb-toolbar-hover);
   color: #e2e8f0;
+}
+
+/* ── Dropdown Submenu ── */
+
+.dropdown-submenu {
+  position: fixed;
+  animation: dropdownFadeIn 80ms ease-out;
+}
+
+.dropdown-menu button:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: -2px;
+  background: var(--mb-surface-hover);
+}
+
+.dropdown-menu button:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.dropdown-menu button .submenu-arrow {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  opacity: 0.6;
+}
+
+.dropdown-menu button:hover .submenu-arrow,
+.dropdown-menu button:focus .submenu-arrow {
+  opacity: 1;
 }
 
 /* File list items (merge modal) */
@@ -1265,4 +1420,302 @@ html[data-theme="dark"] .exhibit-preview-text {
   font-size: 12px;
   color: var(--mb-text-muted);
   margin-left: 4px;
+}
+
+/* ── Export Modal Tabs ── */
+
+.export-tab-strip {
+  display: flex;
+  border-bottom: 2px solid var(--mb-border-light);
+  margin-bottom: 16px;
+  gap: 0;
+}
+
+.export-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mb-text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  cursor: pointer;
+  border-radius: var(--mb-radius-sm) var(--mb-radius-sm) 0 0;
+  transition: color var(--mb-transition), border-color var(--mb-transition), background var(--mb-transition);
+}
+
+.export-tab:hover {
+  color: var(--mb-text);
+  background: var(--mb-surface-hover);
+}
+
+.export-tab.active {
+  color: var(--mb-brand);
+  border-bottom-color: var(--mb-brand);
+  font-weight: 600;
+}
+
+.export-tab-panel {
+  /* shown/hidden via .hidden class */
+}
+
+/* ══════════════════════════════════════════════
+   Onboarding — Tour & Contextual Tips
+   ══════════════════════════════════════════════ */
+
+/* Semi-transparent overlay that dims everything behind the spotlight */
+.tour-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  z-index: 8000;
+  pointer-events: auto;
+}
+
+/* Cutout highlight box drawn on top of the overlay */
+.tour-spotlight {
+  position: absolute;
+  z-index: 8001;
+  border-radius: var(--mb-radius-md);
+  box-shadow:
+    0 0 0 4px var(--mb-brand),
+    0 0 0 9999px rgba(0, 0, 0, 0.55);
+  pointer-events: none;
+  transition: top 250ms ease, left 250ms ease, width 250ms ease, height 250ms ease;
+}
+
+/* Tooltip card */
+.tour-tooltip {
+  position: absolute;
+  z-index: 8002;
+  width: 300px;
+  background: var(--mb-surface);
+  border-radius: var(--mb-radius-lg);
+  box-shadow: var(--mb-shadow-lg);
+  padding: 16px;
+  animation: slideUp 200ms ease;
+}
+
+.tour-tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.tour-step-indicator {
+  font-size: 11px;
+  color: var(--mb-text-muted);
+  font-weight: 500;
+}
+
+.tour-skip-btn {
+  font-size: 11px;
+  color: var(--mb-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--mb-radius-sm);
+  transition: background var(--mb-transition), color var(--mb-transition);
+}
+
+.tour-skip-btn:hover {
+  background: var(--mb-surface-hover);
+  color: var(--mb-text);
+}
+
+.tour-tooltip-title {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 6px;
+  color: var(--mb-text);
+}
+
+.tour-tooltip-text {
+  font-size: 13px;
+  color: var(--mb-text-secondary);
+  line-height: 1.5;
+  margin: 0 0 14px;
+}
+
+.tour-tooltip-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tour-dots {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.tour-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--mb-border);
+  transition: background var(--mb-transition);
+}
+
+.tour-dot.active {
+  background: var(--mb-brand);
+}
+
+.tour-btn-primary {
+  background: var(--mb-brand);
+  color: var(--mb-text-inverse);
+  padding: 6px 16px;
+  border-radius: var(--mb-radius-sm);
+  font-size: 13px;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: background var(--mb-transition);
+}
+
+.tour-btn-primary:hover {
+  background: var(--mb-brand-light);
+}
+
+.tour-btn-secondary {
+  background: var(--mb-surface-alt);
+  color: var(--mb-text);
+  padding: 6px 14px;
+  border-radius: var(--mb-radius-sm);
+  font-size: 13px;
+  border: 1px solid var(--mb-border);
+  cursor: pointer;
+  transition: background var(--mb-transition);
+}
+
+.tour-btn-secondary:hover {
+  background: var(--mb-surface-hover);
+}
+
+/* Contextual tips — subtle floating card */
+.contextual-tip {
+  position: fixed;
+  z-index: 7500;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  background: var(--mb-surface);
+  border: 1px solid var(--mb-border);
+  border-left: 3px solid var(--mb-accent);
+  border-radius: var(--mb-radius-md);
+  box-shadow: var(--mb-shadow-md);
+  padding: 10px 12px;
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.45;
+  animation: slideUp 200ms ease;
+  cursor: pointer;
+}
+
+.contextual-tip.exiting {
+  animation: fadeOut 300ms ease forwards;
+}
+
+.contextual-tip-icon {
+  font-size: 15px;
+  flex-shrink: 0;
+  line-height: 1.3;
+}
+
+.contextual-tip-text {
+  flex: 1;
+  color: var(--mb-text);
+}
+
+.contextual-tip-close {
+  flex-shrink: 0;
+  font-size: 16px;
+  color: var(--mb-text-muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  transition: color var(--mb-transition);
+}
+
+.contextual-tip-close:hover {
+  color: var(--mb-text);
+}
+
+/* ── About modal extras ── */
+
+.about-logo {
+  font-size: 52px;
+  margin-bottom: 10px;
+  line-height: 1;
+}
+
+.about-version {
+  font-size: 12px;
+  color: var(--mb-text-muted);
+  margin: 2px 0 14px;
+}
+
+.about-credits {
+  margin: 16px 0 14px;
+  text-align: left;
+  background: var(--mb-surface-alt);
+  border-radius: var(--mb-radius-md);
+  padding: 12px 16px;
+}
+
+.about-credits h4 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--mb-text-muted);
+  margin: 0 0 8px;
+}
+
+.about-credits ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  font-size: 12px;
+  color: var(--mb-text-secondary);
+  line-height: 1.7;
+}
+
+.about-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.about-links a {
+  color: var(--mb-accent);
+  text-decoration: none;
+}
+
+.about-links a:hover {
+  text-decoration: underline;
+}
+
+.about-links span {
+  color: var(--mb-text-muted);
+}
+
+.about-license {
+  font-size: 11px;
+  color: var(--mb-text-muted);
+  margin: 0;
+}
+
+/* Keyframe for tip fade-out */
+@keyframes fadeOut {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
 }

@@ -738,13 +738,48 @@ export function loadPageAnnotations(pageNum) {
   }
 }
 
+// Auto-save debounce: 500ms after the last modification on a page
+let _autoSaveTimer = null;
+const AUTO_SAVE_DELAY_MS = 500;
+
+// Track which pages have pending unsaved changes
+const _dirtyPages = new Set();
+
 function autoSave() {
   if (suppressAutoSave) return;
-  if (currentPage > 0) {
-    const json = fabricCanvas.toJSON(CUSTOM_PROPS);
-    pageAnnotations[currentPage] = json;
-    pushState(currentPage, json);
+  if (currentPage <= 0) return;
+
+  // Mark this page as dirty immediately
+  _dirtyPages.add(currentPage);
+
+  // Debounce: cancel any pending save and schedule a new one
+  if (_autoSaveTimer !== null) clearTimeout(_autoSaveTimer);
+  _autoSaveTimer = setTimeout(() => {
+    _autoSaveTimer = null;
+    _flushDirtyPages();
+  }, AUTO_SAVE_DELAY_MS);
+}
+
+/** Serialize all dirty pages and push to undo history */
+function _flushDirtyPages() {
+  if (!fabricCanvas) return;
+  for (const pageNum of _dirtyPages) {
+    // Only serialize the currently active page from the live canvas;
+    // other dirty pages were already captured in pageAnnotations when we
+    // navigated away (savePageAnnotations is called on page leave).
+    if (pageNum === currentPage) {
+      const json = fabricCanvas.toJSON(CUSTOM_PROPS);
+      json._canvasWidth = fabricCanvas.width;
+      json._canvasHeight = fabricCanvas.height;
+      pageAnnotations[pageNum] = json;
+      pushState(pageNum, json);
+    }
+    // For non-current pages the annotation was already stored — just push history
+    else if (pageAnnotations[pageNum]) {
+      pushState(pageNum, pageAnnotations[pageNum]);
+    }
   }
+  _dirtyPages.clear();
 }
 
 export function getAnnotations() {

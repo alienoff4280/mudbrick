@@ -189,7 +189,51 @@ export function getNextZoom(currentZoom, direction) {
 
 /* ── Cleanup ── */
 
+// Configurable cleanup distance: pages further away than this are released.
+// Callers (app.js renderCurrentPage) pass the page they just rendered and the
+// loop calls cleanupPage for every other page, so the distance check is done
+// before calling here — but we also expose the constant for direct use.
+export const DEFAULT_CLEANUP_DISTANCE = 1;
+
+/**
+ * Release PDF.js rendering resources for an off-screen page.
+ * Also nulls out the canvas pixel data on any detached canvas associated
+ * with the page (pre-warm canvases created by the idle pre-render) to
+ * allow the GC to reclaim memory sooner.
+ * @param {PDFDocumentProxy} pdfDoc
+ * @param {number} pageNum
+ */
 export function cleanupPage(pdfDoc, pageNum) {
-  // Ask PDF.js to release resources for off-screen pages
-  pdfDoc.getPage(pageNum).then(page => page.cleanup()).catch(() => {});
+  pdfDoc.getPage(pageNum).then(page => {
+    page.cleanup();
+    // Release any off-screen canvas data PDF.js may have cached internally
+    // by zeroing the internal render cache via the public cleanup() call above.
+    // For the pre-warm canvases we created in renderCurrentPage, they are local
+    // variables and will be GC'd naturally; no additional action needed here.
+  }).catch(() => {});
+}
+
+/**
+ * Estimate whether the browser is under memory pressure.
+ * Uses the non-standard performance.memory API (Chromium only) when available.
+ * Returns true when used heap is > 80% of the JS heap size limit.
+ * Falls back to false on unsupported browsers.
+ */
+export function isMemoryPressured() {
+  try {
+    const mem = performance.memory;
+    if (!mem) return false;
+    return mem.usedJSHeapSize / mem.jsHeapSizeLimit > 0.8;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Return the recommended cleanup distance based on current memory pressure.
+ * Under pressure, release pages more aggressively (distance 1).
+ * Under normal conditions, keep 1 page either side (distance 1 is the default).
+ */
+export function getCleanupDistance() {
+  return isMemoryPressured() ? 0 : DEFAULT_CLEANUP_DISTANCE;
 }

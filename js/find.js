@@ -6,7 +6,12 @@
 
 /* ── State ── */
 
-let textIndex = null;     // [{pageNum, text, items}]
+let textIndex = null;       // sparse array: textIndex[pageNum] = {pageNum, text, items} | null
+let _indexedDoc = null;     // pdfDoc reference so we can index on-demand
+let _indexTotal = 0;        // total pages in current document
+let _indexCancelled = false; // set to true when a new doc loads mid-index
+let _indexProgressCb = null; // optional callback(indexedCount, totalPages)
+
 let matches = [];         // [{pageNum, itemIndex, startOffset, endOffset, rects}]
 let currentMatchIdx = -1;
 let caseSensitive = false;
@@ -16,31 +21,57 @@ let isOpen = false;
 /* ── Public API ── */
 
 /**
- * Build a full-text index of the document.
- * Call once after opening a PDF.
+ * Prepare the index for a new document.
+ * Does NOT index pages eagerly — pages are indexed on-demand when searched.
+ * Call once after opening a PDF (replaces the old eager buildTextIndex).
  * @param {PDFDocumentProxy} pdfDoc — PDF.js document
+ * @param {function} [onProgress] — optional callback(indexedCount, totalPages)
  */
-export async function buildTextIndex(pdfDoc) {
-  textIndex = [];
-  const numPages = pdfDoc.numPages;
+export async function buildTextIndex(pdfDoc, onProgress) {
+  // Cancel any background indexing from the previous document
+  _indexCancelled = true;
 
-  for (let i = 1; i <= numPages; i++) {
-    const page = await pdfDoc.getPage(i);
+  textIndex = new Array(pdfDoc.numPages + 1).fill(null); // 1-based, slot 0 unused
+  _indexedDoc = pdfDoc;
+  _indexTotal = pdfDoc.numPages;
+  _indexCancelled = false;
+  _indexProgressCb = onProgress || null;
+  matches = [];
+  currentMatchIdx = -1;
+  query = '';
+  // Individual pages are indexed lazily inside ensurePageIndexed()
+}
+
+/**
+ * Ensure a single page is indexed.  Called just-in-time before searching.
+ * Safe to call multiple times — returns immediately if already indexed.
+ * @param {number} pageNum — 1-based page number
+ */
+async function ensurePageIndexed(pageNum) {
+  if (!textIndex || textIndex[pageNum]) return; // already done
+  if (!_indexedDoc) return;
+  try {
+    const page = await _indexedDoc.getPage(pageNum);
     const content = await page.getTextContent();
-    // Build full page text from items
     let fullText = '';
     const items = content.items.map(item => {
       const start = fullText.length;
       fullText += item.str;
       return { str: item.str, start, transform: item.transform, width: item.width, height: item.height };
     });
-    textIndex.push({ pageNum: i, text: fullText, items });
-  }
+    if (!_indexCancelled && textIndex) {
+      textIndex[pageNum] = { pageNum, text: fullText, items };
+    }
+  } catch (_) { /* page unavailable — leave as null */ }
 }
 
 /** Reset index (on doc close) */
 export function clearTextIndex() {
+  _indexCancelled = true;
   textIndex = null;
+  _indexedDoc = null;
+  _indexTotal = 0;
+  _indexProgressCb = null;
   matches = [];
   currentMatchIdx = -1;
   query = '';
@@ -56,28 +87,29 @@ export function augmentTextIndex(ocrEntries) {
   if (!textIndex) return;
 
   for (const entry of ocrEntries) {
-    // Find existing entry for this page
-    const idx = textIndex.findIndex(e => e.pageNum === entry.pageNum);
-    if (idx >= 0) {
-      // Only replace if native text is sparse (< 20 chars)
-      if (textIndex[idx].text.trim().length < 20) {
-        textIndex[idx] = entry;
-      }
-    } else {
-      // Page not indexed — shouldn't happen, but add it
-      textIndex.push(entry);
-      textIndex.sort((a, b) => a.pageNum - b.pageNum);
+    const pn = entry.pageNum;
+    if (pn < 1 || pn >= textIndex.length) continue;
+    const existing = textIndex[pn];
+    if (!existing) {
+      // Page not yet indexed — store OCR result directly
+      textIndex[pn] = entry;
+    } else if (existing.text.trim().length < 20) {
+      // Native text is sparse — prefer OCR result
+      textIndex[pn] = entry;
     }
   }
 }
 
 /**
- * Search for text across all indexed pages.
+ * Search for text across all pages, indexing them on-demand as needed.
+ * Shows progress via the optional onProgress callback.
+ * Returns a Promise so callers can await the full scan.
  * @param {string} searchQuery
  * @param {boolean} [matchCase=false]
- * @returns {{matches: Array, total: number}}
+ * @param {function} [onProgress] — called as (indexedCount, totalPages) during indexing
+ * @returns {Promise<{matches: Array, total: number}>}
  */
-export function searchText(searchQuery, matchCase = false) {
+export async function searchText(searchQuery, matchCase = false, onProgress) {
   if (!textIndex || !searchQuery) {
     matches = [];
     currentMatchIdx = -1;
@@ -89,13 +121,26 @@ export function searchText(searchQuery, matchCase = false) {
   matches = [];
 
   const q = matchCase ? searchQuery : searchQuery.toLowerCase();
+  let indexedSoFar = 0;
 
-  for (const page of textIndex) {
+  for (let pageNum = 1; pageNum <= _indexTotal; pageNum++) {
+    if (_indexCancelled) break; // new doc loaded — abort
+
+    // Index this page on-demand if not already done
+    if (!textIndex[pageNum]) {
+      await ensurePageIndexed(pageNum);
+      indexedSoFar++;
+      const progressFn = onProgress || _indexProgressCb;
+      if (progressFn) progressFn(indexedSoFar, _indexTotal);
+    }
+
+    const page = textIndex[pageNum];
+    if (!page) continue; // indexing failed for this page — skip
+
     const haystack = matchCase ? page.text : page.text.toLowerCase();
     let pos = 0;
 
     while ((pos = haystack.indexOf(q, pos)) !== -1) {
-      // Map the match offset back to text items
       const matchEnd = pos + q.length;
 
       // Find which items overlap this match
@@ -105,7 +150,6 @@ export function searchText(searchQuery, matchCase = false) {
         if (itemEnd <= pos) continue;
         if (item.start >= matchEnd) break;
 
-        // This item overlaps with the match
         rects.push({
           itemStart: item.start,
           str: item.str,
