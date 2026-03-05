@@ -3605,18 +3605,18 @@ function wireEvents() {
   // Edit Image
   if (DOM.btnEditImage) DOM.btnEditImage.addEventListener('click', handleEditImage);
 
-  // Text/Image edit toolbar (event delegation on page container)
+  // Text edit toolbar (event delegation on page container)
   DOM.pageContainer.addEventListener('click', e => {
     if (e.target.classList.contains('text-edit-commit')) {
       handleCommitTextEdits();
     } else if (e.target.classList.contains('text-edit-cancel')) {
       handleCancelTextEdits();
-    } else if (e.target.classList.contains('image-edit-commit-btn')) {
-      handleCommitImageEdits();
-    } else if (e.target.classList.contains('image-edit-cancel-btn')) {
-      handleCancelImageEdits();
     }
   });
+
+  // Image edit toolbar (custom events dispatched from toolbar buttons)
+  document.addEventListener('image-edit-commit', () => handleCommitImageEdits());
+  document.addEventListener('image-edit-cancel', () => handleCancelImageEdits());
 
   // Page navigation
   DOM.btnFirst.addEventListener('click', firstPage);

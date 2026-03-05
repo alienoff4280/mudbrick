@@ -3279,10 +3279,8 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
       }
     });
 
-    // Edit button — open canvas-based image editor
-    div.querySelector('.image-edit-edit').addEventListener('click', async (e) => {
-      e.stopPropagation();
-      // Extract image pixels from the rendered PDF canvas
+    // Open image editor — shared by Edit button and double-click
+    async function openEditor() {
       const pdfCanvas = document.getElementById('pdf-canvas');
       if (!pdfCanvas) return;
       const ctx = pdfCanvas.getContext('2d');
@@ -3300,12 +3298,22 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
         entry.replaceSrc = { bytes: result.bytes, type: result.type };
         div.classList.add('image-edit-replaced');
         div.classList.remove('image-edit-deleted');
-        // Show preview
         const blob = new Blob([result.bytes], { type: result.type });
         const url = URL.createObjectURL(blob);
         div.style.backgroundImage = `url(${url})`;
         div.style.backgroundSize = 'cover';
       }
+    }
+
+    div.querySelector('.image-edit-edit').addEventListener('click', (e) => {
+      e.stopPropagation();
+      openEditor();
+    });
+
+    // Double-click on overlay opens editor directly
+    div.addEventListener('dblclick', (e) => {
+      e.stopPropagation();
+      openEditor();
     });
 
     imageOverlays.push(entry);
@@ -3346,17 +3354,26 @@ function createImageToolbar(container) {
   toolbar.className = 'text-edit-toolbar';
   toolbar.innerHTML = `
     <div class="text-edit-toolbar-group">
-      <span class="text-edit-info">Click images to select. Use Replace or Delete.</span>
+      <span class="text-edit-info">Double-click an image to edit. Or use Replace / Delete.</span>
     </div>
     <div class="text-edit-toolbar-spacer"></div>
     <div class="text-edit-toolbar-group text-edit-actions">
-      <button class="image-edit-commit-btn text-edit-commit" title="Apply image changes to PDF">Apply</button>
-      <button class="image-edit-cancel-btn text-edit-cancel" title="Cancel image editing">Cancel</button>
+      <button class="image-edit-commit-btn" title="Apply image changes to PDF">Apply</button>
+      <button class="image-edit-cancel-btn" title="Cancel image editing">Cancel</button>
     </div>
   `;
 
   const parent = container.parentElement || container;
   parent.appendChild(toolbar);
+
+  // Wire Apply/Cancel directly (toolbar is outside #page-container,
+  // so delegated click handlers on pageContainer won't reach these)
+  toolbar.querySelector('.image-edit-commit-btn').addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('image-edit-commit'));
+  });
+  toolbar.querySelector('.image-edit-cancel-btn').addEventListener('click', () => {
+    document.dispatchEvent(new CustomEvent('image-edit-cancel'));
+  });
 }
 
 /* ═══════════════════ Commit Image Edits ═══════════════════ */
