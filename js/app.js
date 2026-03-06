@@ -6144,6 +6144,9 @@ function handleKeyboard(e) {
           closeCropModal();
         } else if (isFindOpen()) {
           closeFindBar();
+        } else if (DOM.textLayer.querySelector('.ocr-text-span[contenteditable="true"]')) {
+          disableCorrectionMode(DOM.textLayer);
+          toast('OCR correction mode exited', 'info');
         } else {
           if (canvas) canvas.discardActiveObject().renderAll();
           selectTool('select');

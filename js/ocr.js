@@ -207,6 +207,10 @@ export function renderOCRTextLayer(pageNum, container, viewport) {
   // Don't duplicate if already rendered
   if (container.querySelector('.ocr-text-span')) return;
 
+  // Skip if the page already has native text from PDF.js
+  const nativeSpans = container.querySelectorAll('span[role="presentation"]');
+  if (nativeSpans.length > 0) return;
+
   const scale = viewport.scale;
 
   for (let wordIndex = 0; wordIndex < result.words.length; wordIndex++) {
