@@ -84,6 +84,7 @@ import { compareDocuments, generateCompareReport, renderComparisonView } from '.
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
 import { followLink } from './links.js';
 import { getAuthorName, setAuthorName, addReply, setThreadStatus, getAllThreads, exportThreadsXFDF } from './comments.js';
+import { restoreFonts } from './font-manager.js';
 import { canUndo, canRedo, initPageState } from './history.js';
 import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges, canUndoImage, undoImageAction, extractImagePositions } from './text-edit.js';
 import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
@@ -214,6 +215,9 @@ async function boot() {
       DOM.sidebar.classList.add('collapsed');
       $('btn-toggle-sidebar').innerHTML = icon('panel-left-open', 16);
     }
+
+    // Restore persisted custom fonts
+    restoreFonts().catch(() => {});
 
     // Render recent files on welcome screen
     renderRecentFiles();

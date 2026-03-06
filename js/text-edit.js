@@ -1061,6 +1061,7 @@ function activateBlock(paraIdx) {
       }
       div.dataset._lastText = div.textContent;
       markDirty(div);
+      reflowDiv(div);
     });
     div.addEventListener('blur', () => {
       // Don't clear _focusedLine if focus moved to the toolbar (e.g. select dropdown)
@@ -1319,6 +1320,16 @@ function createToolbar(container) {
     </div>
     <div class="text-edit-toolbar-sep"></div>
     <div class="text-edit-toolbar-group">
+      <select class="text-edit-line-height" title="Line height" style="width:56px;font-size:11px;">
+        <option value="">LH</option>
+        <option value="1.0">1.0</option>
+        <option value="1.15">1.15</option>
+        <option value="1.5">1.5</option>
+        <option value="2.0">2.0</option>
+      </select>
+    </div>
+    <div class="text-edit-toolbar-sep"></div>
+    <div class="text-edit-toolbar-group">
       <input type="color" class="text-edit-color" value="#000000" title="Text color">
       <button class="text-edit-btn text-edit-eyedropper" title="Pick color from page">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 22l1-1h3l9-9"/><path d="M3 21v-3l9-9"/><path d="M15 6l3-3 3 3-3 3"/><path d="M12 9l3 3"/></svg>
@@ -1430,6 +1441,18 @@ function createToolbar(container) {
     });
   });
 
+  // Line height selector
+  toolbar.querySelector('.text-edit-line-height')?.addEventListener('change', (e) => {
+    const lh = e.target.value;
+    if (!lh) return;
+    applyToFocused(div => {
+      pushUndo(div);
+      div.style.lineHeight = lh;
+      div.dataset.lineHeight = lh;
+      markDirty(div);
+    });
+  });
+
   toolbar.querySelector('.text-edit-color').addEventListener('input', (e) => {
     applyToFocused(div => {
       pushUndo(div);
@@ -1531,6 +1554,12 @@ async function handleFontUpload(fontFamilySelect) {
       // Store for pdf-lib embedding during commit
       customFont = { name, bytes, fontObj: null };
 
+      // Persist to IndexedDB via font-manager
+      try {
+        const fm = await import('./font-manager.js');
+        await fm.loadCustomFont(file);
+      } catch { /* font-manager persistence is optional */ }
+
       // Add option to selector and select it
       const opt = document.createElement('option');
       opt.value = 'custom';
@@ -1552,6 +1581,20 @@ async function handleFontUpload(fontFamilySelect) {
   input.click();
 }
 
+/**
+ * Simple reflow: when text in a contenteditable div overflows its original width,
+ * adjust the box width and wrap text naturally via CSS.
+ */
+function reflowDiv(div) {
+  if (!div) return;
+  const maxWidth = parseFloat(div.dataset.width) || div.offsetWidth;
+  // Allow CSS to handle word-wrap within the fixed width
+  div.style.width = maxWidth + 'px';
+  div.style.whiteSpace = 'pre-wrap';
+  div.style.wordBreak = 'break-word';
+  div.style.overflow = 'visible';
+}
+
 /** Mark a line as changed for live preview indication */
 function markDirty(div) {
   const hasTextChange = div.textContent !== div.dataset.original;
@@ -1559,7 +1602,8 @@ function markDirty(div) {
     div.dataset.fontFamilyOverride || div.dataset.bold !== (div.dataset.initialBold || '') ||
     div.dataset.italic !== (div.dataset.initialItalic || '') ||
     div.dataset.underline === 'true' || div.dataset.strikethrough === 'true' ||
-    (div.dataset.align && div.dataset.align !== 'left');
+    (div.dataset.align && div.dataset.align !== 'left') ||
+    div.dataset.lineHeight;
   div.classList.toggle('text-edit-dirty', hasTextChange || !!hasFormatChange);
   updateEditCount();
 }
