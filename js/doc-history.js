@@ -15,7 +15,7 @@
  */
 
 const MAX_DOC_HISTORY = 10;
-const MAX_MEMORY_BYTES = 50 * 1024 * 1024; // 50 MB
+const MAX_MEMORY_BYTES = 300 * 1024 * 1024; // 300 MB
 
 let undoStack = [];  // Uint8Array[]
 let redoStack = [];  // Uint8Array[]
@@ -28,9 +28,9 @@ function totalMemory() {
   return sum;
 }
 
-/** Evict oldest undo entries until within memory budget. */
+/** Evict oldest undo entries until within memory budget, but always keep at least one. */
 function evictIfNeeded() {
-  while (undoStack.length > 0 && totalMemory() > MAX_MEMORY_BYTES) {
+  while (undoStack.length > 1 && totalMemory() > MAX_MEMORY_BYTES) {
     undoStack.shift();
   }
 }
@@ -40,13 +40,16 @@ function evictIfNeeded() {
  * Clears the redo stack (new edit branch).
  */
 export function pushDocState(bytes) {
-  if (!bytes) return;
-  undoStack.push(new Uint8Array(bytes)); // defensive copy
+  if (!bytes) { console.warn('[doc-history] pushDocState called with falsy bytes'); return; }
+  const copy = new Uint8Array(bytes);
+  undoStack.push(copy); // defensive copy
+  console.log('[doc-history] pushDocState: saved', copy.byteLength, 'bytes, undoStack depth:', undoStack.length);
   if (undoStack.length > MAX_DOC_HISTORY) {
     undoStack.shift();
   }
   redoStack.length = 0;
   evictIfNeeded();
+  console.log('[doc-history] after eviction: undoStack depth:', undoStack.length, 'totalMem:', totalMemory());
 }
 
 /**
@@ -55,11 +58,14 @@ export function pushDocState(bytes) {
  * @returns {Uint8Array|null} previous bytes, or null if nothing to undo
  */
 export function undoDoc(currentBytes) {
-  if (undoStack.length === 0) return null;
+  console.log('[doc-history] undoDoc called, undoStack depth:', undoStack.length, 'currentBytes size:', currentBytes?.byteLength);
+  if (undoStack.length === 0) { console.warn('[doc-history] undoDoc: stack empty!'); return null; }
   if (currentBytes) {
     redoStack.push(new Uint8Array(currentBytes));
   }
-  return undoStack.pop();
+  const popped = undoStack.pop();
+  console.log('[doc-history] undoDoc: returning', popped.byteLength, 'bytes, undoStack now:', undoStack.length);
+  return popped;
 }
 
 /**
@@ -77,7 +83,9 @@ export function redoDoc(currentBytes) {
 
 /** Whether document undo is available. */
 export function canUndoDoc() {
-  return undoStack.length > 0;
+  const can = undoStack.length > 0;
+  console.log('[doc-history] canUndoDoc:', can, 'depth:', undoStack.length);
+  return can;
 }
 
 /** Whether document redo is available. */

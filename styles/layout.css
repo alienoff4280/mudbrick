@@ -1299,7 +1299,7 @@ html[data-theme="dark"] #text-layer {
   border: 2px dashed var(--mb-accent);
   background: rgba(41, 128, 185, 0.06);
   z-index: 15;
-  cursor: pointer;
+  cursor: grab;
   transition: border-color 0.15s, background 0.15s;
   box-sizing: border-box;
 }
@@ -1310,7 +1310,6 @@ html[data-theme="dark"] #text-layer {
 .image-edit-overlay.image-edit-deleted {
   border-color: #ef4444;
   background: rgba(239, 68, 68, 0.15);
-  position: relative;
 }
 .image-edit-overlay.image-edit-deleted::after {
   content: 'DELETED';
@@ -1341,6 +1340,26 @@ html[data-theme="dark"] #text-layer {
   padding: 1px 5px;
   border-radius: 3px;
   pointer-events: none;
+}
+.image-edit-overlay.image-edit-moved {
+  border-color: #f59e0b;
+  background: rgba(245, 158, 11, 0.08);
+}
+.image-edit-overlay.image-edit-moved::after {
+  content: 'MOVED';
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  color: #fff;
+  background: rgba(245, 158, 11, 0.85);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 1px 5px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+.image-edit-overlay:active {
+  cursor: grabbing;
 }
 
 .image-edit-actions {
@@ -1378,6 +1397,248 @@ html[data-theme="dark"] #text-layer {
 }
 .image-edit-delete:hover {
   background: #dc2626;
+}
+
+/* Content preview overlay (transparent background, shows just the content) */
+.image-edit-overlay.image-edit-previewed {
+  background: transparent;
+  border-color: var(--mb-accent);
+}
+.image-edit-overlay.image-edit-previewed:hover {
+  background: transparent;
+}
+
+/* Resize handles on selection overlays */
+.image-resize-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background: var(--mb-accent, #2980b9);
+  border: 1px solid #fff;
+  border-radius: 2px;
+  z-index: 5;
+}
+.image-resize-handle.nw { top: -4px; left: -4px; cursor: nw-resize; }
+.image-resize-handle.ne { top: -4px; right: -4px; cursor: ne-resize; }
+.image-resize-handle.sw { bottom: -4px; left: -4px; cursor: sw-resize; }
+.image-resize-handle.se { bottom: -4px; right: -4px; cursor: se-resize; }
+.image-resize-handle.n  { top: -4px; left: calc(50% - 4px); cursor: n-resize; }
+.image-resize-handle.s  { bottom: -4px; left: calc(50% - 4px); cursor: s-resize; }
+.image-resize-handle.w  { top: calc(50% - 4px); left: -4px; cursor: w-resize; }
+.image-resize-handle.e  { top: calc(50% - 4px); right: -4px; cursor: e-resize; }
+
+/* ── Region Select Mode (image-based PDFs) ── */
+.image-region-select-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 14;
+  cursor: crosshair;
+}
+.image-region-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  pointer-events: none;
+  z-index: 16;
+  white-space: nowrap;
+}
+.image-region-draw-box {
+  position: absolute;
+  border: 2px dashed var(--mb-accent, #2980b9);
+  background: rgba(41, 128, 185, 0.15);
+  pointer-events: none;
+  z-index: 15;
+}
+
+/* ── Image Editor Modal ── */
+.image-editor-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(0, 0, 0, 0.9);
+  display: flex;
+  flex-direction: column;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.image-editor-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--mb-toolbar-bg, #1e1e1e);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  align-items: center;
+}
+
+.image-editor-tools,
+.image-editor-filters {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.image-editor-tool-btn {
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ccc;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.image-editor-tool-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.image-editor-tool-btn.active {
+  background: var(--mb-accent, #2980b9);
+  color: #fff;
+  border-color: var(--mb-accent, #2980b9);
+}
+
+.image-editor-tool-btn.image-editor-action-icon {
+  padding: 4px 8px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.image-editor-sep {
+  width: 1px;
+  height: 24px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 0 4px;
+}
+
+.image-editor-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #aaa;
+  white-space: nowrap;
+}
+
+.image-editor-range {
+  width: 80px;
+  accent-color: var(--mb-accent, #2980b9);
+}
+
+.image-editor-range-val {
+  font-size: 11px;
+  color: #ccc;
+  min-width: 28px;
+  text-align: right;
+}
+
+.image-editor-canvas-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  position: relative;
+  min-height: 0;
+}
+
+.image-editor-canvas {
+  box-shadow: 0 0 40px rgba(0, 0, 0, 0.5);
+  image-rendering: auto;
+  will-change: transform;
+}
+.image-editor-zoom-label {
+  color: #ccc;
+  font-size: 12px;
+  min-width: 36px;
+  text-align: center;
+  user-select: none;
+}
+
+.image-editor-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--mb-toolbar-bg, #1e1e1e);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.image-editor-action-btn {
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  color: #ccc;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.image-editor-action-btn:hover {
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+.image-editor-done {
+  background: var(--mb-accent, #2980b9) !important;
+  color: #fff !important;
+  border-color: var(--mb-accent, #2980b9) !important;
+}
+.image-editor-done:hover {
+  filter: brightness(1.1);
+}
+
+.image-editor-cancel:hover {
+  background: rgba(239, 68, 68, 0.3);
+}
+
+.image-editor-color-replace-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.image-editor-color-swatch {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: monospace;
+  background: #444;
+  color: #aaa;
+  border: 1px solid rgba(255,255,255,0.2);
+  min-width: 70px;
+  text-align: center;
+}
+
+#img-ed-replace-apply {
+  background: var(--mb-accent, #2980b9);
+  color: #fff;
+  border-color: var(--mb-accent, #2980b9);
+  font-weight: 600;
+}
+#img-ed-replace-apply:hover {
+  filter: brightness(1.15);
+}
+
+/* Edit button in image overlay */
+.image-edit-edit {
+  background: rgba(34, 197, 94, 0.9);
+  color: #fff;
+}
+.image-edit-edit:hover {
+  background: #16a34a;
 }
 
 #fabric-canvas-wrapper {
