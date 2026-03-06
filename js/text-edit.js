@@ -3116,7 +3116,7 @@ export async function commitTextEdits(pdfBytes, pageNum) {
  * Returns array of { left, top, width, height, pdfX, pdfY, pdfW, pdfH }
  * in screen coordinates (with PDF coords stored for commit).
  */
-async function extractImagePositions(page, viewport) {
+export async function extractImagePositions(page, viewport) {
   const ops = await page.getOperatorList();
   if (!window.pdfjsLib) return [];
   const OPS = window.pdfjsLib.OPS;

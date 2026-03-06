@@ -83,7 +83,7 @@ import {
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
 import { canUndo, canRedo, initPageState } from './history.js';
-import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges } from './text-edit.js';
+import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges, extractImagePositions } from './text-edit.js';
 import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
 import { setLabelRange, getPageLabel, getLabelRanges, clearLabels, removeLabelRange, previewLabels, LABEL_FORMATS } from './page-labels.js';
 import { trapFocus as a11yTrapFocus, releaseFocus as a11yReleaseFocus, announceToScreenReader, cycleRegion } from './a11y.js';
@@ -3596,11 +3596,47 @@ function wireEvents() {
   // Edit Text
   DOM.btnEditText.addEventListener('click', handleEditText);
 
-  // Double-click on text layer enters edit mode
-  DOM.textLayer.addEventListener('dblclick', (e) => {
+  // Double-click on text layer — detect if click hit an image or text
+  DOM.textLayer.addEventListener('dblclick', async (e) => {
     if (!State.pdfDoc || isTextEditActive()) return;
-    // Don't enter text edit when image edit is active (overlays are in text layer)
     if (isImageEditActive()) return;
+
+    // Check if the click landed on an image region
+    const rect = DOM.pageContainer.getBoundingClientRect();
+    const clickX = e.clientX - rect.left;
+    const clickY = e.clientY - rect.top;
+
+    try {
+      const page = await State.pdfDoc.getPage(State.currentPage);
+      const images = await extractImagePositions(page, State._viewport);
+      const hitImage = images.find(img =>
+        clickX >= img.left && clickX <= img.left + img.width &&
+        clickY >= img.top && clickY <= img.top + img.height
+      );
+
+      if (hitImage) {
+        // Enter image edit mode — this creates overlay divs with dblclick handlers
+        const ok = await enterImageEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer);
+        if (!ok) return;
+        DOM.btnEditImage.classList.add('active');
+
+        // Find the overlay that matches the hit image and trigger its dblclick
+        const overlays = DOM.textLayer.querySelectorAll('.image-edit-overlay');
+        for (const ov of overlays) {
+          const ovLeft = parseFloat(ov.style.left);
+          const ovTop = parseFloat(ov.style.top);
+          if (Math.abs(ovLeft - hitImage.left) < 5 && Math.abs(ovTop - hitImage.top) < 5) {
+            ov.dispatchEvent(new MouseEvent('dblclick', { bubbles: false }));
+            break;
+          }
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn('Image detection on dblclick failed:', err);
+    }
+
+    // No image hit — enter text edit mode
     handleEditText();
   });
 
