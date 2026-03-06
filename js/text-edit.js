@@ -184,6 +184,7 @@ let customFont = null; // { name, bytes, fontObj: null (set during commit) }
 let imageActive = false;
 let imageContainer = null;
 let imageOverlays = []; // { div, pdfX, pdfY, pdfW, pdfH, action: 'none'|'delete'|'replace', replaceSrc }
+let imageUndoStack = []; // snapshots for undo within image edit mode
 
 /* ═══════════════════ Font Mapping ═══════════════════ */
 
@@ -3193,6 +3194,53 @@ export async function extractImagePositions(page, viewport) {
   return images;
 }
 
+/* ═══════════════════ Image Edit Undo ═══════════════════ */
+
+function _pushImageUndo(entry) {
+  imageUndoStack.push({
+    entry,
+    action: entry.action,
+    pdfX: entry.pdfX,
+    pdfY: entry.pdfY,
+    replaceSrc: entry.replaceSrc,
+    divLeft: entry.div.style.left,
+    divTop: entry.div.style.top,
+    classList: [...entry.div.classList],
+    bgImage: entry.div.style.backgroundImage,
+  });
+  if (imageUndoStack.length > 30) imageUndoStack.shift();
+  // Directly update undo button state
+  const undoBtn = document.getElementById('btn-undo');
+  if (undoBtn) undoBtn.disabled = false;
+}
+
+function _popImageUndo() {
+  if (imageUndoStack.length === 0) return;
+  const snap = imageUndoStack.pop();
+  const entry = snap.entry;
+  entry.action = snap.action;
+  entry.pdfX = snap.pdfX;
+  entry.pdfY = snap.pdfY;
+  entry.replaceSrc = snap.replaceSrc;
+  entry.div.style.left = snap.divLeft;
+  entry.div.style.top = snap.divTop;
+  entry.div.style.backgroundImage = snap.bgImage;
+  entry.div.style.backgroundSize = snap.bgImage ? 'cover' : '';
+  // Restore class list
+  entry.div.className = snap.classList.join(' ');
+  // Update undo button state
+  const undoBtn = document.getElementById('btn-undo');
+  if (undoBtn) undoBtn.disabled = (imageUndoStack.length === 0);
+}
+
+export function canUndoImage() {
+  return imageActive && imageUndoStack.length > 0;
+}
+
+export function undoImageAction() {
+  _popImageUndo();
+}
+
 /* ═══════════════════ Enter / Exit Image Edit ═══════════════════ */
 
 export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
@@ -3213,9 +3261,332 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
   currentPageNum = pageNum;
   currentPdfDoc = pdfDoc;
   imageOverlays = [];
+  imageUndoStack = [];
 
-  // Create selection overlay for each image
-  for (const img of images) {
+  // Detect page-sized images (image-based PDFs): any image covering >70% of viewport
+  const vpArea = viewport.width * viewport.height;
+  const hasPageImage = images.some(img => (img.width * img.height) / vpArea > 0.7);
+
+  if (hasPageImage) {
+    _enterRegionSelectMode(container, viewport, page);
+  } else {
+    for (const img of images) {
+      _createImageOverlay(img, container);
+    }
+  }
+
+  // Create image edit toolbar
+  createImageToolbar(container, hasPageImage);
+
+  return true;
+}
+
+// Region selection mode for image-based PDFs
+function _enterRegionSelectMode(container, viewport) {
+  const selLayer = document.createElement('div');
+  selLayer.className = 'image-region-select-layer';
+  selLayer.style.width = viewport.width + 'px';
+  selLayer.style.height = viewport.height + 'px';
+  container.appendChild(selLayer);
+
+  // Instruction hint
+  const hint = document.createElement('div');
+  hint.className = 'image-region-hint';
+  hint.textContent = 'Draw a rectangle to select a region to edit or move';
+  selLayer.appendChild(hint);
+
+  let drawing = false;
+  let startX = 0, startY = 0;
+  let selBox = null;
+
+  selLayer.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    if (e.target.closest('.image-edit-overlay')) return; // don't draw over existing regions
+    const rect = selLayer.getBoundingClientRect();
+    startX = e.clientX - rect.left;
+    startY = e.clientY - rect.top;
+    drawing = true;
+
+    selBox = document.createElement('div');
+    selBox.className = 'image-region-draw-box';
+    selBox.style.left = startX + 'px';
+    selBox.style.top = startY + 'px';
+    selBox.style.width = '0px';
+    selBox.style.height = '0px';
+    selLayer.appendChild(selBox);
+  });
+
+  selLayer.addEventListener('mousemove', (e) => {
+    if (!drawing || !selBox) return;
+    const rect = selLayer.getBoundingClientRect();
+    const curX = Math.max(0, Math.min(e.clientX - rect.left, viewport.width));
+    const curY = Math.max(0, Math.min(e.clientY - rect.top, viewport.height));
+    const left = Math.min(startX, curX);
+    const top = Math.min(startY, curY);
+    const w = Math.abs(curX - startX);
+    const h = Math.abs(curY - startY);
+    selBox.style.left = left + 'px';
+    selBox.style.top = top + 'px';
+    selBox.style.width = w + 'px';
+    selBox.style.height = h + 'px';
+  });
+
+  selLayer.addEventListener('mouseup', (e) => {
+    if (!drawing || !selBox) return;
+    drawing = false;
+    let left = parseFloat(selBox.style.left);
+    let top = parseFloat(selBox.style.top);
+    let w = parseFloat(selBox.style.width);
+    let h = parseFloat(selBox.style.height);
+    selBox.remove();
+    selBox = null;
+
+    // Ignore tiny selections (accidental clicks)
+    if (w < 10 || h < 10) return;
+
+    // Auto-trim to content bounding box (ignore background pixels)
+    const trimmed = _trimToContent(left, top, w, h);
+    if (trimmed) {
+      left = trimmed.left;
+      top = trimmed.top;
+      w = trimmed.width;
+      h = trimmed.height;
+    }
+
+    // Ignore if trimmed result is too small
+    if (w < 5 || h < 5) return;
+
+    // Generate a transparent-background preview of the content
+    let previewUrl = null;
+    const pdfCanvas = document.getElementById('pdf-canvas');
+    if (pdfCanvas) {
+      const ctx = pdfCanvas.getContext('2d', { willReadFrequently: true });
+      const dpr = window.devicePixelRatio || 1;
+      const sx = Math.round(left * dpr);
+      const sy = Math.round(top * dpr);
+      const sw = Math.round(w * dpr);
+      const sh = Math.round(h * dpr);
+      if (sw > 0 && sh > 0) {
+        const imgData = ctx.getImageData(sx, sy, sw, sh);
+        _makeBackgroundTransparent(imgData);
+        const tmpCanvas = document.createElement('canvas');
+        tmpCanvas.width = sw;
+        tmpCanvas.height = sh;
+        tmpCanvas.getContext('2d').putImageData(imgData, 0, 0);
+        previewUrl = tmpCanvas.toDataURL('image/png');
+      }
+    }
+
+    // Convert screen coords to PDF coords
+    const scale = viewport.scale;
+    const pageHeight = viewport.height / scale; // PDF units
+    const pdfX = left / scale;
+    const pdfY = pageHeight - (top + h) / scale; // invert Y
+    const pdfW = w / scale;
+    const pdfH = h / scale;
+
+    const img = { left, top, width: w, height: h, pdfX, pdfY, pdfW, pdfH, previewUrl };
+    _createImageOverlay(img, container);
+
+    // Hide hint after first region
+    if (hint.parentElement) hint.style.display = 'none';
+  });
+}
+
+/**
+ * Scan pixels from the rendered PDF canvas within the given CSS rect,
+ * find the tight bounding box of non-background content, and return
+ * the trimmed CSS rect. Returns null if no content found.
+ */
+function _trimToContent(cssLeft, cssTop, cssW, cssH) {
+  const pdfCanvas = document.getElementById('pdf-canvas');
+  if (!pdfCanvas) return null;
+  const ctx = pdfCanvas.getContext('2d', { willReadFrequently: true });
+  const dpr = window.devicePixelRatio || 1;
+
+  // Read pixels at canvas resolution
+  const sx = Math.round(cssLeft * dpr);
+  const sy = Math.round(cssTop * dpr);
+  const sw = Math.round(cssW * dpr);
+  const sh = Math.round(cssH * dpr);
+  if (sw < 1 || sh < 1) return null;
+
+  let imageData;
+  try { imageData = ctx.getImageData(sx, sy, sw, sh); } catch { return null; }
+  const data = imageData.data;
+
+  // Detect background color from the four corners (most likely the background)
+  const cornerPixels = [
+    0,                           // top-left
+    (sw - 1) * 4,               // top-right
+    (sh - 1) * sw * 4,          // bottom-left
+    ((sh - 1) * sw + sw - 1) * 4 // bottom-right
+  ];
+  let bgR = 0, bgG = 0, bgB = 0, count = 0;
+  for (const idx of cornerPixels) {
+    if (idx >= 0 && idx + 2 < data.length) {
+      bgR += data[idx];
+      bgG += data[idx + 1];
+      bgB += data[idx + 2];
+      count++;
+    }
+  }
+  if (count > 0) { bgR = Math.round(bgR / count); bgG = Math.round(bgG / count); bgB = Math.round(bgB / count); }
+
+  // Threshold: how different from background a pixel must be to count as content
+  const THRESHOLD = 20;
+
+  function isContent(i) {
+    const dr = Math.abs(data[i] - bgR);
+    const dg = Math.abs(data[i + 1] - bgG);
+    const db = Math.abs(data[i + 2] - bgB);
+    return (dr + dg + db) > THRESHOLD;
+  }
+
+  // Find bounding box of content pixels
+  let minX = sw, minY = sh, maxX = -1, maxY = -1;
+
+  // Sample every 2nd pixel for speed on large regions
+  const step = (sw * sh > 500000) ? 2 : 1;
+
+  for (let y = 0; y < sh; y += step) {
+    const rowOffset = y * sw * 4;
+    for (let x = 0; x < sw; x += step) {
+      if (isContent(rowOffset + x * 4)) {
+        if (x < minX) minX = x;
+        if (x > maxX) maxX = x;
+        if (y < minY) minY = y;
+        if (y > maxY) maxY = y;
+      }
+    }
+  }
+
+  // No content found — return null (keep original rect)
+  if (maxX < 0 || maxY < 0) return null;
+
+  // Add small padding (2 CSS pixels worth)
+  const pad = Math.round(2 * dpr);
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(sw - 1, maxX + pad);
+  maxY = Math.min(sh - 1, maxY + pad);
+
+  // Convert back to CSS coords
+  return {
+    left: cssLeft + minX / dpr,
+    top: cssTop + minY / dpr,
+    width: (maxX - minX + 1) / dpr,
+    height: (maxY - minY + 1) / dpr,
+  };
+}
+
+/**
+ * Replace background-colored pixels with fully transparent in the given ImageData.
+ * Detects background from corner pixels, then sets alpha=0 for matching pixels.
+ * Uses smooth alpha falloff near content edges for clean anti-aliased results.
+ */
+function _makeBackgroundTransparent(imageData) {
+  const data = imageData.data;
+  const w = imageData.width;
+  const h = imageData.height;
+
+  // Sample corners to detect background color
+  const corners = [
+    0,
+    (w - 1) * 4,
+    (h - 1) * w * 4,
+    ((h - 1) * w + w - 1) * 4,
+  ];
+  let bgR = 0, bgG = 0, bgB = 0, cnt = 0;
+  for (const idx of corners) {
+    if (idx >= 0 && idx + 2 < data.length) {
+      bgR += data[idx]; bgG += data[idx + 1]; bgB += data[idx + 2]; cnt++;
+    }
+  }
+  if (cnt === 0) return;
+  bgR = Math.round(bgR / cnt);
+  bgG = Math.round(bgG / cnt);
+  bgB = Math.round(bgB / cnt);
+
+  const BG_THRESHOLD = 35; // max RGB distance to count as background
+
+  // First pass: mark background vs content
+  const isBg = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const pi = i * 4;
+    const dr = Math.abs(data[pi] - bgR);
+    const dg = Math.abs(data[pi + 1] - bgG);
+    const db = Math.abs(data[pi + 2] - bgB);
+    if (dr + dg + db <= BG_THRESHOLD) isBg[i] = 1;
+  }
+
+  // Second pass: for background pixels, compute distance to nearest content pixel.
+  // Pixels far from content → fully transparent. Near content → partial alpha for
+  // smooth anti-aliased edge.
+  const FADE_RADIUS = 2; // pixels over which to fade
+
+  for (let i = 0; i < w * h; i++) {
+    if (!isBg[i]) continue; // content pixel — keep fully opaque
+
+    // Check neighborhood for any content pixel
+    const px = i % w;
+    const py = (i - px) / w;
+    let nearestDist = FADE_RADIUS + 1;
+
+    for (let dy = -FADE_RADIUS; dy <= FADE_RADIUS && nearestDist > 1; dy++) {
+      const ny = py + dy;
+      if (ny < 0 || ny >= h) continue;
+      for (let dx = -FADE_RADIUS; dx <= FADE_RADIUS; dx++) {
+        const nx = px + dx;
+        if (nx < 0 || nx >= w) continue;
+        if (!isBg[ny * w + nx]) {
+          const d = Math.sqrt(dx * dx + dy * dy);
+          if (d < nearestDist) nearestDist = d;
+        }
+      }
+    }
+
+    const pi = i * 4;
+    if (nearestDist > FADE_RADIUS) {
+      // Far from content — fully transparent
+      data[pi + 3] = 0;
+    } else {
+      // Near content edge — partial alpha for smooth transition
+      const alpha = Math.round(255 * (1 - nearestDist / (FADE_RADIUS + 1)));
+      data[pi + 3] = alpha;
+    }
+  }
+}
+
+/**
+ * Regenerate the transparent content preview on an overlay after resize.
+ * Reads fresh pixels from the PDF canvas at the new bounds.
+ */
+function _regeneratePreview(div, cssLeft, cssTop, cssW, cssH) {
+  const pdfCanvas = document.getElementById('pdf-canvas');
+  if (!pdfCanvas) return;
+  const ctx = pdfCanvas.getContext('2d', { willReadFrequently: true });
+  const dpr = window.devicePixelRatio || 1;
+  const sx = Math.round(cssLeft * dpr);
+  const sy = Math.round(cssTop * dpr);
+  const sw = Math.round(cssW * dpr);
+  const sh = Math.round(cssH * dpr);
+  if (sw < 1 || sh < 1) return;
+  try {
+    const imgData = ctx.getImageData(sx, sy, sw, sh);
+    _makeBackgroundTransparent(imgData);
+    const tmpCanvas = document.createElement('canvas');
+    tmpCanvas.width = sw;
+    tmpCanvas.height = sh;
+    tmpCanvas.getContext('2d').putImageData(imgData, 0, 0);
+    div.style.backgroundImage = `url(${tmpCanvas.toDataURL('image/png')})`;
+    div.style.backgroundSize = '100% 100%';
+    div.classList.add('image-edit-previewed');
+  } catch { /* ignore */ }
+}
+
+// Shared helper: creates an image overlay for a given image region
+function _createImageOverlay(img, container) {
     const div = document.createElement('div');
     div.className = 'image-edit-overlay';
     div.style.left = img.left + 'px';
@@ -3223,13 +3594,28 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
     div.style.width = img.width + 'px';
     div.style.height = img.height + 'px';
 
-    // Action buttons
+    // Show transparent content preview if available (region select mode)
+    if (img.previewUrl) {
+      div.style.backgroundImage = `url(${img.previewUrl})`;
+      div.style.backgroundSize = '100% 100%';
+      div.classList.add('image-edit-previewed');
+    }
+
+    // Action buttons + resize handles
     div.innerHTML = `
       <div class="image-edit-actions">
         <button class="image-edit-btn image-edit-edit" title="Edit image">Edit</button>
         <button class="image-edit-btn image-edit-replace" title="Replace image">Replace</button>
         <button class="image-edit-btn image-edit-delete" title="Delete image">Delete</button>
       </div>
+      <div class="image-resize-handle nw" data-dir="nw"></div>
+      <div class="image-resize-handle ne" data-dir="ne"></div>
+      <div class="image-resize-handle sw" data-dir="sw"></div>
+      <div class="image-resize-handle se" data-dir="se"></div>
+      <div class="image-resize-handle n"  data-dir="n"></div>
+      <div class="image-resize-handle s"  data-dir="s"></div>
+      <div class="image-resize-handle w"  data-dir="w"></div>
+      <div class="image-resize-handle e"  data-dir="e"></div>
     `;
 
     const entry = {
@@ -3238,6 +3624,8 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
       pdfY: img.pdfY,
       pdfW: img.pdfW,
       pdfH: img.pdfH,
+      origPdfX: img.pdfX,
+      origPdfY: img.pdfY,
       action: 'none',
       replaceSrc: null,
     };
@@ -3250,6 +3638,7 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
       input.accept = 'image/*';
       input.onchange = async () => {
         if (!input.files.length) return;
+        _pushImageUndo(entry);
         const file = input.files[0];
         const bytes = await readFileAsBytes(file);
         entry.action = 'replace';
@@ -3266,6 +3655,7 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
 
     div.querySelector('.image-edit-delete').addEventListener('click', (e) => {
       e.stopPropagation();
+      _pushImageUndo(entry);
       if (entry.action === 'delete') {
         // Undo delete
         entry.action = 'none';
@@ -3284,16 +3674,19 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
       const pdfCanvas = document.getElementById('pdf-canvas');
       if (!pdfCanvas) return;
       const ctx = pdfCanvas.getContext('2d');
-      const sx = Math.round(img.left);
-      const sy = Math.round(img.top);
-      const sw = Math.round(img.width);
-      const sh = Math.round(img.height);
+      // Canvas is rendered at devicePixelRatio scale, so multiply CSS coords
+      const dpr = window.devicePixelRatio || 1;
+      const sx = Math.round(parseFloat(div.style.left) * dpr);
+      const sy = Math.round(parseFloat(div.style.top) * dpr);
+      const sw = Math.round(parseFloat(div.style.width) * dpr);
+      const sh = Math.round(parseFloat(div.style.height) * dpr);
       if (sw < 1 || sh < 1) return;
       const imageData = ctx.getImageData(sx, sy, sw, sh);
 
       const { openImageEditor } = await import('./image-editor.js');
       const result = await openImageEditor(imageData, sw, sh);
       if (result) {
+        _pushImageUndo(entry);
         entry.action = 'replace';
         entry.replaceSrc = { bytes: result.bytes, type: result.type };
         div.classList.add('image-edit-replaced');
@@ -3316,14 +3709,140 @@ export async function enterImageEditMode(pageNum, pdfDoc, viewport, container) {
       openEditor();
     });
 
+    // Resize handles: drag to adjust selection bounds
+    let resizeState = null;
+    div.querySelectorAll('.image-resize-handle').forEach(handle => {
+      handle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        _pushImageUndo(entry);
+        const dir = handle.dataset.dir;
+        // Hide preview during resize — we're adjusting the selection area, not scaling the image
+        if (div.classList.contains('image-edit-previewed')) {
+          div.style.backgroundImage = '';
+        }
+        resizeState = {
+          dir,
+          startX: e.clientX,
+          startY: e.clientY,
+          origLeft: parseFloat(div.style.left),
+          origTop: parseFloat(div.style.top),
+          origW: parseFloat(div.style.width),
+          origH: parseFloat(div.style.height),
+        };
+      });
+    });
+
+    const onResizeMove = (e) => {
+      if (!resizeState) return;
+      const dx = e.clientX - resizeState.startX;
+      const dy = e.clientY - resizeState.startY;
+      const { dir, origLeft, origTop, origW, origH } = resizeState;
+      let newLeft = origLeft, newTop = origTop, newW = origW, newH = origH;
+
+      if (dir.includes('e')) newW = Math.max(10, origW + dx);
+      if (dir.includes('w')) { newW = Math.max(10, origW - dx); newLeft = origLeft + origW - newW; }
+      if (dir.includes('s')) newH = Math.max(10, origH + dy);
+      if (dir.includes('n')) { newH = Math.max(10, origH - dy); newTop = origTop + origH - newH; }
+
+      div.style.left = newLeft + 'px';
+      div.style.top = newTop + 'px';
+      div.style.width = newW + 'px';
+      div.style.height = newH + 'px';
+    };
+
+    const onResizeEnd = () => {
+      if (!resizeState) return;
+      // Update PDF coordinates from new screen position/size
+      const scale = currentViewport ? currentViewport.scale : 1;
+      const pageHeight = (currentViewport ? currentViewport.height : parseFloat(div.style.height)) / scale;
+      const newLeft = parseFloat(div.style.left);
+      const newTop = parseFloat(div.style.top);
+      const newW = parseFloat(div.style.width);
+      const newH = parseFloat(div.style.height);
+
+      entry.pdfX = newLeft / scale;
+      entry.pdfY = pageHeight - (newTop + newH) / scale;
+      entry.pdfW = newW / scale;
+      entry.pdfH = newH / scale;
+      if (entry.action === 'none') entry.action = 'move';
+      div.classList.add('image-edit-moved');
+
+      // Regenerate transparent preview from the new selection bounds
+      _regeneratePreview(div, newLeft, newTop, newW, newH);
+
+      resizeState = null;
+    };
+
+    document.addEventListener('mousemove', onResizeMove);
+    document.addEventListener('mouseup', onResizeEnd);
+
+    // Drag-to-move: hold mouse and drag to reposition the image
+    let dragState = null;
+    div.addEventListener('mousedown', (e) => {
+      // Only left-click, not on buttons or resize handles
+      if (e.button !== 0 || e.target.closest('.image-edit-actions') || e.target.closest('.image-resize-handle')) return;
+      e.preventDefault();
+      e.stopPropagation();
+      dragState = {
+        startX: e.clientX,
+        startY: e.clientY,
+        origLeft: parseFloat(div.style.left),
+        origTop: parseFloat(div.style.top),
+        moved: false,
+        undoPushed: false,
+      };
+    });
+
+    const onDragMove = (e) => {
+      if (!dragState) return;
+      const dx = e.clientX - dragState.startX;
+      const dy = e.clientY - dragState.startY;
+      if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+        if (!dragState.undoPushed) {
+          _pushImageUndo(entry);
+          dragState.undoPushed = true;
+        }
+        dragState.moved = true;
+      }
+      if (!dragState.moved) return;
+      div.style.left = (dragState.origLeft + dx) + 'px';
+      div.style.top = (dragState.origTop + dy) + 'px';
+      div.style.cursor = 'grabbing';
+    };
+
+    const onDragEnd = () => {
+      if (!dragState) return;
+      if (dragState.moved) {
+        // Update PDF coordinates based on new screen position
+        const newLeft = parseFloat(div.style.left);
+        const newTop = parseFloat(div.style.top);
+        const deltaX = newLeft - dragState.origLeft;
+        const deltaY = newTop - dragState.origTop;
+        // Convert screen delta to PDF-space delta using viewport scale
+        const scale = currentViewport ? currentViewport.scale : 1;
+        entry.pdfX += deltaX / scale;
+        // PDF Y is inverted (origin at bottom-left)
+        entry.pdfY -= deltaY / scale;
+        if (entry.action === 'none') entry.action = 'move';
+        div.classList.add('image-edit-moved');
+      }
+      div.style.cursor = '';
+      dragState = null;
+    };
+
+    document.addEventListener('mousemove', onDragMove);
+    document.addEventListener('mouseup', onDragEnd);
+    // Store cleanup refs on the div for removal
+    div._dragCleanup = () => {
+      document.removeEventListener('mousemove', onDragMove);
+      document.removeEventListener('mouseup', onDragEnd);
+      document.removeEventListener('mousemove', onResizeMove);
+      document.removeEventListener('mouseup', onResizeEnd);
+    };
+
     imageOverlays.push(entry);
     container.appendChild(div);
-  }
-
-  // Create image edit toolbar
-  createImageToolbar(container);
-
-  return true;
 }
 
 export function exitImageEditMode() {
@@ -3331,7 +3850,12 @@ export function exitImageEditMode() {
   imageActive = false;
 
   if (imageContainer) {
-    imageContainer.querySelectorAll('.image-edit-overlay').forEach(el => el.remove());
+    imageContainer.querySelectorAll('.image-edit-overlay').forEach(el => {
+      if (el._dragCleanup) el._dragCleanup();
+      el.remove();
+    });
+    // Remove region selection layer (image-based PDF mode)
+    imageContainer.querySelectorAll('.image-region-select-layer').forEach(el => el.remove());
   }
 
   if (toolbar) {
@@ -3340,6 +3864,7 @@ export function exitImageEditMode() {
   }
 
   imageOverlays = [];
+  imageUndoStack = [];
   imageContainer = null;
 }
 
@@ -3347,14 +3872,18 @@ export function isImageEditActive() {
   return imageActive;
 }
 
-function createImageToolbar(container) {
+function createImageToolbar(container, regionMode = false) {
   if (toolbar) toolbar.remove();
+
+  const infoText = regionMode
+    ? 'Draw rectangles to select regions. Then double-click to edit, drag to move, or use Replace / Delete.'
+    : 'Double-click to edit. Drag to move. Or use Replace / Delete.';
 
   toolbar = document.createElement('div');
   toolbar.className = 'text-edit-toolbar';
   toolbar.innerHTML = `
     <div class="text-edit-toolbar-group">
-      <span class="text-edit-info">Double-click an image to edit. Or use Replace / Delete.</span>
+      <span class="text-edit-info">${infoText}</span>
     </div>
     <div class="text-edit-toolbar-spacer"></div>
     <div class="text-edit-toolbar-group text-edit-actions">
@@ -3388,29 +3917,77 @@ export async function commitImageEdits(pdfBytes, pageNum) {
   const doc = await PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true });
   const page = doc.getPage(pageNum - 1);
 
+  // Small bleed (in PDF points) to fully cover edges/anti-aliasing
+  const BLEED = 2;
+
   for (const change of changes) {
     if (change.action === 'delete') {
-      // Cover with white rectangle
+      // Cover with white rectangle at original position
       page.drawRectangle({
-        x: change.pdfX,
-        y: change.pdfY,
-        width: change.pdfW,
-        height: change.pdfH,
+        x: (change.origPdfX ?? change.pdfX) - BLEED,
+        y: (change.origPdfY ?? change.pdfY) - BLEED,
+        width: change.pdfW + BLEED * 2,
+        height: change.pdfH + BLEED * 2,
         color: PDFLib.rgb(1, 1, 1),
         borderWidth: 0,
       });
-    } else if (change.action === 'replace' && change.replaceSrc) {
-      // Cover original
+    } else if (change.action === 'move') {
+      // Cover original position with white, then re-extract and draw at new position
       page.drawRectangle({
-        x: change.pdfX,
-        y: change.pdfY,
-        width: change.pdfW,
-        height: change.pdfH,
+        x: (change.origPdfX ?? change.pdfX) - BLEED,
+        y: (change.origPdfY ?? change.pdfY) - BLEED,
+        width: change.pdfW + BLEED * 2,
+        height: change.pdfH + BLEED * 2,
+        color: PDFLib.rgb(1, 1, 1),
+        borderWidth: 0,
+      });
+      // Capture image from the rendered canvas and embed as PNG
+      const pdfCanvas = document.getElementById('pdf-canvas');
+      if (pdfCanvas) {
+        const ctx = pdfCanvas.getContext('2d', { willReadFrequently: true });
+        const scale = currentViewport ? currentViewport.scale : 1;
+        const dpr = window.devicePixelRatio || 1;
+        const origScreenX = Math.round((change.origPdfX ?? change.pdfX) * scale * dpr);
+        const pageHeight = page.getHeight();
+        const origScreenY = Math.round((pageHeight - (change.origPdfY ?? change.pdfY) - change.pdfH) * scale * dpr);
+        const sw = Math.round(change.pdfW * scale * dpr);
+        const sh = Math.round(change.pdfH * scale * dpr);
+        if (sw > 0 && sh > 0) {
+          const imgData = ctx.getImageData(origScreenX, origScreenY, sw, sh);
+
+          // Make background pixels transparent so they don't overwrite
+          // content at the destination. Detect BG from corners.
+          _makeBackgroundTransparent(imgData);
+
+          const tmpCanvas = document.createElement('canvas');
+          tmpCanvas.width = sw;
+          tmpCanvas.height = sh;
+          tmpCanvas.getContext('2d').putImageData(imgData, 0, 0);
+          const blob = await new Promise(r => tmpCanvas.toBlob(r, 'image/png'));
+          if (blob) {
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+            const image = await doc.embedPng(bytes);
+            page.drawImage(image, {
+              x: change.pdfX,
+              y: change.pdfY,
+              width: change.pdfW,
+              height: change.pdfH,
+            });
+          }
+        }
+      }
+    } else if (change.action === 'replace' && change.replaceSrc) {
+      // Cover original position
+      page.drawRectangle({
+        x: (change.origPdfX ?? change.pdfX) - BLEED,
+        y: (change.origPdfY ?? change.pdfY) - BLEED,
+        width: change.pdfW + BLEED * 2,
+        height: change.pdfH + BLEED * 2,
         color: PDFLib.rgb(1, 1, 1),
         borderWidth: 0,
       });
 
-      // Embed and draw new image
+      // Embed and draw new image at (possibly moved) position
       let image;
       try {
         if (change.replaceSrc.type.includes('png')) {

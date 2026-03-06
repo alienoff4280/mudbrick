@@ -83,7 +83,7 @@ import {
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
 import { canUndo, canRedo, initPageState } from './history.js';
-import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges, extractImagePositions } from './text-edit.js';
+import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges, canUndoImage, undoImageAction, extractImagePositions } from './text-edit.js';
 import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
 import { setLabelRange, getPageLabel, getLabelRanges, clearLabels, removeLabelRange, previewLabels, LABEL_FORMATS } from './page-labels.js';
 import { trapFocus as a11yTrapFocus, releaseFocus as a11yReleaseFocus, announceToScreenReader, cycleRegion } from './a11y.js';
@@ -1084,7 +1084,7 @@ async function reloadAfterEdit(newBytes, { skipHistory = false, editedPage = 0 }
 
 function updateUndoRedoButtons() {
   if (DOM.btnUndo) {
-    DOM.btnUndo.disabled = !(canUndoDoc() || canUndo(State.currentPage));
+    DOM.btnUndo.disabled = !(canUndoDoc() || canUndo(State.currentPage) || canUndoImage());
   }
   if (DOM.btnRedo) {
     DOM.btnRedo.disabled = !(canRedoDoc() || canRedo(State.currentPage));
@@ -1092,30 +1092,57 @@ function updateUndoRedoButtons() {
 }
 
 async function handleUndo() {
-  // Try document-level undo first (more impactful: text edits, insert page, crop…)
+  console.log('[handleUndo] CALLED. canUndoImage:', canUndoImage(), 'canUndoDoc:', canUndoDoc(), 'canUndo(page):', canUndo(State.currentPage), 'pdfBytes size:', State.pdfBytes?.byteLength);
+  // Image edit mode undo (move/delete/edit within active session)
+  if (canUndoImage()) {
+    console.log('[handleUndo] → image undo branch');
+    undoImageAction();
+    updateUndoRedoButtons();
+    return;
+  }
+  // Try document-level undo (text edits, insert page, crop…)
   if (canUndoDoc()) {
-    const prevBytes = undoDoc(State.pdfBytes);
-    if (prevBytes) {
-      await reloadAfterEdit(prevBytes, { skipHistory: true });
-      toast('Undo successful');
+    console.log('[handleUndo] → doc undo branch');
+    try {
+      const prevBytes = undoDoc(State.pdfBytes);
+      console.log('[handleUndo] undoDoc returned:', prevBytes ? prevBytes.byteLength + ' bytes' : 'null');
+      if (prevBytes) {
+        const same = prevBytes.byteLength === State.pdfBytes?.byteLength;
+        console.log('[handleUndo] prevBytes same size as current?', same);
+        console.log('[handleUndo] calling reloadAfterEdit...');
+        await reloadAfterEdit(prevBytes, { skipHistory: true });
+        console.log('[handleUndo] reloadAfterEdit completed OK');
+        toast('Undo successful');
+      }
+    } catch (err) {
+      console.error('[handleUndo] doc undo FAILED:', err);
+      toast('Undo failed: ' + err.message, 'error');
     }
     updateUndoRedoButtons();
     return;
   }
   // Fall back to annotation undo
   if (canUndo(State.currentPage)) {
+    console.log('[handleUndo] → annotation undo branch');
     undoAnnotation();
     updateUndoRedoButtons();
+  } else {
+    console.log('[handleUndo] → nothing to undo (all checks false)');
   }
 }
 
 async function handleRedo() {
   // Try document-level redo first
   if (canRedoDoc()) {
-    const nextBytes = redoDoc(State.pdfBytes);
-    if (nextBytes) {
-      await reloadAfterEdit(nextBytes, { skipHistory: true });
-      toast('Redo successful');
+    try {
+      const nextBytes = redoDoc(State.pdfBytes);
+      if (nextBytes) {
+        await reloadAfterEdit(nextBytes, { skipHistory: true });
+        toast('Redo successful');
+      }
+    } catch (err) {
+      console.error('[redo] doc redo failed:', err);
+      toast('Redo failed: ' + err.message, 'error');
     }
     updateUndoRedoButtons();
     return;
@@ -1136,6 +1163,12 @@ function handleEditText() {
     exitTextEditMode();
     DOM.btnEditText.classList.remove('active');
     return;
+  }
+  // Exit image edit mode first if active
+  if (isImageEditActive()) {
+    if (hasImageEditChanges() && !confirm('You have unsaved image edits. Discard changes?')) return;
+    exitImageEditMode();
+    DOM.btnEditImage.classList.remove('active');
   }
   enterTextEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer, DOM.pdfCanvas)
     .then(ok => {
@@ -1180,6 +1213,12 @@ function handleEditImage() {
     DOM.btnEditImage.classList.remove('active');
     return;
   }
+  // Exit text edit mode first if active
+  if (isTextEditActive()) {
+    if (hasTextEditChanges() && !confirm('You have unsaved text edits. Discard changes?')) return;
+    exitTextEditMode();
+    DOM.btnEditText.classList.remove('active');
+  }
   enterImageEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer)
     .then(ok => {
       if (ok) DOM.btnEditImage.classList.add('active');
@@ -1190,9 +1229,18 @@ async function handleCommitImageEdits() {
   if (!isImageEditActive()) return;
   try {
     showLoading('Applying image edits…');
+    // Capture a defensive copy of the pre-edit bytes BEFORE pdf-lib touches anything
+    const preEditBytes = new Uint8Array(State.pdfBytes);
+    console.log('[commit-image] pre-edit bytes captured, size:', preEditBytes.byteLength);
     const newBytes = await commitImageEdits(State.pdfBytes, State.currentPage);
+    console.log('[commit-image] commitImageEdits returned:', newBytes ? newBytes.byteLength + ' bytes' : 'null');
     if (newBytes) {
-      await reloadAfterEdit(newBytes);
+      // Push the pre-edit copy explicitly, then reload with skipHistory
+      console.log('[commit-image] pushing pre-edit bytes to doc history...');
+      pushDocState(preEditBytes);
+      console.log('[commit-image] reloading with new bytes...');
+      await reloadAfterEdit(newBytes, { skipHistory: true });
+      console.log('[commit-image] reload complete. canUndoDoc:', canUndoDoc());
       toast('Image edits applied');
     } else {
       toast('No changes to apply', 'info');
@@ -1204,6 +1252,7 @@ async function handleCommitImageEdits() {
     exitImageEditMode();
     DOM.btnEditImage.classList.remove('active');
     hideLoading();
+    updateUndoRedoButtons();
   }
 }
 
@@ -3590,8 +3639,8 @@ function wireEvents() {
   }
 
   // Undo / Redo
-  DOM.btnUndo.addEventListener('click', handleUndo);
-  DOM.btnRedo.addEventListener('click', handleRedo);
+  DOM.btnUndo.addEventListener('click', () => { console.log('[button] Undo button clicked'); handleUndo(); });
+  DOM.btnRedo.addEventListener('click', () => { console.log('[button] Redo button clicked'); handleRedo(); });
 
   // Edit Text
   DOM.btnEditText.addEventListener('click', handleEditText);
@@ -3653,6 +3702,7 @@ function wireEvents() {
   });
 
   // Image edit toolbar (custom events dispatched from toolbar buttons)
+  document.addEventListener('image-undo-changed', () => updateUndoRedoButtons());
   document.addEventListener('image-edit-commit', () => handleCommitImageEdits());
   document.addEventListener('image-edit-cancel', () => handleCancelImageEdits());
 
@@ -5418,6 +5468,19 @@ function handleKeyboard(e) {
     return;
   }
 
+  // Undo / Redo — always available regardless of focus
+  if (mod && e.key === 'z' && !e.shiftKey && State.pdfDoc) {
+    console.log('[keyboard] Ctrl+Z detected, calling handleUndo');
+    e.preventDefault();
+    handleUndo();
+    return;
+  }
+  if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) && State.pdfDoc) {
+    e.preventDefault();
+    handleRedo();
+    return;
+  }
+
   // Don't intercept when typing in inputs, selects, or Fabric IText editing
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
   if (e.target.contentEditable === 'true') return;
@@ -5457,16 +5520,6 @@ function handleKeyboard(e) {
   const isEditingText = activeObj && activeObj.isEditing;
 
   switch (true) {
-    // Undo / Redo
-    case mod && e.key === 'z' && !e.shiftKey:
-      e.preventDefault();
-      handleUndo();
-      break;
-    case mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey)):
-      e.preventDefault();
-      handleRedo();
-      break;
-
     // Copy / Paste / Duplicate annotations
     case mod && e.key === 'c' && !isEditingText:
       e.preventDefault();
