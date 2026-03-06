@@ -207,9 +207,10 @@ export function renderOCRTextLayer(pageNum, container, viewport) {
   // Don't duplicate if already rendered
   if (container.querySelector('.ocr-text-span')) return;
 
-  // Skip if the page already has native text from PDF.js
-  const nativeSpans = container.querySelectorAll('span[role="presentation"]');
-  if (nativeSpans.length > 0) return;
+  // Skip if the page already has native text from PDF.js (both 4.x and fallback)
+  const existingSpans = container.querySelectorAll('span:not(.ocr-text-span)');
+  const nativeTextLen = Array.from(existingSpans).reduce((sum, s) => sum + (s.textContent?.trim().length || 0), 0);
+  if (nativeTextLen > 20) return;
 
   const scale = viewport.scale;
 
@@ -295,7 +296,9 @@ export function getOCRTextEntries() {
  */
 export function enableCorrectionMode(pageNum, container) {
   // Don't enable correction mode if page has native text — OCR overlay not needed
-  if (container.querySelectorAll('span[role="presentation"]').length > 0) return;
+  const existingSpans = container.querySelectorAll('span:not(.ocr-text-span)');
+  const nativeTextLen = Array.from(existingSpans).reduce((sum, s) => sum + (s.textContent?.trim().length || 0), 0);
+  if (nativeTextLen > 20) return;
 
   const spans = container.querySelectorAll('.ocr-text-span');
   spans.forEach(span => {
