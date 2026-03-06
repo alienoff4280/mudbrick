@@ -1109,6 +1109,15 @@ html[data-theme="dark"] #text-layer.text-edit-active {
   border-color: rgba(41, 128, 185, 0.4);
   background: rgba(41, 128, 185, 0.05);
 }
+/* OCR-sourced blocks: show visible borders so user knows where to click */
+.text-edit-block-ocr {
+  border-color: rgba(41, 128, 185, 0.35);
+  background: rgba(41, 128, 185, 0.06);
+}
+.text-edit-block-ocr:hover {
+  border-color: rgba(41, 128, 185, 0.6);
+  background: rgba(41, 128, 185, 0.12);
+}
 .text-edit-zone-dirty {
   border-color: rgba(234, 179, 8, 0.4);
   background: rgba(234, 179, 8, 0.05);

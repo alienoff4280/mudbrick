@@ -753,12 +753,16 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pd
   }
   const lines = groupIntoLines(textContent.items, viewport, textContent.styles, fontMeta);
 
+  let _ocrBased = false;
   if (lines.length === 0) {
     // Try OCR results for scanned pages
-    const { hasOCRResults, getOCRResults } = await import('./ocr.js');
+    const { hasOCRResults, getOCRResults, disableCorrectionMode } = await import('./ocr.js');
+    // Exit OCR correction mode if active
+    disableCorrectionMode(container);
     if (hasOCRResults(pageNum)) {
       const ocrData = getOCRResults(pageNum);
       if (ocrData && ocrData.lines && ocrData.lines.length > 0) {
+        _ocrBased = true;
         const scale = viewport.scale;
         for (const ocrLine of ocrData.lines) {
           const left = ocrLine.bbox.x0 * scale;
@@ -817,7 +821,7 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pd
     const paraRight = Math.max(...para.map(l => l.left + l.width));
 
     const zone = document.createElement('div');
-    zone.className = 'text-edit-block-zone';
+    zone.className = 'text-edit-block-zone' + (_ocrBased ? ' text-edit-block-ocr' : '');
     zone.dataset.blockIdx = pi;
     zone.style.position = 'absolute';
     zone.style.left = (paraLeft - 2) + 'px';
@@ -836,11 +840,16 @@ export async function enterTextEditMode(pageNum, pdfDoc, viewport, container, pd
   // Boost text-layer opacity so edit overlays are fully opaque
   container.classList.add('text-edit-active');
 
-  // Lift form field overlay above text-edit lines so form inputs are clickable
+  // Disable form overlay during text edit so block zones receive clicks.
+  // If the page has actual form fields, keep them clickable above text-edit lines.
   const formOverlay = container.parentElement?.querySelector('#form-overlay');
   if (formOverlay) {
-    formOverlay.style.zIndex = '20';
-    formOverlay.style.pointerEvents = 'auto';
+    if (formOverlay.children.length > 0) {
+      formOverlay.style.zIndex = '20';
+      formOverlay.style.pointerEvents = 'auto';
+    } else {
+      formOverlay.style.pointerEvents = 'none';
+    }
   }
 
   // Register keyboard handler for text edit shortcuts

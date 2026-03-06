@@ -4621,9 +4621,15 @@ function wireEvents() {
     toast('OCR text exported', 'success');
   });
   $('btn-ocr-correct')?.addEventListener('click', () => {
-    enableCorrectionMode(State.currentPage, DOM.textLayer);
+    const result = enableCorrectionMode(State.currentPage, DOM.textLayer);
     $('ocr-modal-backdrop')?.classList.add('hidden');
-    toast('OCR correction mode active. Click on words to edit. Press Escape to exit.', 'info');
+    if (result === 'native') {
+      toast('This page has native text — use Edit Text to edit directly', 'info');
+    } else if (result === 'no-ocr') {
+      toast('No OCR text on this page — run OCR first', 'warning');
+    } else {
+      toast('OCR correction mode active. Click on words to edit. Press Escape to exit.', 'info');
+    }
   });
 
   // Edit ribbon — Insert Blank Page

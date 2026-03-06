@@ -298,9 +298,12 @@ export function enableCorrectionMode(pageNum, container) {
   // Don't enable correction mode if page has native text — OCR overlay not needed
   const existingSpans = container.querySelectorAll('span:not(.ocr-text-span)');
   const nativeTextLen = Array.from(existingSpans).reduce((sum, s) => sum + (s.textContent?.trim().length || 0), 0);
-  if (nativeTextLen > 20) return;
+  if (nativeTextLen > 20) return 'native';
 
+  // Check if there are OCR spans to correct
   const spans = container.querySelectorAll('.ocr-text-span');
+  if (spans.length === 0) return 'no-ocr';
+
   spans.forEach(span => {
     span.style.color = 'rgba(0,0,0,0.7)';
     span.style.background = 'rgba(255,255,200,0.5)';
