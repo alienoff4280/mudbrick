@@ -375,11 +375,9 @@ function renderRecentFiles() {
       </div>
     `;
 
-    li.title = 'Click to learn more';
+    li.title = 'Click to open a file';
     list.appendChild(li);
-    li.addEventListener('click', () => {
-      toast('Use "Open a PDF" to reopen files — file data is not stored in browser', 'info');
-    });
+    li.addEventListener('click', () => DOM.fileInput.click());
     li.style.cursor = 'pointer';
   }
 }
@@ -3236,12 +3234,6 @@ function renderCommentReplies(thread) {
   `).join('');
 }
 
-function escapeHtml(s) {
-  const div = document.createElement('div');
-  div.textContent = s || '';
-  return div.innerHTML;
-}
-
 function refreshCommentsSidebar() {
   const container = $('comments-list');
   if (!container) return;
@@ -3770,7 +3762,7 @@ function buildRecentSubmenu() {
     icon: 'file',
     label: f.name.length > 35 ? f.name.slice(0, 32) + '\u2026' : f.name,
     needsDoc: false,
-    action: () => toast('Use "Open" to reopen files \u2014 file data is not stored in browser', 'info'),
+    action: () => DOM.fileInput.click(),
   }));
   items.push('---');
   items.push({ icon: 'trash', label: 'Clear Recent', needsDoc: false, action: () => { clearRecentFiles(); toast('Recent files cleared'); } });
@@ -4155,14 +4147,109 @@ function wireEvents() {
   // Properties panel close
   $('btn-close-panel').addEventListener('click', () => togglePropertiesPanel(false));
 
+  // --- Helper: apply a color/stroke change to the active selected object ---
+  function applyToSelected(props) {
+    const canvas = getCanvas();
+    if (!canvas) return;
+    const obj = canvas.getActiveObject();
+    if (!obj) return;
+    if (props.color) {
+      obj.set('stroke', props.color);
+      if (obj.fill && obj.fill !== 'transparent') obj.set('fill', props.color);
+      // For text objects update fill instead of stroke
+      if (obj.mudbrickType === 'text') obj.set('fill', props.color);
+      // For groups (arrow, xmark), update children
+      if (obj._objects) {
+        obj._objects.forEach(child => {
+          if (child.stroke) child.set('stroke', props.color);
+          if (child.fill && child.fill !== 'transparent') child.set('fill', props.color);
+        });
+      }
+    }
+    if (props.strokeWidth != null) {
+      obj.set('strokeWidth', props.strokeWidth);
+      if (obj._objects) {
+        obj._objects.forEach(child => {
+          if (child.stroke) child.set('strokeWidth', props.strokeWidth);
+        });
+      }
+    }
+    if (props.opacity != null) obj.set('opacity', props.opacity);
+    if (props.fontSize != null) obj.set('fontSize', props.fontSize);
+    if (props.fontFamily != null) obj.set('fontFamily', props.fontFamily);
+    canvas.renderAll();
+  }
+
+  // --- Helper: sync panel UI from selected object ---
+  function syncPanelFromObject(obj) {
+    if (!obj) return;
+    const color = obj.stroke || obj.fill || '#000000';
+    // Update color swatches
+    document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => {
+      s.classList.toggle('active', s.dataset.color === color);
+    });
+    const cp = $('prop-color-picker');
+    if (cp) cp.value = color;
+    // Update opacity
+    const os = $('prop-opacity');
+    const ov = $('prop-opacity-value');
+    if (os && obj.opacity != null) {
+      os.value = Math.round(obj.opacity * 100);
+      if (ov) ov.textContent = os.value + '%';
+    }
+    // Update stroke width
+    const ss = $('prop-stroke-width');
+    const sv = $('prop-stroke-width-value');
+    if (ss && obj.strokeWidth != null) {
+      ss.value = Math.round(obj.strokeWidth);
+      if (sv) sv.textContent = ss.value + 'px';
+    }
+    // Update font size
+    const fs = $('prop-font-size');
+    if (fs && obj.fontSize != null) fs.value = obj.fontSize;
+    // Update font family
+    const ff = $('prop-font-family');
+    if (ff && obj.fontFamily) ff.value = obj.fontFamily;
+  }
+
   // Properties panel — color swatches
   document.querySelectorAll('#panel-tool-props .color-swatch').forEach(swatch => {
     swatch.addEventListener('click', () => {
       document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
       swatch.classList.add('active');
       updateToolOptions({ color: swatch.dataset.color });
+      applyToSelected({ color: swatch.dataset.color });
     });
   });
+
+  // Properties panel — color picker input
+  const colorPicker = $('prop-color-picker');
+  if (colorPicker) {
+    colorPicker.addEventListener('input', () => {
+      document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
+      updateToolOptions({ color: colorPicker.value });
+      applyToSelected({ color: colorPicker.value });
+    });
+  }
+
+  // Properties panel — eyedropper
+  const eyedropperBtn = $('prop-eyedropper');
+  if (eyedropperBtn) {
+    eyedropperBtn.addEventListener('click', () => {
+      if (typeof window.EyeDropper === 'function') {
+        const dropper = new window.EyeDropper();
+        dropper.open().then(result => {
+          const color = result.sRGBHex;
+          document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
+          if (colorPicker) colorPicker.value = color;
+          updateToolOptions({ color });
+          applyToSelected({ color });
+        }).catch(() => {});
+      } else {
+        toast('EyeDropper not supported in this browser', 'info');
+      }
+    });
+  }
 
   // Properties panel — opacity slider
   const opacitySlider = $('prop-opacity');
@@ -4170,7 +4257,9 @@ function wireEvents() {
   if (opacitySlider && opacityValue) {
     opacitySlider.addEventListener('input', () => {
       opacityValue.textContent = opacitySlider.value + '%';
-      updateToolOptions({ opacity: parseInt(opacitySlider.value) / 100 });
+      const val = parseInt(opacitySlider.value) / 100;
+      updateToolOptions({ opacity: val });
+      applyToSelected({ opacity: val });
     });
   }
 
@@ -4180,6 +4269,7 @@ function wireEvents() {
     fontSizeInput.addEventListener('change', () => {
       const size = parseInt(fontSizeInput.value) || 16;
       updateToolOptions({ fontSize: size });
+      applyToSelected({ fontSize: size });
     });
   }
 
@@ -4188,6 +4278,28 @@ function wireEvents() {
   if (fontFamilySelect) {
     fontFamilySelect.addEventListener('change', () => {
       updateToolOptions({ fontFamily: fontFamilySelect.value });
+      applyToSelected({ fontFamily: fontFamilySelect.value });
+    });
+  }
+
+  // Properties panel — shape picker
+  document.querySelectorAll('#shape-picker .shape-pick').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#shape-picker .shape-pick').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updateToolOptions({ shapeType: btn.dataset.shape });
+    });
+  });
+
+  // Properties panel — stroke width slider
+  const strokeSlider = $('prop-stroke-width');
+  const strokeValue = $('prop-stroke-width-value');
+  if (strokeSlider && strokeValue) {
+    strokeSlider.addEventListener('input', () => {
+      strokeValue.textContent = strokeSlider.value + 'px';
+      const val = parseInt(strokeSlider.value);
+      updateToolOptions({ strokeWidth: val });
+      applyToSelected({ strokeWidth: val });
     });
   }
 
@@ -4555,7 +4667,7 @@ function wireEvents() {
     const canvas = getCanvas();
     if (!canvas) return;
 
-    canvas.on('selection:created', (e) => {
+    function _onObjectSelected(e) {
       const obj = e.selected?.[0];
       if (obj && obj.mudbrickType === 'sticky-note') {
         showNotePropsPanel(obj);
@@ -4572,26 +4684,12 @@ function wireEvents() {
       } else {
         hideCommentThreadPanel();
       }
-    });
+      // Sync properties panel to reflect the selected object's properties
+      if (obj) syncPanelFromObject(obj);
+    }
 
-    canvas.on('selection:updated', (e) => {
-      const obj = e.selected?.[0];
-      if (obj && obj.mudbrickType === 'sticky-note') {
-        showNotePropsPanel(obj);
-      } else {
-        hideNotePropsPanel();
-      }
-      if (obj && obj.mudbrickType === 'link') {
-        showLinkPropsPanel(obj);
-      } else {
-        hideLinkPropsPanel();
-      }
-      if (obj && obj.commentThread) {
-        showCommentThreadPanel(obj);
-      } else {
-        hideCommentThreadPanel();
-      }
-    });
+    canvas.on('selection:created', _onObjectSelected);
+    canvas.on('selection:updated', _onObjectSelected);
 
     canvas.on('selection:cleared', () => {
       hideNotePropsPanel();
@@ -6111,7 +6209,8 @@ function selectTool(toolName) {
     btn.classList.add('active');
   });
   State.activeTool = toolName;
-  setTool(toolName, { shapeType: 'rect', stampType: 'approved' });
+  const activeShape = document.querySelector('#shape-picker .shape-pick.active');
+  setTool(toolName, { shapeType: activeShape?.dataset.shape || 'rect', stampType: 'approved' });
   updatePanelToolTitle();
   // Update status bar tool indicator
   const toolLabel = $('status-tool');
@@ -6134,6 +6233,12 @@ function selectTool(toolName) {
   const isTextTool = toolName === 'text' || toolName === 'select';
   if (fontSizeRow) fontSizeRow.style.display = isTextTool ? '' : 'none';
   if (fontFamilyRow) fontFamilyRow.style.display = isTextTool ? '' : 'none';
+  // Show shape picker and stroke width only for shape tool
+  const shapeTypeRow = $('prop-shape-type-row');
+  const strokeWidthRow = $('prop-stroke-width-row');
+  const isShapeTool = toolName === 'shape';
+  if (shapeTypeRow) shapeTypeRow.style.display = isShapeTool ? '' : 'none';
+  if (strokeWidthRow) strokeWidthRow.style.display = isShapeTool ? '' : 'none';
   // Update canvas cursor
   DOM.canvasArea.setAttribute('data-cursor', toolName);
 

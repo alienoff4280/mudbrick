@@ -1824,6 +1824,61 @@ html[data-theme="dark"] #text-layer {
 .color-swatch:hover { transform: scale(1.15); box-shadow: var(--mb-shadow-sm); }
 .color-swatch.active { border-color: var(--mb-text); box-shadow: 0 0 0 1px var(--mb-surface), 0 0 0 2px var(--mb-text); }
 
+/* Color picker & eyedropper in properties panel */
+.prop-color-picker {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 2px solid transparent;
+  border-radius: var(--mb-radius-xs);
+  cursor: pointer;
+  background: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.prop-color-picker::-webkit-color-swatch-wrapper { padding: 0; }
+.prop-color-picker::-webkit-color-swatch { border: none; border-radius: 2px; }
+.prop-eyedropper-btn {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid transparent;
+  border-radius: var(--mb-radius-xs);
+  background: var(--mb-surface);
+  color: var(--mb-text-secondary);
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--mb-transition);
+}
+.prop-eyedropper-btn:hover { color: var(--mb-text); background: var(--mb-bg-hover); }
+.prop-eyedropper-btn.active { border-color: var(--mb-primary); color: var(--mb-primary); }
+
+/* Shape picker */
+.shape-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  flex: 1;
+}
+.shape-pick {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--mb-radius-xs);
+  border: 2px solid transparent;
+  background: var(--mb-surface);
+  color: var(--mb-text-secondary);
+  cursor: pointer;
+  padding: 0;
+  transition: all var(--mb-transition);
+}
+.shape-pick:hover { color: var(--mb-text); background: var(--mb-bg-hover); transform: scale(1.1); }
+.shape-pick.active { border-color: var(--mb-primary); color: var(--mb-primary); }
+
 /* Slider */
 .prop-slider {
   flex: 1;

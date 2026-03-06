@@ -143,6 +143,12 @@ export function initAnnotations(canvasId = 'fabric-canvas') {
     if (currentTool === 'text' && typeof onRequestToolSwitch === 'function') {
       onRequestToolSwitch('select');
     }
+    // Keep the text selected and wrapper interactive so the user can
+    // immediately move/resize without an extra click
+    fabricCanvas.setActiveObject(text);
+    fabricCanvas.renderAll();
+    const wrapperEl = document.getElementById('fabric-canvas-wrapper');
+    if (wrapperEl) wrapperEl.style.pointerEvents = 'auto';
   });
 
   // In select mode, pointer-events default to 'none' so clicks pass through
@@ -317,7 +323,16 @@ export function setTool(toolName, options = {}) {
       wrapper.style.pointerEvents = 'auto';
       fabricCanvas.selection = false;
       fabricCanvas.defaultCursor = 'crosshair';
-      fabricCanvas.forEachObject(o => { o.selectable = false; o.evented = false; });
+      fabricCanvas.forEachObject(o => {
+        // Allow existing shapes to be selected/resized
+        if (o.mudbrickType === 'shape') {
+          o.selectable = true;
+          o.evented = true;
+        } else {
+          o.selectable = false;
+          o.evented = false;
+        }
+      });
       break;
 
     case 'stamp':
@@ -418,15 +433,20 @@ function handleCanvasClick(opt) {
   const pointer = fabricCanvas.getPointer(opt.e);
 
   switch (currentTool) {
-    case 'text':
-      // Don't add text if clicking on existing text object
+    case 'text': {
+      // Don't add text if clicking on existing object
       if (opt.target) return;
+      // Don't add text if another text is currently being edited
+      // (this click is exiting that edit, not requesting a new text)
+      const activeObj = fabricCanvas.getActiveObject();
+      if (activeObj && activeObj.isEditing) return;
       addText(pointer.x, pointer.y);
       break;
+    }
 
     case 'shape':
-      if (!shapeStartPoint) {
-        // Start shape drawing
+      if (!shapeStartPoint && !opt.target) {
+        // Start shape drawing only on empty canvas area
         shapeStartPoint = { x: pointer.x, y: pointer.y };
         startShapePreview(pointer);
       }
@@ -542,8 +562,75 @@ function onShapeMove(opt) {
       }
     );
   } else if (shapeType === 'arrow') {
-    // Arrow = line + triangle head
     shapePreview = createArrow(shapeStartPoint, pointer);
+  } else if (shapeType === 'triangle') {
+    shapePreview = new fabric.Polygon(
+      [{ x: left + width / 2, y: top }, { x: left + width, y: top + height }, { x: left, y: top + height }],
+      {
+        fill: 'transparent',
+        stroke: toolOptions.color,
+        strokeWidth: toolOptions.strokeWidth * currentZoom,
+        selectable: false,
+        evented: false,
+      }
+    );
+  } else if (shapeType === 'diamond') {
+    shapePreview = new fabric.Polygon(
+      [{ x: left + width / 2, y: top }, { x: left + width, y: top + height / 2 }, { x: left + width / 2, y: top + height }, { x: left, y: top + height / 2 }],
+      {
+        fill: 'transparent',
+        stroke: toolOptions.color,
+        strokeWidth: toolOptions.strokeWidth * currentZoom,
+        selectable: false,
+        evented: false,
+      }
+    );
+  } else if (shapeType === 'star') {
+    const cx = left + width / 2, cy = top + height / 2;
+    const outerR = Math.min(width, height) / 2;
+    const innerR = outerR * 0.4;
+    const pts = [];
+    for (let i = 0; i < 5; i++) {
+      const outerA = (Math.PI / 2 * 3) + (i * 2 * Math.PI / 5);
+      pts.push({ x: cx + Math.cos(outerA) * outerR, y: cy + Math.sin(outerA) * outerR });
+      const innerA = outerA + Math.PI / 5;
+      pts.push({ x: cx + Math.cos(innerA) * innerR, y: cy + Math.sin(innerA) * innerR });
+    }
+    shapePreview = new fabric.Polygon(pts, {
+      fill: 'transparent',
+      stroke: toolOptions.color,
+      strokeWidth: toolOptions.strokeWidth * currentZoom,
+      selectable: false,
+      evented: false,
+    });
+  } else if (shapeType === 'checkmark') {
+    shapePreview = new fabric.Polyline(
+      [{ x: left, y: top + height * 0.6 }, { x: left + width * 0.35, y: top + height }, { x: left + width, y: top }],
+      {
+        fill: 'transparent',
+        stroke: toolOptions.color,
+        strokeWidth: (toolOptions.strokeWidth + 1) * currentZoom,
+        strokeLineCap: 'round',
+        strokeLineJoin: 'round',
+        selectable: false,
+        evented: false,
+      }
+    );
+  } else if (shapeType === 'xmark') {
+    const line1 = new fabric.Line([left, top, left + width, top + height], {
+      stroke: toolOptions.color,
+      strokeWidth: (toolOptions.strokeWidth + 1) * currentZoom,
+      strokeLineCap: 'round',
+    });
+    const line2 = new fabric.Line([left + width, top, left, top + height], {
+      stroke: toolOptions.color,
+      strokeWidth: (toolOptions.strokeWidth + 1) * currentZoom,
+      strokeLineCap: 'round',
+    });
+    shapePreview = new fabric.Group([line1, line2], {
+      selectable: false,
+      evented: false,
+    });
   }
 
   if (shapePreview) {
