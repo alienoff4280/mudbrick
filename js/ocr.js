@@ -60,7 +60,9 @@ async function renderPageToCanvas(pdfDoc, pageNum) {
  * @param {function} onProgress — callback({current, total, status, progress})
  * @returns {Object} ocrResults map
  */
-export async function runOCR(pdfDoc, pageNumbers, onProgress) {
+export async function runOCR(pdfDoc, pageNumbers, onProgress, options = {}) {
+  const { language = 'eng', confidenceThreshold = 60 } = options;
+
   // Load Tesseract.js
   onProgress?.({
     current: 0, total: pageNumbers.length,
@@ -68,9 +70,14 @@ export async function runOCR(pdfDoc, pageNumbers, onProgress) {
   });
   await ensureTesseract();
 
-  // Create / reuse worker
+  // Create / reuse worker (recreate if language changed)
   if (!worker) {
-    worker = await window.Tesseract.createWorker('eng');
+    worker = await window.Tesseract.createWorker(language);
+    worker._lang = language;
+  } else if (worker._lang !== language) {
+    await worker.terminate();
+    worker = await window.Tesseract.createWorker(language);
+    worker._lang = language;
   }
 
   for (let i = 0; i < pageNumbers.length; i++) {
@@ -138,11 +145,16 @@ export async function runOCR(pdfDoc, pageNumbers, onProgress) {
       fullText = result.data.text || '';
     }
 
+    const avgConfidence = words.length ? words.reduce((s, w) => s + w.confidence, 0) / words.length : 0;
+    const lowConfidenceWords = words.filter(w => w.confidence < 70);
+
     ocrResults[pageNum] = {
       words,
       lines,
       fullText: fullText.trim(),
       pageHeight,
+      avgConfidence,
+      lowConfidenceWords,
     };
   }
 
@@ -197,10 +209,19 @@ export function renderOCRTextLayer(pageNum, container, viewport) {
 
   const scale = viewport.scale;
 
-  for (const word of result.words) {
+  for (let wordIndex = 0; wordIndex < result.words.length; wordIndex++) {
+    const word = result.words[wordIndex];
     const span = document.createElement('span');
     span.className = 'ocr-text-span';
     span.textContent = word.text + ' ';
+    span.dataset.wordIdx = String(wordIndex);
+
+    // Confidence coloring classes
+    if (word.confidence < 50) {
+      span.classList.add('ocr-low-confidence');
+    } else if (word.confidence < 70) {
+      span.classList.add('ocr-medium-confidence');
+    }
 
     // Position based on PDF coordinates scaled to current zoom
     const left = word.bbox.x0 * scale;
@@ -263,6 +284,104 @@ export function getOCRTextEntries() {
   }
 
   return entries;
+}
+
+/**
+ * Enter OCR correction mode — make OCR text spans editable.
+ */
+export function enableCorrectionMode(pageNum, container) {
+  const spans = container.querySelectorAll('.ocr-text-span');
+  spans.forEach(span => {
+    span.style.color = 'rgba(0,0,0,0.7)';
+    span.style.background = 'rgba(255,255,200,0.5)';
+    span.style.cursor = 'text';
+    span.contentEditable = 'true';
+    span.spellcheck = true;
+
+    span.addEventListener('blur', () => {
+      const wordIdx = parseInt(span.dataset.wordIdx);
+      if (!isNaN(wordIdx) && ocrResults[pageNum]?.words[wordIdx]) {
+        ocrResults[pageNum].words[wordIdx].text = span.textContent.trim();
+        ocrResults[pageNum].words[wordIdx].confidence = 100;
+        ocrResults[pageNum].fullText = ocrResults[pageNum].words.map(w => w.text).join(' ');
+      }
+    });
+  });
+}
+
+/**
+ * Exit correction mode — make spans invisible again.
+ */
+export function disableCorrectionMode(container) {
+  const spans = container.querySelectorAll('.ocr-text-span');
+  spans.forEach(span => {
+    span.style.color = 'transparent';
+    span.style.background = 'none';
+    span.style.cursor = 'default';
+    span.contentEditable = 'false';
+  });
+}
+
+/**
+ * Export all OCR results as plain text.
+ */
+export function exportOCRText() {
+  const pages = Object.keys(ocrResults).sort((a, b) => +a - +b);
+  let text = '';
+  for (const pageNum of pages) {
+    text += `--- Page ${pageNum} ---\n`;
+    text += ocrResults[pageNum].fullText + '\n\n';
+  }
+  return text;
+}
+
+/**
+ * Get OCR stats for display.
+ */
+export function getOCRStats() {
+  const pages = Object.keys(ocrResults);
+  if (!pages.length) return null;
+  const totalWords = pages.reduce((s, p) => s + ocrResults[p].words.length, 0);
+  const avgConfidence = pages.reduce((s, p) => s + ocrResults[p].avgConfidence, 0) / pages.length;
+  const lowConfCount = pages.reduce((s, p) => s + (ocrResults[p].lowConfidenceWords?.length || 0), 0);
+  return {
+    pagesProcessed: pages.length,
+    totalWords,
+    avgConfidence: Math.round(avgConfidence),
+    lowConfidenceWords: lowConfCount,
+  };
+}
+
+/**
+ * Embed OCR text as invisible text layer in a pdf-lib document.
+ * Makes exported PDFs permanently searchable in any viewer.
+ */
+export async function embedOCRTextLayer(pdfDoc, PDFLib) {
+  const font = await pdfDoc.embedFont(PDFLib.StandardFonts.Helvetica);
+
+  for (let i = 0; i < pdfDoc.getPageCount(); i++) {
+    const pageNum = i + 1;
+    if (!ocrResults[pageNum]?.words?.length) continue;
+
+    const result = ocrResults[pageNum];
+    const page = pdfDoc.getPage(i);
+    const { height: pageHeight } = page.getSize();
+
+    for (const word of result.words) {
+      if (!word.text.trim()) continue;
+
+      const wordHeight = word.bbox.y1 - word.bbox.y0;
+      const fontSize = Math.max(1, wordHeight * 0.85);
+
+      page.drawText(word.text, {
+        x: word.bbox.x0,
+        y: pageHeight - word.bbox.y1 + (wordHeight * 0.15),
+        size: fontSize,
+        font,
+        opacity: 0,
+      });
+    }
+  }
 }
 
 /**

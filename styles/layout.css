@@ -1082,6 +1082,16 @@ html, body {
 html[data-theme="dark"] #text-layer ::selection {
   background: rgba(80, 160, 255, 0.6);
 }
+
+/* OCR confidence highlighting */
+.ocr-confidence-toggle .ocr-low-confidence {
+  background: rgba(255, 0, 0, 0.15) !important;
+  color: inherit !important;
+}
+.ocr-confidence-toggle .ocr-medium-confidence {
+  background: rgba(255, 165, 0, 0.10) !important;
+  color: inherit !important;
+}
 html[data-theme="dark"] #text-layer {
   opacity: 0.35;
 }

@@ -1454,6 +1454,38 @@
           </div>
         </div>
 
+        <!-- Language selection -->
+        <div style="margin-top:12px;">
+          <label class="modal-form-label" for="ocr-language">Language</label>
+          <select id="ocr-language" class="modal-form-input">
+            <option value="eng" selected>English</option>
+            <option value="spa">Spanish</option>
+            <option value="fra">French</option>
+            <option value="deu">German</option>
+            <option value="por">Portuguese</option>
+            <option value="ita">Italian</option>
+            <option value="jpn">Japanese</option>
+            <option value="kor">Korean</option>
+            <option value="chi_sim">Chinese (Simplified)</option>
+            <option value="chi_tra">Chinese (Traditional)</option>
+            <option value="ara">Arabic</option>
+            <option value="rus">Russian</option>
+            <option value="hin">Hindi</option>
+            <option value="eng+spa">English + Spanish</option>
+          </select>
+        </div>
+
+        <!-- Options -->
+        <div style="margin-top:8px;">
+          <label class="modal-form-label">Options</label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-top:4px;">
+            <input type="checkbox" id="ocr-embed-text" checked> Embed text layer in exported PDF
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;margin-top:4px;">
+            <input type="checkbox" id="ocr-show-confidence"> Show confidence highlighting
+          </label>
+        </div>
+
         <!-- Progress area (hidden until running) -->
         <div id="ocr-progress-area" class="hidden mt-12">
           <div class="modal-progress-header">
@@ -1462,6 +1494,16 @@
           </div>
           <div class="modal-progress-bar-wrapper">
             <div id="ocr-progress-bar" class="modal-progress-bar-fill" style="width:0%;"></div>
+          </div>
+        </div>
+
+        <!-- Results area (shown after OCR completes) -->
+        <div id="ocr-results-area" class="hidden" style="margin-top:12px;padding:8px;background:var(--bg-secondary);border-radius:4px;">
+          <div style="font-weight:600;font-size:12px;margin-bottom:4px;">Results</div>
+          <div id="ocr-stats" style="font-size:11px;color:var(--text-secondary);"></div>
+          <div style="display:flex;gap:6px;margin-top:8px;">
+            <button id="btn-ocr-export-text" class="btn-secondary" style="font-size:11px;">Export Text</button>
+            <button id="btn-ocr-correct" class="btn-secondary" style="font-size:11px;">Correct OCR</button>
           </div>
         </div>
       </div>

@@ -64,7 +64,8 @@ import { applyHeadersFooters, previewHeaderText } from './headers.js';
 import { openSignatureModal, closeSignatureModal, initSignatureEvents } from './signatures.js';
 import {
   runOCR, hasOCRResults, renderOCRTextLayer, getOCRTextEntries,
-  clearOCRResults, terminateOCR,
+  clearOCRResults, terminateOCR, isPageScanned,
+  enableCorrectionMode, disableCorrectionMode, exportOCRText, getOCRStats,
 } from './ocr.js';
 
 import { encryptPDF, removeMetadata, getMetadata, setMetadata, sanitizeDocument } from './security.js';
@@ -600,6 +601,20 @@ async function openPDF(bytes, fileName, fileSize) {
   requestAnimationFrame(() => {
     fitWidth();
   });
+
+  // Auto-detect scanned pages and suggest OCR
+  setTimeout(async () => {
+    try {
+      const checkCount = Math.min(State.totalPages, 5);
+      let scannedCount = 0;
+      for (let i = 1; i <= checkCount; i++) {
+        if (await isPageScanned(State.pdfDoc, i)) scannedCount++;
+      }
+      if (scannedCount >= Math.ceil(checkCount / 2)) {
+        toast('This PDF appears to be scanned. Run OCR (Tools → OCR) to make text searchable.', 'info', 8000);
+      }
+    } catch { /* ignore auto-detect errors */ }
+  }, 1000);
 }
 
 /* ═══════════════════ Page Rendering ═══════════════════ */
@@ -4409,11 +4424,12 @@ function wireEvents() {
     $('btn-ocr-run').disabled = true;
 
     try {
+      const language = $('ocr-language')?.value || 'eng';
       await runOCR(State.pdfDoc, pageNumbers, (info) => {
         $('ocr-progress-label').textContent = info.status;
         $('ocr-progress-pct').textContent = Math.round(info.progress) + '%';
         $('ocr-progress-bar').style.width = info.progress + '%';
-      });
+      }, { language });
 
       // Augment find text index with OCR results
       const ocrEntries = getOCRTextEntries();
@@ -4428,19 +4444,48 @@ function wireEvents() {
         ocrBadge.classList.remove('hidden');
       }
 
+      // Show OCR stats in results area
+      const stats = getOCRStats();
+      if (stats) {
+        $('ocr-results-area')?.classList.remove('hidden');
+        const statsEl = $('ocr-stats');
+        if (statsEl) {
+          statsEl.textContent = `${stats.pagesProcessed} pages, ${stats.totalWords} words, ` +
+            `${stats.avgConfidence}% avg confidence` +
+            (stats.lowConfidenceWords ? `, ${stats.lowConfidenceWords} low-confidence words` : '');
+        }
+      }
+
+      // Store embed preference
+      State.ocrEmbedText = $('ocr-embed-text')?.checked ?? true;
+
       // Re-render current page to show OCR text layer
       await renderCurrentPage();
 
       toast(`OCR complete — ${pageNumbers.length} page${pageNumbers.length !== 1 ? 's' : ''} processed`, 'success');
-
-      // Close modal
-      $('ocr-modal-backdrop').classList.add('hidden');
     } catch (err) {
       toast('OCR failed: ' + err.message, 'error');
       console.error('OCR error:', err);
     } finally {
       $('btn-ocr-run').disabled = false;
     }
+  });
+
+  // OCR enhancement event listeners
+  $('ocr-show-confidence')?.addEventListener('change', (e) => {
+    DOM.textLayer?.classList.toggle('ocr-confidence-toggle', e.target.checked);
+  });
+  $('btn-ocr-export-text')?.addEventListener('click', () => {
+    const text = exportOCRText();
+    if (!text) { toast('No OCR results to export', 'warning'); return; }
+    const blob = new Blob([text], { type: 'text/plain' });
+    downloadBlob(blob, (State.fileName || 'document').replace(/\.pdf$/i, '') + '-ocr.txt');
+    toast('OCR text exported', 'success');
+  });
+  $('btn-ocr-correct')?.addEventListener('click', () => {
+    enableCorrectionMode(State.currentPage, DOM.textLayer);
+    $('ocr-modal-backdrop')?.classList.add('hidden');
+    toast('OCR correction mode active. Click on words to edit. Press Escape to exit.', 'info');
   });
 
   // Edit ribbon — Insert Blank Page

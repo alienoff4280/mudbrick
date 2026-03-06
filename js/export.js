@@ -17,6 +17,7 @@ import {
 
 import { showUserError, clearRecoveryData } from './error-handler.js';
 import { writeLinkToPDF } from './links.js';
+import { hasOCRResults, embedOCRTextLayer } from './ocr.js';
 
 const getPDFLib = () => window.PDFLib;
 const getFabric = () => window.fabric;
@@ -296,6 +297,20 @@ export async function exportAnnotatedPDF(opts) {
 
     // Step 3: Preserve existing PDF link annotations from the original document
     await preserveLinkAnnotations(pdfBytes, pdfDoc, pageAnnotations, PDFLib);
+
+    // Step 4: Embed OCR text as invisible searchable layer (if OCR was run)
+    try {
+      // Check if any page has OCR results
+      let hasAnyOCR = false;
+      for (let i = 1; i <= pdfDoc.getPageCount(); i++) {
+        if (hasOCRResults(i)) { hasAnyOCR = true; break; }
+      }
+      if (hasAnyOCR) {
+        await embedOCRTextLayer(pdfDoc, PDFLib);
+      }
+    } catch (ocrErr) {
+      console.warn('Could not embed OCR text layer:', ocrErr.message);
+    }
 
     const bytes = await pdfDoc.save();
     // Clear recovery data on successful export
