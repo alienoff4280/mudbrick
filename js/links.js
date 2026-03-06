@@ -33,8 +33,16 @@ export function createLinkRect(fabricCanvas, x, y, w, h, opts = {}) {
  */
 export function followLink(obj, goToPageFn) {
   if (!obj || obj.mudbrickType !== 'link') return;
-  if (obj.linkType === 'url' && obj.linkURL) {
-    window.open(obj.linkURL, '_blank', 'noopener');
+  if (obj.linkType === 'url') {
+    if (!obj.linkURL) return;
+    // Use a link element click to avoid popup blocker issues
+    const a = document.createElement('a');
+    a.href = obj.linkURL;
+    a.target = '_blank';
+    a.rel = 'noopener';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   } else if (obj.linkType === 'page' && obj.linkPage) {
     goToPageFn(obj.linkPage);
   }

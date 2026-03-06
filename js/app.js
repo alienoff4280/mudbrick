@@ -4695,6 +4695,8 @@ function wireEvents() {
       hideNotePropsPanel();
       hideLinkPropsPanel();
       hideCommentThreadPanel();
+      // Reset color swatches to default (no active highlight)
+      document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
     });
 
     // Also refresh notes sidebar after any annotation modification
