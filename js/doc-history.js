@@ -42,14 +42,12 @@ function evictIfNeeded() {
 export function pushDocState(bytes) {
   if (!bytes) { console.warn('[doc-history] pushDocState called with falsy bytes'); return; }
   const copy = new Uint8Array(bytes);
-  undoStack.push(copy); // defensive copy
-  console.log('[doc-history] pushDocState: saved', copy.byteLength, 'bytes, undoStack depth:', undoStack.length);
+  undoStack.push(copy);
   if (undoStack.length > MAX_DOC_HISTORY) {
     undoStack.shift();
   }
   redoStack.length = 0;
   evictIfNeeded();
-  console.log('[doc-history] after eviction: undoStack depth:', undoStack.length, 'totalMem:', totalMemory());
 }
 
 /**
@@ -58,14 +56,11 @@ export function pushDocState(bytes) {
  * @returns {Uint8Array|null} previous bytes, or null if nothing to undo
  */
 export function undoDoc(currentBytes) {
-  console.log('[doc-history] undoDoc called, undoStack depth:', undoStack.length, 'currentBytes size:', currentBytes?.byteLength);
-  if (undoStack.length === 0) { console.warn('[doc-history] undoDoc: stack empty!'); return null; }
+  if (undoStack.length === 0) return null;
   if (currentBytes) {
     redoStack.push(new Uint8Array(currentBytes));
   }
-  const popped = undoStack.pop();
-  console.log('[doc-history] undoDoc: returning', popped.byteLength, 'bytes, undoStack now:', undoStack.length);
-  return popped;
+  return undoStack.pop();
 }
 
 /**
@@ -83,9 +78,7 @@ export function redoDoc(currentBytes) {
 
 /** Whether document undo is available. */
 export function canUndoDoc() {
-  const can = undoStack.length > 0;
-  console.log('[doc-history] canUndoDoc:', can, 'depth:', undoStack.length);
-  return can;
+  return undoStack.length > 0;
 }
 
 /** Whether document redo is available. */

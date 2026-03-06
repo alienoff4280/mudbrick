@@ -334,6 +334,10 @@ export function setTool(toolName, options = {}) {
       fabricCanvas.selection = false;
       fabricCanvas.defaultCursor = 'crosshair';
       fabricCanvas.forEachObject(o => { o.selectable = false; o.evented = false; });
+      if (!window._redactWarningShown) {
+        document.dispatchEvent(new CustomEvent('redact-warning'));
+        window._redactWarningShown = true;
+      }
       break;
 
     case 'sticky-note':

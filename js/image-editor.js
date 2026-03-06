@@ -50,6 +50,8 @@ class ImageEditor {
     this.contrast = 0;     // -100 to 100
     this.hueRotate = 0;    // 0 to 360
     this.saturation = 100;  // 0 to 200
+    this.blur = 0;         // 0 to 20
+    this.sharpen = 0;      // 0 to 100
 
     // Crop state
     this.cropRect = null; // { x, y, w, h } in image-space coords
@@ -76,11 +78,18 @@ class ImageEditor {
     this.bgClickMode = false;
 
     // Tool state
-    this.activeTool = 'paint'; // 'paint' | 'crop' | 'eraser' | 'colorReplace' | 'bgRemove'
+    this.activeTool = 'paint'; // 'paint' | 'crop' | 'eraser' | 'colorReplace' | 'bgRemove' | 'line' | 'rect' | 'arrow'
     this.brushSize = 8;
     this.brushColor = '#ff0000';
     this.painting = false;
     this.lastPt = null;
+
+    // Shape state
+    this.shapeStart = null;
+    this.shaping = false;
+    this.shapeStroke = 3;
+    this.shapeColor = '#ff0000';
+    this.shapeFill = false;
 
     // Undo stack (stores paint canvas snapshots)
     this.undoStack = [];
@@ -129,6 +138,15 @@ class ImageEditor {
           <button class="image-editor-tool-btn" data-tool="bgRemove" title="Remove background (make transparent)">
             <span>Remove BG</span>
           </button>
+          <button class="image-editor-tool-btn" data-tool="line" title="Draw line">
+            <span>Line</span>
+          </button>
+          <button class="image-editor-tool-btn" data-tool="rect" title="Draw rectangle">
+            <span>Rect</span>
+          </button>
+          <button class="image-editor-tool-btn" data-tool="arrow" title="Draw arrow">
+            <span>Arrow</span>
+          </button>
           <span class="image-editor-sep"></span>
           <button class="image-editor-tool-btn image-editor-action-icon" id="img-ed-rotate-ccw" title="Rotate 90° left">&#x21BA;</button>
           <button class="image-editor-tool-btn image-editor-action-icon" id="img-ed-rotate-cw" title="Rotate 90° right">&#x21BB;</button>
@@ -158,7 +176,8 @@ class ImageEditor {
               <input type="range" class="image-editor-range" id="img-ed-replace-tolerance" min="0" max="150" value="40">
               <span class="image-editor-range-val" id="img-ed-replace-tolerance-val">40</span>
             </label>
-            <button class="image-editor-tool-btn" id="img-ed-replace-apply" title="Replace sampled color">Apply Replace</button>
+            <button class="image-editor-tool-btn" id="img-ed-replace-apply" title="Replace connected region of sampled color">Apply Replace</button>
+            <button class="image-editor-tool-btn" id="img-ed-replace-all" title="Replace ALL pixels matching this color (not just connected)">Replace All</button>
           </span>
           <span class="image-editor-bg-remove-controls" data-for-tool="bgRemove" style="display:none;">
             <label class="image-editor-label">
@@ -173,6 +192,20 @@ class ImageEditor {
             </label>
             <button class="image-editor-tool-btn" id="img-ed-bg-remove-corners" title="Remove background detected from corners">Auto (corners)</button>
             <button class="image-editor-tool-btn" id="img-ed-bg-remove-click" title="Click on the background color to remove">Click to sample</button>
+          </span>
+          <span class="image-editor-shape-controls" data-for-tool="line,rect,arrow" style="display:none;">
+            <label class="image-editor-label">
+              Stroke
+              <input type="range" class="image-editor-range" id="img-ed-shape-stroke" min="1" max="20" value="3">
+              <span class="image-editor-range-val" id="img-ed-shape-stroke-val">3</span>
+            </label>
+            <label class="image-editor-label">
+              Color
+              <input type="color" id="img-ed-shape-color" value="#ff0000">
+            </label>
+            <label class="image-editor-label" style="cursor:pointer;">
+              <input type="checkbox" id="img-ed-shape-fill"> Fill
+            </label>
           </span>
         </div>
         <div class="image-editor-filters">
@@ -195,6 +228,16 @@ class ImageEditor {
             Saturation
             <input type="range" class="image-editor-range" id="img-ed-saturation" min="0" max="200" value="100">
             <span class="image-editor-range-val" id="img-ed-saturation-val">100%</span>
+          </label>
+          <label class="image-editor-label">
+            Blur
+            <input type="range" class="image-editor-range" id="img-ed-blur" min="0" max="20" value="0">
+            <span class="image-editor-range-val" id="img-ed-blur-val">0</span>
+          </label>
+          <label class="image-editor-label">
+            Sharpen
+            <input type="range" class="image-editor-range" id="img-ed-sharpen" min="0" max="100" value="0">
+            <span class="image-editor-range-val" id="img-ed-sharpen-val">0</span>
           </label>
           <span class="image-editor-sep"></span>
           <label class="image-editor-label">
@@ -296,7 +339,32 @@ class ImageEditor {
     if (this.contrast !== 0) parts.push(`contrast(${1 + this.contrast / 100})`);
     if (this.hueRotate !== 0) parts.push(`hue-rotate(${this.hueRotate}deg)`);
     if (this.saturation !== 100) parts.push(`saturate(${this.saturation}%)`);
+    if (this.blur > 0) parts.push(`blur(${this.blur}px)`);
     return parts.length > 0 ? parts.join(' ') : 'none';
+  }
+
+  _applySharpen(ctx, w, h) {
+    if (this.sharpen <= 0) return;
+    const amount = this.sharpen / 100;
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const d = imgData.data;
+    const copy = new Uint8ClampedArray(d);
+    const stride = w * 4;
+    // 3x3 unsharp mask kernel: center=1+4a, neighbors=-a
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const i = (y * w + x) * 4;
+        for (let c = 0; c < 3; c++) {
+          const center = copy[i + c];
+          const neighbors = copy[i - stride + c] + copy[i + stride + c] +
+                            copy[i - 4 + c] + copy[i + 4 + c];
+          d[i + c] = Math.min(255, Math.max(0,
+            center + amount * (4 * center - neighbors)
+          ));
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
   }
 
   _drawCheckerboard(ctx, w, h) {
@@ -339,6 +407,9 @@ class ImageEditor {
 
     // Composite paint layer on top
     ctx.drawImage(this.paintCanvas, 0, 0, this.workW, this.workH, 0, 0, dw, dh);
+
+    // Apply sharpen post-processing
+    this._applySharpen(ctx, dw, dh);
 
     // Draw crop rectangle if active
     if (this.cropRect && this.activeTool === 'crop') {
@@ -392,6 +463,9 @@ class ImageEditor {
       // Paint layer on top
       ctx.drawImage(this.paintCanvas, 0, 0, this.workW, this.workH);
 
+      // Apply sharpen post-processing
+      this._applySharpen(ctx, this.workW, this.workH);
+
       out.toBlob((blob) => {
         if (!blob) { resolve(null); return; }
         const reader = new FileReader();
@@ -426,6 +500,8 @@ class ImageEditor {
       contrast: this.contrast,
       hueRotate: this.hueRotate,
       saturation: this.saturation,
+      blur: this.blur,
+      sharpen: this.sharpen,
       tintOpacity: this.tintOpacity,
       tintColor: this.tintColor,
     });
@@ -454,6 +530,8 @@ class ImageEditor {
     this.contrast = snap.contrast;
     this.hueRotate = snap.hueRotate;
     this.saturation = snap.saturation;
+    this.blur = snap.blur ?? 0;
+    this.sharpen = snap.sharpen ?? 0;
     this.tintOpacity = snap.tintOpacity;
     this.tintColor = snap.tintColor;
 
@@ -468,6 +546,10 @@ class ImageEditor {
       m.querySelector('#img-ed-hue-val').textContent = this.hueRotate + '°';
       m.querySelector('#img-ed-saturation').value = this.saturation;
       m.querySelector('#img-ed-saturation-val').textContent = this.saturation + '%';
+      m.querySelector('#img-ed-blur').value = this.blur;
+      m.querySelector('#img-ed-blur-val').textContent = this.blur;
+      m.querySelector('#img-ed-sharpen').value = this.sharpen;
+      m.querySelector('#img-ed-sharpen-val').textContent = this.sharpen;
       m.querySelector('#img-ed-tint-opacity').value = this.tintOpacity;
       m.querySelector('#img-ed-tint-opacity-val').textContent = this.tintOpacity + '%';
     }
@@ -824,6 +906,8 @@ class ImageEditor {
     this.contrast = 0;
     this.hueRotate = 0;
     this.saturation = 100;
+    this.blur = 0;
+    this.sharpen = 0;
     this.tintOpacity = 0;
 
     // Reset filter sliders
@@ -836,6 +920,74 @@ class ImageEditor {
     m.querySelector('#img-ed-hue-val').textContent = '0°';
     m.querySelector('#img-ed-saturation').value = 100;
     m.querySelector('#img-ed-saturation-val').textContent = '100%';
+    m.querySelector('#img-ed-blur').value = 0;
+    m.querySelector('#img-ed-blur-val').textContent = '0';
+    m.querySelector('#img-ed-sharpen').value = 0;
+    m.querySelector('#img-ed-sharpen-val').textContent = '0';
+    m.querySelector('#img-ed-tint-opacity').value = 0;
+    m.querySelector('#img-ed-tint-opacity-val').textContent = '0%';
+
+    this._renderPreview();
+  }
+
+  _applyColorReplaceAll() {
+    if (!this.replaceSourceColor) return;
+    this._pushUndo();
+
+    const imgData = this._getCompositeImageData();
+    const data = imgData.data;
+    const tol = this.replaceTolerance;
+    const w = this.workW;
+    const h = this.workH;
+
+    const sr = this.replaceSourceColor.r;
+    const sg = this.replaceSourceColor.g;
+    const sb = this.replaceSourceColor.b;
+
+    const tc = this.replaceTargetColor;
+    const tr = parseInt(tc.slice(1, 3), 16);
+    const tg = parseInt(tc.slice(3, 5), 16);
+    const tb = parseInt(tc.slice(5, 7), 16);
+
+    const maxDist = tol * tol * 3;
+
+    for (let i = 0; i < w * h; i++) {
+      const pi = i * 4;
+      const dr = data[pi] - sr, dg = data[pi + 1] - sg, db = data[pi + 2] - sb;
+      const dist = dr * dr + dg * dg + db * db;
+      if (dist <= maxDist) {
+        const blend = 1 - dist / maxDist;
+        data[pi]     = Math.round(data[pi] + (tr - data[pi]) * blend);
+        data[pi + 1] = Math.round(data[pi + 1] + (tg - data[pi + 1]) * blend);
+        data[pi + 2] = Math.round(data[pi + 2] + (tb - data[pi + 2]) * blend);
+      }
+    }
+
+    this.originalCanvas.width = this.workW;
+    this.originalCanvas.height = this.workH;
+    this.originalCanvas.getContext('2d').putImageData(imgData, 0, 0);
+
+    this.brightness = 0;
+    this.contrast = 0;
+    this.hueRotate = 0;
+    this.saturation = 100;
+    this.blur = 0;
+    this.sharpen = 0;
+    this.tintOpacity = 0;
+
+    const m = this.modal;
+    m.querySelector('#img-ed-brightness').value = 0;
+    m.querySelector('#img-ed-brightness-val').textContent = '0';
+    m.querySelector('#img-ed-contrast').value = 0;
+    m.querySelector('#img-ed-contrast-val').textContent = '0';
+    m.querySelector('#img-ed-hue').value = 0;
+    m.querySelector('#img-ed-hue-val').textContent = '0°';
+    m.querySelector('#img-ed-saturation').value = 100;
+    m.querySelector('#img-ed-saturation-val').textContent = '100%';
+    m.querySelector('#img-ed-blur').value = 0;
+    m.querySelector('#img-ed-blur-val').textContent = '0';
+    m.querySelector('#img-ed-sharpen').value = 0;
+    m.querySelector('#img-ed-sharpen-val').textContent = '0';
     m.querySelector('#img-ed-tint-opacity').value = 0;
     m.querySelector('#img-ed-tint-opacity-val').textContent = '0%';
 
@@ -1055,6 +1207,8 @@ class ImageEditor {
     this._wireFilter('contrast', '#img-ed-contrast', '#img-ed-contrast-val', v => v);
     this._wireFilter('hueRotate', '#img-ed-hue', '#img-ed-hue-val', v => v + '°');
     this._wireFilter('saturation', '#img-ed-saturation', '#img-ed-saturation-val', v => v + '%');
+    this._wireFilter('blur', '#img-ed-blur', '#img-ed-blur-val', v => v);
+    this._wireFilter('sharpen', '#img-ed-sharpen', '#img-ed-sharpen-val', v => v);
 
     // Tint controls
     modal.querySelector('#img-ed-tint-color').addEventListener('input', (e) => {
@@ -1080,6 +1234,7 @@ class ImageEditor {
       tolVal.textContent = this.replaceTolerance;
     });
     modal.querySelector('#img-ed-replace-apply').addEventListener('click', () => this._applyColorReplace());
+    modal.querySelector('#img-ed-replace-all').addEventListener('click', () => this._applyColorReplaceAll());
 
     // Background remover controls
     const bgThreshInput = modal.querySelector('#img-ed-bg-threshold');
@@ -1099,6 +1254,20 @@ class ImageEditor {
       // Just a hint — clicking on the canvas while in bgRemove mode will sample
       this.bgClickMode = true;
       modal.querySelector('#img-ed-bg-remove-click').textContent = 'Now click on the background…';
+    });
+
+    // Shape controls
+    const shapeStrokeInput = modal.querySelector('#img-ed-shape-stroke');
+    const shapeStrokeVal = modal.querySelector('#img-ed-shape-stroke-val');
+    shapeStrokeInput.addEventListener('input', () => {
+      this.shapeStroke = parseInt(shapeStrokeInput.value);
+      shapeStrokeVal.textContent = this.shapeStroke;
+    });
+    modal.querySelector('#img-ed-shape-color').addEventListener('input', (e) => {
+      this.shapeColor = e.target.value;
+    });
+    modal.querySelector('#img-ed-shape-fill').addEventListener('change', (e) => {
+      this.shapeFill = e.target.checked;
     });
 
     // Canvas mouse events
@@ -1236,7 +1405,7 @@ class ImageEditor {
     cropBtn.style.display = (tool === 'crop' && this.cropRect) ? '' : 'none';
 
     // Cursor
-    if (tool === 'crop' || tool === 'colorReplace' || tool === 'bgRemove') {
+    if (['crop', 'colorReplace', 'bgRemove', 'line', 'rect', 'arrow'].includes(tool)) {
       this.displayCanvas.style.cursor = 'crosshair';
     } else {
       this.displayCanvas.style.cursor = 'default';
@@ -1251,21 +1420,22 @@ class ImageEditor {
     const pt = this._canvasToImage(e.clientX, e.clientY);
 
     if (this.activeTool === 'colorReplace') {
-      // Sample color from the original image at click point
       this._sampleColor(pt);
       e.preventDefault();
       return;
     } else if (this.activeTool === 'bgRemove') {
-      // Sample BG color from click point and remove it
       this._sampleBgColor(pt);
       e.preventDefault();
       return;
+    } else if (['line', 'rect', 'arrow'].includes(this.activeTool)) {
+      this._pushUndo();
+      this.shapeStart = pt;
+      this.shaping = true;
     } else if (this.activeTool === 'crop') {
       this.cropping = true;
       this.cropStart = pt;
       this.cropRect = null;
     } else {
-      // Paint or eraser
       this._pushUndo();
       this.painting = true;
       this.lastPt = pt;
@@ -1275,7 +1445,11 @@ class ImageEditor {
   }
 
   _handleMouseMove(e) {
-    if (this.cropping && this.cropStart) {
+    if (this.shaping && this.shapeStart) {
+      const pt = this._canvasToImage(e.clientX, e.clientY);
+      this._renderPreview();
+      this._drawShapePreview(this.shapeStart, pt);
+    } else if (this.cropping && this.cropStart) {
       const pt = this._canvasToImage(e.clientX, e.clientY);
       const x = Math.min(this.cropStart.x, pt.x);
       const y = Math.min(this.cropStart.y, pt.y);
@@ -1292,7 +1466,14 @@ class ImageEditor {
     }
   }
 
-  _handleMouseUp() {
+  _handleMouseUp(e) {
+    if (this.shaping && this.shapeStart) {
+      const pt = this._canvasToImage(e.clientX, e.clientY);
+      this._drawShapeOnPaint(this.shapeStart, pt);
+      this.shaping = false;
+      this.shapeStart = null;
+      this._renderPreview();
+    }
     this.cropping = false;
     this.painting = false;
     this.lastPt = null;
@@ -1318,6 +1499,64 @@ class ImageEditor {
     ctx.lineTo(to.x, to.y);
     ctx.stroke();
     ctx.restore();
+  }
+
+  // ── Shapes ──
+
+  _drawShape(ctx, tool, from, to) {
+    ctx.save();
+    ctx.strokeStyle = this.shapeColor;
+    ctx.fillStyle = this.shapeColor;
+    ctx.lineWidth = this.shapeStroke;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (tool === 'line') {
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+    } else if (tool === 'rect') {
+      const x = Math.min(from.x, to.x);
+      const y = Math.min(from.y, to.y);
+      const w = Math.abs(to.x - from.x);
+      const h = Math.abs(to.y - from.y);
+      if (this.shapeFill) {
+        ctx.fillRect(x, y, w, h);
+      }
+      ctx.strokeRect(x, y, w, h);
+    } else if (tool === 'arrow') {
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      // Arrowhead
+      const angle = Math.atan2(to.y - from.y, to.x - from.x);
+      const headLen = Math.max(12, this.shapeStroke * 4);
+      ctx.beginPath();
+      ctx.moveTo(to.x, to.y);
+      ctx.lineTo(to.x - headLen * Math.cos(angle - Math.PI / 6), to.y - headLen * Math.sin(angle - Math.PI / 6));
+      ctx.lineTo(to.x - headLen * Math.cos(angle + Math.PI / 6), to.y - headLen * Math.sin(angle + Math.PI / 6));
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  _drawShapePreview(from, to) {
+    // Draw on the display canvas (scaled) for live preview
+    const ctx = this.displayCtx;
+    const sf = { x: from.x * this.scale, y: from.y * this.scale };
+    const st = { x: to.x * this.scale, y: to.y * this.scale };
+    const savedStroke = this.shapeStroke;
+    this.shapeStroke = savedStroke * this.scale;
+    this._drawShape(ctx, this.activeTool, sf, st);
+    this.shapeStroke = savedStroke;
+  }
+
+  _drawShapeOnPaint(from, to) {
+    // Bake shape onto the paint canvas at full resolution
+    this._drawShape(this.paintCtx, this.activeTool, from, to);
   }
 
   // ── Reset ──

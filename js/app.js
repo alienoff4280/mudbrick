@@ -21,7 +21,7 @@ import {
 import {
   resetPdfLib, ensurePdfLib, rotatePage, deletePage,
   reorderPages, mergePDFs, splitPDF, addWatermark, appendPages,
-  insertBlankPage, cropPages, replacePages,
+  insertBlankPage, cropPages, replacePages, normalizePageSizes,
 } from './pdf-edit.js';
 
 import {
@@ -1092,42 +1092,28 @@ function updateUndoRedoButtons() {
 }
 
 async function handleUndo() {
-  console.log('[handleUndo] CALLED. canUndoImage:', canUndoImage(), 'canUndoDoc:', canUndoDoc(), 'canUndo(page):', canUndo(State.currentPage), 'pdfBytes size:', State.pdfBytes?.byteLength);
-  // Image edit mode undo (move/delete/edit within active session)
   if (canUndoImage()) {
-    console.log('[handleUndo] → image undo branch');
     undoImageAction();
     updateUndoRedoButtons();
     return;
   }
-  // Try document-level undo (text edits, insert page, crop…)
   if (canUndoDoc()) {
-    console.log('[handleUndo] → doc undo branch');
     try {
       const prevBytes = undoDoc(State.pdfBytes);
-      console.log('[handleUndo] undoDoc returned:', prevBytes ? prevBytes.byteLength + ' bytes' : 'null');
       if (prevBytes) {
-        const same = prevBytes.byteLength === State.pdfBytes?.byteLength;
-        console.log('[handleUndo] prevBytes same size as current?', same);
-        console.log('[handleUndo] calling reloadAfterEdit...');
         await reloadAfterEdit(prevBytes, { skipHistory: true });
-        console.log('[handleUndo] reloadAfterEdit completed OK');
         toast('Undo successful');
       }
     } catch (err) {
-      console.error('[handleUndo] doc undo FAILED:', err);
+      console.error('[undo] doc undo failed:', err);
       toast('Undo failed: ' + err.message, 'error');
     }
     updateUndoRedoButtons();
     return;
   }
-  // Fall back to annotation undo
   if (canUndo(State.currentPage)) {
-    console.log('[handleUndo] → annotation undo branch');
     undoAnnotation();
     updateUndoRedoButtons();
-  } else {
-    console.log('[handleUndo] → nothing to undo (all checks false)');
   }
 }
 
@@ -1231,16 +1217,10 @@ async function handleCommitImageEdits() {
     showLoading('Applying image edits…');
     // Capture a defensive copy of the pre-edit bytes BEFORE pdf-lib touches anything
     const preEditBytes = new Uint8Array(State.pdfBytes);
-    console.log('[commit-image] pre-edit bytes captured, size:', preEditBytes.byteLength);
     const newBytes = await commitImageEdits(State.pdfBytes, State.currentPage);
-    console.log('[commit-image] commitImageEdits returned:', newBytes ? newBytes.byteLength + ' bytes' : 'null');
     if (newBytes) {
-      // Push the pre-edit copy explicitly, then reload with skipHistory
-      console.log('[commit-image] pushing pre-edit bytes to doc history...');
       pushDocState(preEditBytes);
-      console.log('[commit-image] reloading with new bytes...');
       await reloadAfterEdit(newBytes, { skipHistory: true });
-      console.log('[commit-image] reload complete. canUndoDoc:', canUndoDoc());
       toast('Image edits applied');
     } else {
       toast('No changes to apply', 'info');
@@ -2397,6 +2377,45 @@ async function executeWatermark() {
   }
 }
 
+/* ═══════════════════ Normalize Page Sizes ═══════════════════ */
+
+function openNormalizePagesModal() {
+  $('normalize-modal-backdrop').classList.remove('hidden');
+  // Toggle custom fields visibility
+  document.querySelectorAll('input[name="normalize-size"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      $('normalize-custom-fields').style.display = radio.value === 'custom' && radio.checked ? '' : 'none';
+    });
+  });
+}
+
+async function executeNormalize() {
+  if (!State.pdfBytes) return;
+
+  const selected = document.querySelector('input[name="normalize-size"]:checked')?.value || 'letter';
+  let targetSize;
+  if (selected === 'custom') {
+    const w = parseFloat($('normalize-width').value) || 8.5;
+    const h = parseFloat($('normalize-height').value) || 11;
+    targetSize = { width: w * 72, height: h * 72 }; // inches to points
+  } else {
+    targetSize = selected;
+  }
+
+  showLoading('Normalizing page sizes…');
+  try {
+    const newBytes = await normalizePageSizes(State.pdfBytes, targetSize);
+    $('normalize-modal-backdrop').classList.add('hidden');
+    await reloadAfterEdit(newBytes);
+    toast('Page sizes normalized', 'success');
+  } catch (err) {
+    console.error('Normalize failed:', err);
+    toast('Normalize failed: ' + err.message, 'error');
+  } finally {
+    hideLoading();
+  }
+}
+
 /* ═══════════════════ Bates Numbering Modal ═══════════════════ */
 
 function openBatesModal() {
@@ -3429,6 +3448,8 @@ function getMenuDefinitions() {
       '---',
       { icon: 'lock', label: 'Security', action: () => $('btn-encrypt').click() },
       { icon: 'message-square', label: 'Comment Summary', action: () => $('btn-comment-summary').click() },
+      '---',
+      { icon: 'maximize', label: 'Normalize Page Sizes', action: openNormalizePagesModal },
     ],
     'Help': [
       { icon: 'info', label: 'Keyboard Shortcuts', shortcut: '?', needsDoc: false, action: openShortcutsModal },
@@ -3639,8 +3660,8 @@ function wireEvents() {
   }
 
   // Undo / Redo
-  DOM.btnUndo.addEventListener('click', () => { console.log('[button] Undo button clicked'); handleUndo(); });
-  DOM.btnRedo.addEventListener('click', () => { console.log('[button] Redo button clicked'); handleRedo(); });
+  DOM.btnUndo.addEventListener('click', handleUndo);
+  DOM.btnRedo.addEventListener('click', handleRedo);
 
   // Edit Text
   DOM.btnEditText.addEventListener('click', handleEditText);
@@ -3804,6 +3825,7 @@ function wireEvents() {
       if (modal === 'sanitize') closeModal('sanitize-modal-backdrop');
       if (modal === 'shortcuts') closeModal('shortcuts-modal-backdrop');
       if (modal === 'about') closeModal('about-modal-backdrop');
+      if (modal === 'normalize') closeModal('normalize-modal-backdrop');
       if (modal === 'page-labels') {
         closeModal('page-labels-modal-backdrop');
         // Restore previously saved ranges on cancel
@@ -3929,6 +3951,9 @@ function wireEvents() {
   $('watermark-opacity').addEventListener('input', () => {
     $('watermark-opacity-value').textContent = Math.round(parseFloat($('watermark-opacity').value) * 100) + '%';
   });
+
+  // Normalize Page Sizes modal
+  $('btn-normalize-execute').addEventListener('click', executeNormalize);
 
   // Bates Numbering modal
   $('btn-bates').addEventListener('click', openBatesModal);
@@ -4238,6 +4263,17 @@ function wireEvents() {
 
   // Keyboard shortcuts
   document.addEventListener('keydown', handleKeyboard);
+
+  // Text edit fallback notification
+  document.addEventListener('text-edit-fallback', (e) => {
+    const n = e.detail.count;
+    toast(`${n} line${n > 1 ? 's' : ''} used fallback rendering — font may differ slightly`, 'info');
+  });
+
+  // Redaction visual-only warning
+  document.addEventListener('redact-warning', () => {
+    toast('Redactions are visual only — export to PDF to make permanent. Original content may still be extractable.', 'warning', 6000);
+  });
 
   // Find bar events
   const findInput = $('find-input');
@@ -5470,7 +5506,6 @@ function handleKeyboard(e) {
 
   // Undo / Redo — always available regardless of focus
   if (mod && e.key === 'z' && !e.shiftKey && State.pdfDoc) {
-    console.log('[keyboard] Ctrl+Z detected, calling handleUndo');
     e.preventDefault();
     handleUndo();
     return;

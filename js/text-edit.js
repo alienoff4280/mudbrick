@@ -154,6 +154,13 @@ function samplePixelColor(canvas, x, y) {
   }
 }
 
+function _getTextDecoration(div) {
+  const parts = [];
+  if (div.dataset.underline === 'true') parts.push('underline');
+  if (div.dataset.strikethrough === 'true') parts.push('line-through');
+  return parts.length ? parts.join(' ') : 'none';
+}
+
 let active = false;
 let editContainer = null;
 let toolbar = null;
@@ -406,6 +413,20 @@ function handleTextEditKeydown(e) {
       div.style.fontStyle = isItalic ? 'normal' : 'italic';
       div.dataset.italic = isItalic ? '' : 'true';
       if (toolbar) toolbar.querySelector('.text-edit-italic')?.classList.toggle('active', !isItalic);
+    });
+    return;
+  }
+
+  // Ctrl+U — toggle underline
+  if (mod && e.key === 'u') {
+    e.preventDefault();
+    e.stopPropagation();
+    applyToFocused(div => {
+      pushUndo(div);
+      const isUnderline = div.dataset.underline === 'true';
+      div.dataset.underline = isUnderline ? '' : 'true';
+      div.style.textDecoration = _getTextDecoration(div);
+      if (toolbar) toolbar.querySelector('.text-edit-underline')?.classList.toggle('active', !isUnderline);
     });
     return;
   }
@@ -1093,7 +1114,9 @@ function deactivateBlock() {
     const initialItalic = div.dataset.initialItalic === 'true';
     const hasTextChange = newText !== original;
     const hasFormatChange = fontSizeOverride || colorOverride || fontFamilyOverride ||
-      bold !== initialBold || italic !== initialItalic;
+      bold !== initialBold || italic !== initialItalic ||
+      div.dataset.underline === 'true' || div.dataset.strikethrough === 'true' ||
+      (div.dataset.align && div.dataset.align !== 'left');
 
     if (hasTextChange || hasFormatChange || isDirty) hasDirty = true;
 
@@ -1128,6 +1151,9 @@ function deactivateBlock() {
       screenWidth: parseFloat(div.dataset.width),
       screenHeight: parseFloat(div.dataset.height),
       bgColor: div.dataset.bgColor || '#ffffff',
+      underline: div.dataset.underline === 'true',
+      strikethrough: div.dataset.strikethrough === 'true',
+      align: div.dataset.align || 'left',
     });
     div.remove();
   }
@@ -1276,6 +1302,20 @@ function createToolbar(container) {
     <div class="text-edit-toolbar-group">
       <button class="text-edit-btn text-edit-bold" title="Bold (Ctrl+B)"><b>B</b></button>
       <button class="text-edit-btn text-edit-italic" title="Italic (Ctrl+I)"><i>I</i></button>
+      <button class="text-edit-btn text-edit-underline" title="Underline (Ctrl+U)"><u>U</u></button>
+      <button class="text-edit-btn text-edit-strikethrough" title="Strikethrough"><s>S</s></button>
+    </div>
+    <div class="text-edit-toolbar-sep"></div>
+    <div class="text-edit-toolbar-group">
+      <button class="text-edit-btn text-edit-align" data-align="left" title="Align left">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="17" y1="10" x2="3" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="17" y1="14" x2="3" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+      </button>
+      <button class="text-edit-btn text-edit-align" data-align="center" title="Align center">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="10" x2="6" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="18" y1="14" x2="6" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+      </button>
+      <button class="text-edit-btn text-edit-align" data-align="right" title="Align right">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="21" y1="10" x2="7" y2="10"/><line x1="21" y1="6" x2="3" y2="6"/><line x1="21" y1="14" x2="7" y2="14"/><line x1="21" y1="18" x2="3" y2="18"/></svg>
+      </button>
     </div>
     <div class="text-edit-toolbar-sep"></div>
     <div class="text-edit-toolbar-group">
@@ -1355,6 +1395,38 @@ function createToolbar(container) {
       div.style.fontStyle = isItalic ? 'normal' : 'italic';
       div.dataset.italic = isItalic ? '' : 'true';
       toolbar.querySelector('.text-edit-italic').classList.toggle('active', !isItalic);
+    });
+  });
+
+  toolbar.querySelector('.text-edit-underline').addEventListener('click', () => {
+    applyToFocused(div => {
+      pushUndo(div);
+      const isUnderline = div.dataset.underline === 'true';
+      div.dataset.underline = isUnderline ? '' : 'true';
+      div.style.textDecoration = _getTextDecoration(div);
+      toolbar.querySelector('.text-edit-underline').classList.toggle('active', !isUnderline);
+    });
+  });
+
+  toolbar.querySelector('.text-edit-strikethrough').addEventListener('click', () => {
+    applyToFocused(div => {
+      pushUndo(div);
+      const isStrike = div.dataset.strikethrough === 'true';
+      div.dataset.strikethrough = isStrike ? '' : 'true';
+      div.style.textDecoration = _getTextDecoration(div);
+      toolbar.querySelector('.text-edit-strikethrough').classList.toggle('active', !isStrike);
+    });
+  });
+
+  toolbar.querySelectorAll('.text-edit-align').forEach(btn => {
+    btn.addEventListener('click', () => {
+      applyToFocused(div => {
+        pushUndo(div);
+        div.style.textAlign = btn.dataset.align;
+        div.dataset.align = btn.dataset.align;
+      });
+      toolbar.querySelectorAll('.text-edit-align').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
     });
   });
 
@@ -1485,7 +1557,9 @@ function markDirty(div) {
   const hasTextChange = div.textContent !== div.dataset.original;
   const hasFormatChange = div.dataset.fontSizeOverride || div.dataset.colorOverride ||
     div.dataset.fontFamilyOverride || div.dataset.bold !== (div.dataset.initialBold || '') ||
-    div.dataset.italic !== (div.dataset.initialItalic || '');
+    div.dataset.italic !== (div.dataset.initialItalic || '') ||
+    div.dataset.underline === 'true' || div.dataset.strikethrough === 'true' ||
+    (div.dataset.align && div.dataset.align !== 'left');
   div.classList.toggle('text-edit-dirty', hasTextChange || !!hasFormatChange);
   updateEditCount();
 }
@@ -1521,6 +1595,11 @@ function updateToolbarState(div) {
   if (!toolbar) return;
   toolbar.querySelector('.text-edit-bold').classList.toggle('active', div.dataset.bold === 'true');
   toolbar.querySelector('.text-edit-italic').classList.toggle('active', div.dataset.italic === 'true');
+  toolbar.querySelector('.text-edit-underline').classList.toggle('active', div.dataset.underline === 'true');
+  toolbar.querySelector('.text-edit-strikethrough').classList.toggle('active', div.dataset.strikethrough === 'true');
+  toolbar.querySelectorAll('.text-edit-align').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.align === (div.dataset.align || 'left'));
+  });
 
   const sizeSelect = toolbar.querySelector('.text-edit-font-size');
   sizeSelect.value = div.dataset.fontSizeOverride || '';
@@ -2761,7 +2840,9 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     const userChangedBold = bold !== initialBold;
     const userChangedItalic = italic !== initialItalic;
     const hasFormatChange = fontSizeOverride || colorOverride || fontFamilyOverride ||
-      userChangedBold || userChangedItalic;
+      userChangedBold || userChangedItalic ||
+      div.dataset.underline === 'true' || div.dataset.strikethrough === 'true' ||
+      (div.dataset.align && div.dataset.align !== 'left');
 
     if (!hasTextChange && !hasFormatChange) continue;
 
@@ -2791,6 +2872,9 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       bold: commitBold,
       italic: commitItalic,
       bgColor: div.dataset.bgColor || '#ffffff',
+      underline: div.dataset.underline === 'true',
+      strikethrough: div.dataset.strikethrough === 'true',
+      align: div.dataset.align || 'left',
     });
   }
 
@@ -2815,6 +2899,9 @@ export async function commitTextEdits(pdfBytes, pageNum) {
         bold: saved.bold,
         italic: saved.italic,
         bgColor: saved.bgColor || '#ffffff',
+        underline: !!saved.underline,
+        strikethrough: !!saved.strikethrough,
+        align: saved.align || 'left',
       });
     }
   }
@@ -2844,22 +2931,10 @@ export async function commitTextEdits(pdfBytes, pageNum) {
   let textOps = streamText ? parseTextOperations(streamText, fontCMaps) : [];
   let streamModified = false;
 
-  console.log('[commitTextEdits] Strategy A init:',
-    'streamData=', !!streamData,
-    'streamLen=', streamText ? streamText.length : 0,
-    'textOps=', textOps.length,
-    'fontCMaps=', fontCMaps.size,
-    'changes=', changes.length);
   if (fontCMaps.size > 0) {
     for (const [fn, fm] of fontCMaps) {
       console.log(`  Font ${fn}: isCID=${fm.isCID} glyphs=${fm.glyphToUnicode.size} reverse=${fm.unicodeToGlyph.size}`);
     }
-  }
-  if (textOps.length > 0) {
-    console.log('[commitTextEdits] Sample textOps (first 10):');
-    textOps.slice(0, 10).forEach((o, i) => {
-      console.log(`  [${i}] text="${o.text.slice(0,40)}" x=${o.x.toFixed(1)} y=${o.y.toFixed(1)} font=${o.fontRef} op=${o.operator} isHex=${o.isHex} isCID=${o.isCID}`);
-    });
   }
 
   const fallbackChanges = []; // changes that need cover-and-replace
@@ -2870,11 +2945,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
     const canUse = streamText && canUseContentStreamReplacement(change, pageFontMap);
     if (canUse) {
       const op = matchChangeToOperation(change, textOps);
-      console.log('[commitTextEdits] Strategy A attempt:',
-        'orig=', JSON.stringify(change.originalText?.slice(0, 30)),
-        'new=', JSON.stringify(change.newText?.slice(0, 30)),
-        'pdfPos=', change.pdfX?.toFixed(1), change.pdfY?.toFixed(1),
-        'matched=', op ? `"${op.text.slice(0, 30)}" @(${op.x.toFixed(1)},${op.y.toFixed(1)}) isCID=${op.isCID}` : 'NO MATCH');
       if (op) {
         // When the original text spans multiple content stream operators (e.g.,
         // "Re: N" + "-" + "400 Application…"), expand the replacement range to
@@ -2895,8 +2965,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
             }
             if (combinedText.length > op.text.length) {
               effectiveOp = { ...op, endOffset: lastEndOffset, text: combinedText };
-              console.log('[commitTextEdits] Expanded op range:',
-                `"${combinedText.slice(0, 40)}" endOffset ${op.endOffset}→${lastEndOffset}`);
             }
           }
         }
@@ -2907,7 +2975,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
         const replaced = replaceTextInStream(streamText, effectiveOp, change.newText, fme);
         if (replaced === null) {
           // Encoding failed (e.g., new chars not in CID subset) — fall back
-          console.log('[commitTextEdits] Strategy A encode failed, falling back');
           fallbackChanges.push(change);
           continue;
         }
@@ -2924,10 +2991,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
         continue; // Done — no cover-and-replace needed for this change
       }
     } else {
-      console.log('[commitTextEdits] Strategy A skipped:',
-        'orig=', JSON.stringify(change.originalText?.slice(0, 30)),
-        'userChangedFormat=', change.userChangedFormat,
-        'hasStreamText=', !!streamText);
     }
     // Content stream replacement not possible → collect for cover-and-replace fallback
     fallbackChanges.push(change);
@@ -2937,7 +3000,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
   if (streamModified && appliedStrategyA.length > 0) {
     try {
       const ulOps = parseUnderlineOps(streamText);
-      console.log('[commitTextEdits] Underline ops found:', ulOps.length);
       if (ulOps.length > 0) {
         // Process underline adjustments from end to start so offsets stay valid
         const adjustments = [];
@@ -2951,7 +3013,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
             const yDist = Math.abs(ul.y - sa.y);
             const xDist = Math.abs(ul.x - sa.x);
             if (yDist < 8 && xDist < 20) {
-              console.log(`[commitTextEdits] Adjusting underline: type=${ul.type} x=${ul.x.toFixed(1)} y=${ul.y.toFixed(1)} width=${ul.width.toFixed(1)} scale=${scaleFactor.toFixed(3)}`);
               adjustments.push({ ulOp: ul, scaleFactor });
             }
           }
@@ -2963,7 +3024,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
           streamText = adjustUnderlineWidth(streamText, adj.ulOp, adj.scaleFactor);
         }
         if (adjustments.length > 0) {
-          console.log('[commitTextEdits] Applied', adjustments.length, 'underline adjustments');
         }
       }
     } catch (err) {
@@ -2972,7 +3032,6 @@ export async function commitTextEdits(pdfBytes, pageNum) {
   }
 
   // Write modified content stream back to the PDF
-  console.log('[commitTextEdits] Stream modified=', streamModified, 'fallback changes=', fallbackChanges.length);
   if (streamModified && streamData && streamData.streams.length > 0) {
     try {
       const newBytes = new Uint8Array(streamText.length);
@@ -3007,6 +3066,9 @@ export async function commitTextEdits(pdfBytes, pageNum) {
 
   // ── Strategy B: Cover-and-replace fallback (for format changes, CIDFonts, unmatched text) ──
   if (fallbackChanges.length > 0) {
+    document.dispatchEvent(new CustomEvent('text-edit-fallback', {
+      detail: { count: fallbackChanges.length }
+    }));
     const fontCache = {};
     async function getFont(fontName, bold, italic) {
       if (fontName === 'custom' && customFont) {
@@ -3096,13 +3158,38 @@ export async function commitTextEdits(pdfBytes, pageNum) {
       const scaleX = (originalWidth > 0 && naturalWidth > 0) ? originalWidth / naturalWidth : 1;
       const applyScale = hasCTM && scaleX !== 1 && scaleX > 0.5 && scaleX < 2.0;
 
+      // Alignment adjustment
+      let drawX = x;
+      if (change.align === 'center' && originalWidth > 0) {
+        drawX = x + (originalWidth - naturalWidth) / 2;
+      } else if (change.align === 'right' && originalWidth > 0) {
+        drawX = x + (originalWidth - naturalWidth);
+      }
+
       if (applyScale) {
         page.pushOperators(PDFLib.pushGraphicsState());
-        page.pushOperators(PDFLib.concatTransformationMatrix(scaleX, 0, 0, 1, x * (1 - scaleX), 0));
-        page.drawText(change.newText, { x, y, size: fontSize, font, color });
+        page.pushOperators(PDFLib.concatTransformationMatrix(scaleX, 0, 0, 1, drawX * (1 - scaleX), 0));
+        page.drawText(change.newText, { x: drawX, y, size: fontSize, font, color });
         page.pushOperators(PDFLib.popGraphicsState());
       } else {
-        page.drawText(change.newText, { x, y, size: fontSize, font, color });
+        page.drawText(change.newText, { x: drawX, y, size: fontSize, font, color });
+      }
+
+      // Underline and strikethrough decorations
+      const textW = applyScale ? naturalWidth * scaleX : naturalWidth;
+      if (change.underline) {
+        page.drawRectangle({
+          x: drawX, y: y - fontSize * 0.15,
+          width: textW, height: 0.5,
+          color, borderWidth: 0,
+        });
+      }
+      if (change.strikethrough) {
+        page.drawRectangle({
+          x: drawX, y: y + fontSize * 0.3,
+          width: textW, height: 0.5,
+          color, borderWidth: 0,
+        });
       }
     }
   }

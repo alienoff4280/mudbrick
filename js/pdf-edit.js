@@ -366,3 +366,70 @@ export async function addWatermark(pdfBytes, opts = {}) {
 
   return doc.save();
 }
+
+/* ═══════════════════ Normalize Page Sizes ═══════════════════ */
+
+/**
+ * Resize all pages to a uniform size.
+ * Content is centered and scaled to fit (aspect-ratio preserved).
+ * @param {Uint8Array} pdfBytes
+ * @param {'letter'|'a4'|'legal'|'first'|{width:number,height:number}} targetSize
+ * @returns {Promise<Uint8Array>}
+ */
+export async function normalizePageSizes(pdfBytes, targetSize) {
+  const PDFLib = getPDFLib();
+  const doc = await ensurePdfLib(pdfBytes);
+
+  let tw, th;
+  if (targetSize === 'letter') { tw = 612; th = 792; }
+  else if (targetSize === 'a4') { tw = 595.28; th = 841.89; }
+  else if (targetSize === 'legal') { tw = 612; th = 1008; }
+  else if (targetSize === 'first') {
+    const s = doc.getPage(0).getSize();
+    tw = s.width; th = s.height;
+  } else { tw = targetSize.width; th = targetSize.height; }
+
+  const count = doc.getPageCount();
+
+  for (let i = 0; i < count; i++) {
+    const page = doc.getPage(i);
+    const { width: pw, height: ph } = page.getSize();
+
+    if (Math.abs(pw - tw) < 1 && Math.abs(ph - th) < 1) continue;
+
+    const scale = Math.min(tw / pw, th / ph);
+    const dx = (tw - pw * scale) / 2;
+    const dy = (th - ph * scale) / 2;
+
+    // Wrap existing content stream in a graphics state transform
+    const contentsRef = page.node.get(PDFLib.PDFName.of('Contents'));
+    if (contentsRef) {
+      const prependBytes = new TextEncoder().encode(`q ${scale} 0 0 ${scale} ${dx} ${dy} cm\n`);
+      const appendBytes = new TextEncoder().encode('\nQ');
+
+      const prependRef = doc.context.register(
+        doc.context.flateStream(prependBytes)
+      );
+      const appendRef = doc.context.register(
+        doc.context.flateStream(appendBytes)
+      );
+
+      const existingRefs = [];
+      if (contentsRef instanceof PDFLib.PDFArray) {
+        for (let j = 0; j < contentsRef.size(); j++) {
+          existingRefs.push(contentsRef.get(j));
+        }
+      } else {
+        existingRefs.push(contentsRef);
+      }
+
+      const newArray = doc.context.obj([prependRef, ...existingRefs, appendRef]);
+      page.node.set(PDFLib.PDFName.of('Contents'), newArray);
+    }
+
+    page.setMediaBox(0, 0, tw, th);
+    page.setCropBox(0, 0, tw, th);
+  }
+
+  return doc.save();
+}

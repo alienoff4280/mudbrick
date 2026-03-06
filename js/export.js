@@ -49,6 +49,13 @@ export async function exportAnnotatedPDF(opts) {
         return json && json.objects && json.objects.length > 0;
       });
 
+    const hasRedactions = Object.values(pageAnnotations).some(json =>
+      json?.objects?.some(o => o.mudbrickType === 'redact')
+    );
+    if (hasRedactions) {
+      console.warn('PDF contains redaction annotations. Visual content is covered but underlying PDF objects are not removed.');
+    }
+
     // Load a fresh copy of the PDF for modification
     const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes, {
       ignoreEncryption: true,
