@@ -31,13 +31,25 @@ export function createLinkRect(fabricCanvas, x, y, w, h, opts = {}) {
 /**
  * Follow a link — open URL or navigate to page.
  */
+/**
+ * Ensure a URL has a protocol prefix.
+ */
+export function normalizeURL(url) {
+  if (!url) return url;
+  url = url.trim();
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(url)) {
+    return 'https://' + url;
+  }
+  return url;
+}
+
 export function followLink(obj, goToPageFn) {
   if (!obj || obj.mudbrickType !== 'link') return;
   if (obj.linkType === 'url') {
     if (!obj.linkURL) return;
-    // Use a link element click to avoid popup blocker issues
+    const url = normalizeURL(obj.linkURL);
     const a = document.createElement('a');
-    a.href = obj.linkURL;
+    a.href = url;
     a.target = '_blank';
     a.rel = 'noopener';
     document.body.appendChild(a);
@@ -112,7 +124,7 @@ export function writeLinkToPDF(page, linkObj, canvasW, canvasH, pageW, pageH) {
     Rect: [x1, y1, x2, y2],
     Border: [0, 0, 0],
     A: linkObj.linkType === 'url'
-      ? { S: 'URI', URI: PDFLib.PDFString.of(linkObj.linkURL || '') }
+      ? { S: 'URI', URI: PDFLib.PDFString.of(normalizeURL(linkObj.linkURL) || '') }
       : { S: 'GoTo', D: PDFLib.PDFString.of(`page${linkObj.linkPage || 1}`) },
   });
 

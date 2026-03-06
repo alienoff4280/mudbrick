@@ -83,7 +83,7 @@ import {
 } from './comment-summary.js';
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
-import { followLink } from './links.js';
+import { followLink, normalizeURL, extractLinksFromPage, createLinkRect } from './links.js';
 import { getAuthorName, setAuthorName, addReply, setThreadStatus, getAllThreads, exportThreadsXFDF } from './comments.js';
 import { restoreFonts } from './font-manager.js';
 import { canUndo, canRedo, initPageState } from './history.js';
@@ -685,6 +685,32 @@ async function renderCurrentPage() {
   // Resize and reload annotation overlay
   resizeOverlay(w, h, State.zoom);
   loadPageAnnotations(renderedPage);
+
+  // Extract existing PDF link annotations if no Fabric annotations are saved for this page
+  const annotations = getAnnotations();
+  if (!annotations[renderedPage] && State.pdfLibDoc) {
+    try {
+      const pdfPage = State.pdfLibDoc.getPage(renderedPage - 1);
+      const { height: pageH } = pdfPage.getSize();
+      const pdfLinks = extractLinksFromPage(pdfPage, pageH);
+      if (pdfLinks.length > 0) {
+        const fabCanvas = getCanvas();
+        const { width: pageW } = pdfPage.getSize();
+        const sx = w / pageW;
+        const sy = h / pageH;
+        for (const link of pdfLinks) {
+          createLinkRect(fabCanvas, link.x * sx, link.y * sy, link.width * sx, link.height * sy, {
+            linkType: link.type,
+            linkURL: link.url,
+            linkPage: link.page,
+          });
+        }
+        fabCanvas.discardActiveObject();
+        fabCanvas.renderAll();
+        savePageAnnotations(renderedPage);
+      }
+    } catch (_e) { /* ignore extraction errors */ }
+  }
 
   // Ensure undo history has a baseline state for this page
   const canvas = getCanvas();
@@ -4382,7 +4408,7 @@ function wireEvents() {
   $('btn-link-save')?.addEventListener('click', () => {
     if (!_selectedLinkObj) return;
     _selectedLinkObj.linkType = $('link-type-select').value;
-    _selectedLinkObj.linkURL = $('link-url-input').value;
+    _selectedLinkObj.linkURL = normalizeURL($('link-url-input').value);
     _selectedLinkObj.linkPage = parseInt($('link-page-input').value) || 1;
     toast('Link saved', 'success');
   });
