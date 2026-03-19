@@ -19,6 +19,16 @@ Timeline: 20 weeks (5 months) across 4 phases. Phase 1 MVP in 6 weeks.
 
 Branch strategy: New branch `mudbrickv2` in the existing `mudbrick` repo. If successful, replaces main after testing.
 
+### Confirmed Windows App Additions
+
+- `src-tauri/` owns the Rust shell, sidecar configuration, window management, and native app lifecycle
+- The PyInstaller spec plus `scripts/build-sidecar.ps1` bundle Python + Tesseract into a distributable sidecar directory
+- Tauri file dialogs replace browser open, save, and save-as pickers
+- OCR progress streams from the local sidecar over SSE, so there is no polling layer
+- Sessions persist in `%APPDATA%/mudbrick/sessions/` while active session state stays in memory
+- GitHub Actions builds and publishes `.msi` and `.exe` installers to GitHub Releases
+- Tauri auto-updater uses GitHub Releases as the update source
+
 ---
 
 ## 1. Architecture Decision
@@ -383,6 +393,21 @@ Base URL: `http://localhost:8000/api` (local sidecar, never exposed to network)
 
 ## 5. Feature-by-Feature Implementation Plan
 
+### Recommended Build Order (Bottom-Up, Parallel)
+
+For the Windows app, start at the lowest-dependency layer and move upward. Tasks within the same layer are the ones we should run in parallel.
+
+| Layer | Start Here Because | Tasks in This Layer | Safe Parallel Lanes | Exit Criteria |
+|---|---|---|---|---|
+| 1. Native shell + packaging foundation | Every other task depends on the app booting locally and launching the sidecar reliably | `src-tauri/` scaffold, sidecar spawn/health check, `tauri.conf.json`, PyInstaller spec, `scripts/build-sidecar.ps1`, initial GitHub Actions release skeleton | Rust/Tauri shell, Python bundling, React/Vite scaffold | `pnpm tauri dev` opens the window, starts the sidecar, and passes a health check |
+| 2. Local file I/O + sessions | The Windows app is local-first, so open/save/session plumbing must exist before feature work can land cleanly | Tauri open/save/save-as dialogs, `%APPDATA%/mudbrick/sessions/` layout, in-memory active session registry, open/save/save-as routers, metadata/version storage | Backend session manager + routers, frontend Tauri bridge + typed API client | Open a PDF from disk, create a session, save, save as, and restore working files locally |
+| 3. Viewer shell | The viewer is the base surface that nearly every feature plugs into | PDF.js render path, zoom controls, thumbnails, navigation, drag-and-drop, keyboard shortcuts, dark mode | Viewer UI, thumbnail endpoint, desktop file-drop handling | Large PDFs render correctly, navigation is fast, and desktop file loading feels native |
+| 4. Annotation + export core | This is the first feature-complete value slice for the desktop app | Fabric.js canvas, annotation store, property panel, export dialog, backend annotation renderer, export route | Frontend annotation tools, backend PyMuPDF renderer spike | Users can annotate and export a valid PDF with those annotations embedded |
+| 5. Document mutation workflows | These features depend on sessions, viewer state, and export/save semantics already existing | Rotate/delete/reorder, merge, split, document undo/redo, save/save-as integration polish | Page ops API, merge/split API, frontend dialogs/history UI | Core document editing works on 100MB files without breaking session history |
+| 6. OCR, text, and forensic features | These are heavier capabilities that build on the stable local shell and document pipeline | `pytesseract` sidecar bundle, `/api/ocr/{sid}` SSE, correction mode, text extract/search/edit, forensic redaction engine and UI | OCR engine + SSE transport, redaction engine, frontend OCR/redaction panels | Long-running operations stream progress and complete reliably inside the desktop app |
+| 6.5. Pre-7 quality gate | Release/update work should only start once the app is already trustworthy, regression-tested, and button-complete for the core workflow | Strict regression pass, TDD coverage audit, button-by-button functional test matrix, crash/recovery validation, performance baseline, installer readiness checklist | Frontend test hardening, backend test hardening, manual QA matrix, performance validation | Phase 1-3 functionality is proven stable enough that Stage 7 is packaging work, not bug discovery |
+| 7. Release, update, and polish | Ship only after the app and sidecar are stable enough to package and update safely | `.msi`/`.exe` release workflow, Tauri updater wiring, accessibility, onboarding, recent files, final QA | CI/release automation, updater UX, QA/accessibility pass | Installer builds cleanly, updates work, and the Windows app is ready for team rollout |
+
 ### Phase 1: MVP Core (Weeks 1-6)
 
 | Week | Feature | Frontend Work | Backend Work | Notes |
@@ -431,6 +456,96 @@ Base URL: `http://localhost:8000/api` (local sidecar, never exposed to network)
 | 15 | Form field detection | FormOverlay | `/api/forms/{sid}/fields` |
 | 16 | Form filling + creation | FormFieldEditor, FormDataPanel | `/api/forms/{sid}/fill,flatten,export,import` |
 | 16 | **Phase 3 QA** | Feature testing | -- |
+
+### Pre-7 Quality Gate: Strict Precheck (Required Before Stage 7)
+
+This is a hard gate between Stage 6 and Stage 7. We do **not** start installer, updater, onboarding, or release rollout work until this gate passes. The goal is to make Stage 7 about packaging and rollout confidence, not about discovering broken core behavior late.
+
+#### Purpose
+
+- Prove that the desktop app already works for the real Novo Legal workflow before we start distributing it
+- Catch regressions before packaging hides them behind installer/update complexity
+- Force a **test-first / TDD** workflow so tests lead implementation rather than trail it
+- Verify that every major button, shortcut, dialog, and document mutation path works end-to-end
+
+#### TDD Rule (Mandatory)
+
+For all remaining feature work before Stage 7:
+- Write or update the failing test first
+- Implement the minimum code needed to make the test pass
+- Refactor only after the test is green
+- No feature PR is complete without automated tests plus a matching manual verification note
+- No "we'll add tests later" exceptions for core flows
+
+#### Required Test Layers
+
+| Layer | Scope | Required Before Stage 7 |
+|---|---|---|
+| Unit tests | Pure utilities, reducers/stores, formatting, page math, token replacement, request/response validation | Must exist for all critical utility modules and state transitions |
+| Component tests | Buttons, dialogs, toolbars, welcome screen, recent files, OCR controls, redaction review, save flows | Must cover visible UI behavior, not just render snapshots |
+| Integration tests | Frontend API client + backend routers + session/version flows | Must cover open, save, save-as, export, rotate, delete, reorder, merge, split, OCR request flow |
+| Golden/output tests | Exported PDFs, redaction output, annotation flattening, OCR text payloads | Must compare output against known-good fixtures for core operations |
+| Manual QA matrix | Button-by-button and shortcut-by-shortcut verification on Windows | Must be completed and signed off before Stage 7 begins |
+| Performance checks | 100MB open, page navigation, export, page ops, OCR startup, session recovery | Must be measured and written down, not estimated |
+
+#### Button-and-Flow Precheck Matrix
+
+Every user-facing control in completed phases must be checked explicitly:
+- Welcome screen: open button, drag-and-drop, recent files open/remove
+- Toolbar and shortcuts: `Ctrl+O`, `Ctrl+S`, `Ctrl+Shift+S`, navigation, zoom controls, dark mode
+- Document flows: open, close, save, save as, undo, redo, crash recovery restore
+- Page operations: rotate, delete, reorder, insert, merge, split
+- Annotation flows: draw, highlight, text, shapes, stamps, cover/redact, property changes, export visibility
+- OCR flows: start OCR, receive SSE progress, review results, correction mode save path
+- Text/redaction flows: search, edit, pattern search, review, apply redaction, verify unrecoverable output
+- Legal tools from Phase 3: Bates, headers/footers, exhibits, page labels, signatures, forms
+
+If a button exists in the UI, it must have:
+- An automated test where practical
+- A manual QA row in the matrix
+- A recorded expected result
+
+#### Entry Criteria for Pre-7 Gate
+
+Stage 7 work cannot begin until all of the following are true:
+- Phase 1, 2, and 3 planned functionality is implemented
+- Backend sidecar starts reliably in local desktop runs
+- The document session/version system is stable under repeated edits
+- The export path is already trusted for real documents
+- There is a runnable automated test suite for both frontend and backend
+- QA fixtures exist for small, medium, and 100MB-class PDFs
+
+#### Exit Criteria for Pre-7 Gate
+
+Stage 7 may begin only when all of the following are true:
+- All completed features have automated coverage at the right layer
+- Critical regressions are zero; medium issues are triaged and accepted explicitly
+- Manual QA matrix is complete on Windows 10 and Windows 11
+- Crash recovery has been tested by forced app termination
+- Save, save-as, export, and reopen round-trips are verified
+- OCR, redaction, and annotation export outputs match expected fixtures
+- Performance baseline is documented and acceptable
+- CI is green on lint, frontend tests, backend tests, and smoke checks
+
+#### Stop-Ship Bugs for This Gate
+
+Any one of these blocks Stage 7 entirely:
+- Any document open/save/export corruption issue
+- Any unrecoverable crash in core flows
+- Any redaction bug where content remains recoverable
+- Any OCR job that hangs without completion/error feedback
+- Any broken undo/redo or version rollback behavior
+- Any major button in completed phases that does nothing or produces the wrong document state
+- Any failed crash recovery on unsaved work
+
+#### Deliverables
+
+Before Stage 7 starts, the team must produce:
+- A completed automated test inventory by module and feature
+- A manual QA matrix with pass/fail and notes
+- A regression fixture set for PDFs and expected outputs
+- A performance baseline report for the core desktop flows
+- A short "Stage 7 approved" sign-off note naming remaining known issues
 
 ### Phase 4: Polish and Parity (Weeks 17-20)
 
@@ -702,7 +817,37 @@ There is only one environment. Dev and production use the same local architectur
 
 ---
 
-## 9. Risk Mitigation
+## 9. Development Quality Policy
+
+### Test-First Rule
+
+Mudbrick v2 should follow test-driven development by default:
+- Write the failing test first for new behavior or a reproduced bug
+- Implement the narrowest change that makes the test pass
+- Refactor after green, not before green
+- Keep bug-fix tests permanently so regressions stay covered
+
+### Pull Request Expectations
+
+Every feature PR should include:
+- What behavior changed
+- Which failing test was added first
+- Which automated layers were updated: unit, component, integration, output fixture
+- Which manual QA steps were run
+- Any remaining risks or intentionally deferred coverage
+
+### CI Gate Policy
+
+At minimum, CI must block merges when any of these fail:
+- Lint
+- Frontend unit/component tests
+- Backend tests
+- Core smoke tests for open, save, export, and session lifecycle
+- Release smoke validation once Stage 7 starts
+
+---
+
+## 10. Risk Mitigation
 
 | # | Risk | Likelihood | Impact | Mitigation | Phase |
 |---|---|---|---|---|---|
@@ -717,10 +862,11 @@ There is only one environment. Dev and production use the same local architectur
 | 9 | Auto-updater reliability | Medium | Medium | Tauri's built-in updater uses GitHub Releases as the update feed. Test thoroughly in Phase 4. Fallback: manual download from website. | 4 |
 | 10 | PyInstaller startup time | Medium | Low | `--onedir` mode starts in 1-2s. `--onefile` mode can take 5-10s (extracts to temp). Use `--onedir`. Backend health check adds ~1s. Total app startup target: <3s. | 1 |
 | 11 | Tesseract binary compatibility across Windows versions | Low | Medium | Bundle a statically-linked Tesseract 5 binary. Test on Windows 10 and 11. PyInstaller includes all DLL dependencies automatically. | 2 |
+| 12 | Stage 7 starts before product stability is proven | Medium | High | Enforce the Pre-7 Quality Gate. Release work is blocked until functional, regression, and crash-recovery checks are complete. | 6.5 |
 
 ---
 
-## 10. Session Management Details
+## 11. Session Management Details
 
 ### Local Storage Architecture
 
@@ -842,7 +988,7 @@ def cleanup_stale_sessions(max_age_days: int = 7):
 
 ---
 
-## 11. OCR Strategy
+## 12. OCR Strategy
 
 ### Bundled Tesseract
 
@@ -885,7 +1031,7 @@ If higher accuracy is needed for specific documents, the `ocr_engine.py` interfa
 
 ---
 
-## 12. Migration/Cutover Strategy
+## 13. Migration/Cutover Strategy
 
 ### Branch Strategy
 - New branch `mudbrickv2` in the existing `mudbrick` repo
@@ -917,7 +1063,7 @@ If higher accuracy is needed for specific documents, the `ocr_engine.py` interfa
 
 ---
 
-## 13. Cost Estimate
+## 14. Cost Estimate
 
 | Item | Cost | Notes |
 |---|---|---|
@@ -929,7 +1075,7 @@ If higher accuracy is needed for specific documents, the `ocr_engine.py` interfa
 
 ---
 
-## 14. Key Files to Port from v1
+## 15. Key Files to Port from v1
 
 These files contain logic that transfers directly or with minimal modification:
 
@@ -948,7 +1094,22 @@ These files contain logic that transfers directly or with minimal modification:
 
 ---
 
-## 15. Acceptance Criteria
+## 16. Acceptance Criteria
+
+### Pre-7 Quality Gate (Must pass ALL before Stage 7 begins)
+
+- [ ] All Phase 1-3 user-facing buttons and menu actions have been verified against a manual QA matrix
+- [ ] Every completed core feature has automated coverage at the appropriate layer
+- [ ] Frontend tests cover critical UI behavior, not only rendering
+- [ ] Backend tests cover document mutation, session lifecycle, and output correctness
+- [ ] Exported PDF fixtures are verified against known-good results
+- [ ] Crash recovery is tested by force-closing the app during unsaved work
+- [ ] Save, Save As, export, reopen, undo, and redo round-trips are verified
+- [ ] OCR progress, completion, failure handling, and correction mode are verified
+- [ ] Redaction output is verified unrecoverable with forensic checks
+- [ ] Performance baseline exists for open, navigate, export, page ops, and OCR
+- [ ] CI is green on lint, frontend tests, backend tests, and smoke checks
+- [ ] Remaining known issues are explicitly triaged and accepted; none are stop-ship
 
 ### Phase 1 MVP Gate (Must pass ALL to proceed)
 
@@ -1004,6 +1165,8 @@ These files contain logic that transfers directly or with minimal modification:
 2. **Filevine integration scope:** Should v2 include direct document pull/push from Filevine cases? If yes, add to Phase 4 scope. This would be the only networked feature beyond optional cloud OCR.
 
 3. **Multi-platform support:** This plan targets Windows only. macOS/Linux support via Tauri is possible in the future but deferred.
+
+4. **Common-editor backlog beyond current scope:** See [COMMON-PDF-EDITOR-BACKLOG.md](COMMON-PDF-EDITOR-BACKLOG.md) for commonly expected PDF editor features that are not explicitly planned in Phases 1-4, plus a recommended post-parity implementation sequence.
 
 ---
 

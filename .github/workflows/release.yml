@@ -1,0 +1,57 @@
+name: Release Desktop
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  publish-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Install frontend dependencies
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Build web app
+        run: pnpm --filter @mudbrick/web build
+
+      # TODO: Add the PyInstaller sidecar bundle step once the final
+      # Windows packaging path for the local Python backend is locked in.
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          MUDBRICK_UPDATER_ENDPOINT: ${{ vars.MUDBRICK_UPDATER_ENDPOINT }}
+          MUDBRICK_UPDATER_PUBKEY: ${{ vars.MUDBRICK_UPDATER_PUBKEY }}
+        with:
+          tagName: v__VERSION__
+          releaseName: Mudbrick v__VERSION__
+          releaseBody: Windows desktop installer artifacts for Mudbrick.
+          releaseDraft: true
+          prerelease: false
