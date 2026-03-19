@@ -15,6 +15,20 @@ import type {
   PageOperationResponse,
   MergeResponse,
   SaveResponse,
+  BatesRequest,
+  BatesResponse,
+  HeaderFooterRequest,
+  HeaderFooterResponse,
+  RedactionPattern,
+  RedactionSearchResponse,
+  RedactionRegion,
+  RedactionResult,
+  OcrResults,
+  TextExtractResponse,
+  TextSearchResponse,
+  TextEditItem,
+  TextEditResponse,
+  SplitResponse,
 } from '../types/api';
 import type { PageAnnotations } from '../types/annotation';
 
@@ -198,6 +212,166 @@ class ApiClient {
         annotations,
         output_path: outputPath,
         options,
+      }),
+    });
+  }
+
+  // -- Phase 3: Legal Document Features --
+
+  async applyBatesNumbers(
+    sessionId: string,
+    options: BatesRequest,
+  ): Promise<BatesResponse> {
+    return this.request(`/bates/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
+  }
+
+  async applyHeadersFooters(
+    sessionId: string,
+    options: HeaderFooterRequest,
+  ): Promise<HeaderFooterResponse> {
+    return this.request(`/headers/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
+  }
+
+  // -- Phase 2: Redaction --
+
+  /**
+   * Get available redaction patterns.
+   */
+  async getRedactionPatterns(): Promise<RedactionPattern[]> {
+    return this.request('/redaction/patterns');
+  }
+
+  /**
+   * Search for sensitive data patterns in the document.
+   */
+  async searchRedactionPatterns(
+    sessionId: string,
+    patterns: string[],
+    customRegex?: string,
+    pages?: number[],
+  ): Promise<RedactionSearchResponse> {
+    return this.request(`/redaction/${sessionId}/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        patterns,
+        custom_regex: customRegex,
+        pages: pages ?? undefined,
+      }),
+    });
+  }
+
+  /**
+   * Apply forensic redaction to specified regions.
+   */
+  async applyRedaction(
+    sessionId: string,
+    regions: RedactionRegion[],
+  ): Promise<RedactionResult> {
+    return this.request(`/redaction/${sessionId}/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ regions }),
+    });
+  }
+
+  // -- Phase 2: OCR --
+
+  /**
+   * Start OCR processing. Returns an EventSource for SSE streaming.
+   */
+  startOcr(
+    sessionId: string,
+    options: { pages?: number[]; language?: string; dpi?: number } = {},
+  ): EventSource {
+    const params = new URLSearchParams();
+    // OCR uses POST with SSE, but EventSource only supports GET.
+    // So we POST to start and use a separate SSE endpoint.
+    // Actually, we'll POST via fetch and read the stream.
+    // For simplicity, use the createEventSource helper with query params.
+    return this.createEventSource(`/ocr/${sessionId}`);
+  }
+
+  /**
+   * Start OCR with POST request and return the response for SSE streaming.
+   */
+  async startOcrStream(
+    sessionId: string,
+    options: { pages?: number[]; language?: string; dpi?: number } = {},
+  ): Promise<Response> {
+    const url = `${this.baseUrl}/ocr/${sessionId}`;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
+  }
+
+  /**
+   * Get cached OCR results.
+   */
+  async getOcrResults(sessionId: string): Promise<OcrResults> {
+    return this.request(`/ocr/${sessionId}/results`);
+  }
+
+  // -- Phase 2: Text & Search --
+
+  /**
+   * Extract text from PDF pages with position information.
+   */
+  async extractText(sessionId: string, pages?: string): Promise<TextExtractResponse> {
+    const query = pages ? `?pages=${encodeURIComponent(pages)}` : '';
+    return this.request(`/text/${sessionId}/extract${query}`);
+  }
+
+  /**
+   * Search for text across all pages.
+   */
+  async searchText(sessionId: string, query: string): Promise<TextSearchResponse> {
+    return this.request(`/text/${sessionId}/search?q=${encodeURIComponent(query)}`);
+  }
+
+  /**
+   * Edit text on a specific page (cover-and-replace).
+   */
+  async editText(
+    sessionId: string,
+    page: number,
+    edits: TextEditItem[],
+  ): Promise<TextEditResponse> {
+    return this.request(`/text/${sessionId}/edit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ page, edits }),
+    });
+  }
+
+  // -- Phase 2: Split --
+
+  /**
+   * Split PDF into multiple files by page ranges.
+   */
+  async splitPdf(
+    sessionId: string,
+    ranges: string[],
+    outputDir: string,
+    filenamePrefix?: string,
+  ): Promise<SplitResponse> {
+    return this.request(`/split/${sessionId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ranges,
+        output_dir: outputDir,
+        filename_prefix: filenamePrefix ?? undefined,
       }),
     });
   }

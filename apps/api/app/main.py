@@ -11,7 +11,19 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .dependencies import get_session_manager
-from .routers import documents, pages, merge, thumbnails, export
+from .routers import (
+    bates,
+    documents,
+    export,
+    headers,
+    merge,
+    ocr,
+    pages,
+    redaction,
+    split,
+    text,
+    thumbnails,
+)
 
 
 @asynccontextmanager
@@ -55,6 +67,12 @@ app.include_router(pages.router)
 app.include_router(merge.router)
 app.include_router(thumbnails.router)
 app.include_router(export.router)
+app.include_router(bates.router)
+app.include_router(headers.router)
+app.include_router(redaction.router)
+app.include_router(ocr.router)
+app.include_router(text.router)
+app.include_router(split.router)
 
 
 @app.get("/api/health")
