@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from .config import settings
+from .routers import documents
 
 app = FastAPI(
     title="Mudbrick API",
@@ -24,6 +25,10 @@ if settings.environment == "local":
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+
+# Register routers
+app.include_router(documents.router)
 
 
 @app.get("/api/health")
