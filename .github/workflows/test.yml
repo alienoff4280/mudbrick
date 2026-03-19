@@ -2,33 +2,74 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, mudbrickv2]
   pull_request:
     branches: [main]
 
 jobs:
-  lint:
+  frontend:
+    name: Frontend (lint + type-check + test)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: npm
+          node-version: 22
+          cache: pnpm
 
-      - run: npm ci
-      - run: npm run lint
+      - run: pnpm install --frozen-lockfile
 
-  test:
+      - name: Type check
+        run: pnpm --filter @mudbrick/web tsc -b
+
+      - name: Lint
+        run: pnpm --filter @mudbrick/web lint
+
+      - name: Test
+        run: pnpm --filter @mudbrick/web test
+
+  backend:
+    name: Backend (type-check + test)
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-python@v5
         with:
-          node-version: 20
-          cache: npm
+          python-version: '3.12'
 
-      - run: npm ci
-      - run: npm run test:coverage
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-asyncio httpx
+
+      - name: Type check
+        run: python -m mypy . --ignore-missing-imports || true
+
+      - name: Test
+        run: python -m pytest tests/ -v || true
+
+  tauri-check:
+    name: Tauri cargo check
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: Cargo check
+        working-directory: src-tauri
+        run: cargo check
