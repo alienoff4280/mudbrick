@@ -14,7 +14,9 @@ from .dependencies import get_session_manager
 from .routers import (
     bates,
     documents,
+    exhibits,
     export,
+    forms,
     headers,
     merge,
     ocr,
@@ -69,6 +71,8 @@ app.include_router(thumbnails.router)
 app.include_router(export.router)
 app.include_router(bates.router)
 app.include_router(headers.router)
+app.include_router(exhibits.router)
+app.include_router(forms.router)
 app.include_router(redaction.router)
 app.include_router(ocr.router)
 app.include_router(text.router)

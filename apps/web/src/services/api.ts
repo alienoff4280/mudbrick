@@ -29,6 +29,18 @@ import type {
   TextEditItem,
   TextEditResponse,
   SplitResponse,
+  ExhibitStampRequest,
+  ExhibitStampResponse,
+  PageLabelsRequest,
+  PageLabelsResponse,
+  PageLabelsGetResponse,
+  FormFieldsResponse,
+  FormFillRequest,
+  FormFillResponse,
+  FormFlattenResponse,
+  FormExportResponse,
+  FormImportRequest,
+  FormImportResponse,
 } from '../types/api';
 import type { PageAnnotations } from '../types/annotation';
 
@@ -237,6 +249,75 @@ class ApiClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(options),
+    });
+  }
+
+  // -- Phase 3: Exhibit Stamps --
+
+  async applyExhibitStamps(
+    sessionId: string,
+    options: ExhibitStampRequest,
+  ): Promise<ExhibitStampResponse> {
+    return this.request(`/exhibits/${sessionId}/stamp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(options),
+    });
+  }
+
+  // -- Phase 3: Page Labels --
+
+  async getPageLabels(sessionId: string): Promise<PageLabelsGetResponse> {
+    return this.request(`/exhibits/${sessionId}/labels`);
+  }
+
+  async setPageLabels(
+    sessionId: string,
+    request: PageLabelsRequest,
+  ): Promise<PageLabelsResponse> {
+    return this.request(`/exhibits/${sessionId}/labels`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  }
+
+  // -- Phase 3: Forms --
+
+  async getFormFields(sessionId: string): Promise<FormFieldsResponse> {
+    return this.request(`/forms/${sessionId}/fields`);
+  }
+
+  async fillFormFields(
+    sessionId: string,
+    request: FormFillRequest,
+  ): Promise<FormFillResponse> {
+    return this.request(`/forms/${sessionId}/fill`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
+    });
+  }
+
+  async flattenForm(sessionId: string): Promise<FormFlattenResponse> {
+    return this.request(`/forms/${sessionId}/flatten`, { method: 'POST' });
+  }
+
+  async exportFormData(
+    sessionId: string,
+    format: string = 'json',
+  ): Promise<FormExportResponse> {
+    return this.request(`/forms/${sessionId}/export?format=${encodeURIComponent(format)}`);
+  }
+
+  async importFormData(
+    sessionId: string,
+    request: FormImportRequest,
+  ): Promise<FormImportResponse> {
+    return this.request(`/forms/${sessionId}/import`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(request),
     });
   }
 

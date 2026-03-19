@@ -117,6 +117,95 @@ export interface ApiState<T> {
   error: string | null;
 }
 
+// ── Phase 3: Exhibit Types ──
+
+export interface ExhibitStampRequest {
+  format?: string;
+  start_num?: number;
+  position?: string;
+  font?: string;
+  font_size?: number;
+  color?: string;
+  bg_color?: string;
+  margin?: number;
+  pages?: number[];
+}
+
+export interface ExhibitStampResponse {
+  success: boolean;
+  labels: string[];
+  page_count: number;
+}
+
+export interface PageLabelEntry {
+  page: number;
+  label: string;
+}
+
+export interface PageLabelsRequest {
+  labels: PageLabelEntry[];
+}
+
+export interface PageLabelsResponse {
+  success: boolean;
+  page_count: number;
+}
+
+export interface PageLabelsGetResponse {
+  labels: Record<number, string>;
+  page_count: number;
+}
+
+// ── Phase 3: Form Types ──
+
+export interface FormField {
+  name: string;
+  type: string;
+  page: number;
+  rect: number[];
+  value: unknown;
+  options: string[];
+  flags: number;
+  read_only: boolean;
+}
+
+export interface FormFieldsResponse {
+  fields: FormField[];
+  total: number;
+  has_xfa: boolean;
+}
+
+export interface FormFillRequest {
+  fields: Record<string, unknown>;
+}
+
+export interface FormFillResponse {
+  success: boolean;
+  fields_updated: number;
+  page_count: number;
+}
+
+export interface FormFlattenResponse {
+  success: boolean;
+  page_count: number;
+}
+
+export interface FormExportResponse {
+  success: boolean;
+  format: string;
+  data: Record<string, unknown>;
+}
+
+export interface FormImportRequest {
+  format: string;
+  data: Record<string, unknown>;
+}
+
+export interface FormImportResponse {
+  success: boolean;
+  fields_updated: number;
+}
+
 // ── Phase 2: Redaction Types ──
 
 export interface RedactionPattern {
