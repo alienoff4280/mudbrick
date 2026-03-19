@@ -11,6 +11,7 @@ import { LoadingOverlay } from './components/welcome/LoadingOverlay';
 import { PdfViewer } from './components/viewer/PdfViewer';
 import { ThumbnailSidebar } from './components/viewer/ThumbnailSidebar';
 import { Toolbar } from './components/annotations/Toolbar';
+import { PropertyPanel } from './components/annotations/PropertyPanel';
 import { ToastContainer } from './components/shared/Toast';
 import { OfflineIndicator } from './components/shared/OfflineIndicator';
 import { useDocumentStore } from './stores/documentStore';
@@ -20,6 +21,7 @@ import { useKeyboardShortcuts } from './hooks/useKeyboardShortcuts';
 import { useDarkMode } from './hooks/useDarkMode';
 import { useTauri } from './hooks/useTauri';
 import { api } from './services/api';
+import type { PageOperation } from './components/sidebar/PageList';
 
 export function App() {
   // Apply dark mode CSS class
@@ -36,7 +38,7 @@ export function App() {
   const addToast = useUIStore((s) => s.addToast);
   const sidebarOpen = useUIStore((s) => s.sidebarOpen);
 
-  const { openFile } = useTauri();
+  const { openFile, openMultipleFiles, chooseSavePath } = useTauri();
 
   /**
    * Open a PDF file by local path.
@@ -111,8 +113,138 @@ export function App() {
     [setCurrentPage],
   );
 
+  /** Save current document (Ctrl+S) */
+  const handleSave = useCallback(async () => {
+    if (!document) return;
+    try {
+      setLoading(true);
+      await api.save(document.sessionId);
+      addToast({ type: 'success', message: 'Saved' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Save failed';
+      addToast({ type: 'error', message: msg });
+    } finally {
+      setLoading(false);
+    }
+  }, [document, setLoading, addToast]);
+
+  /** Save As (Ctrl+Shift+S) */
+  const handleSaveAs = useCallback(async () => {
+    if (!document) return;
+    const path = await chooseSavePath(document.fileName);
+    if (!path) return;
+    try {
+      setLoading(true);
+      await api.saveAs(document.sessionId, path);
+      addToast({ type: 'success', message: `Saved as ${path.split(/[/\\]/).pop()}` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Save failed';
+      addToast({ type: 'error', message: msg });
+    } finally {
+      setLoading(false);
+    }
+  }, [document, chooseSavePath, setLoading, addToast]);
+
+  /** Merge files */
+  const handleMerge = useCallback(async () => {
+    const paths = await openMultipleFiles();
+    if (paths.length < 2) {
+      addToast({ type: 'warning', message: 'Select at least 2 files to merge' });
+      return;
+    }
+    try {
+      setLoading(true);
+      const resp = await api.mergeFiles(paths);
+      const infoResp = await api.getDocumentInfo(resp.session_id);
+      setDocument({
+        sessionId: infoResp.session_id,
+        filePath: infoResp.file_path,
+        fileName: infoResp.file_name,
+        fileSize: infoResp.file_size,
+        pageCount: infoResp.page_count,
+        currentVersion: infoResp.current_version,
+        pages: [],
+        createdAt: infoResp.created_at,
+        updatedAt: infoResp.updated_at,
+      });
+      addToast({ type: 'success', message: `Merged ${paths.length} files` });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Merge failed';
+      addToast({ type: 'error', message: msg });
+    } finally {
+      setLoading(false);
+    }
+  }, [openMultipleFiles, setLoading, setDocument, addToast]);
+
+  /** Page operations from sidebar context menu */
+  const handlePageOperation = useCallback(
+    async (op: PageOperation) => {
+      if (!document) return;
+      try {
+        setLoading(true);
+        const sid = document.sessionId;
+        switch (op.type) {
+          case 'rotate-cw':
+            await api.rotatePage(sid, [op.pageNum], 90);
+            break;
+          case 'rotate-ccw':
+            await api.rotatePage(sid, [op.pageNum], -90);
+            break;
+          case 'delete':
+            await api.deletePage(sid, [op.pageNum]);
+            break;
+          case 'insert-after':
+            await api.insertBlankPage(sid, op.pageNum);
+            break;
+        }
+        // Refresh doc info
+        const info = await api.getDocumentInfo(sid);
+        setDocument({
+          ...document,
+          pageCount: info.page_count,
+          currentVersion: info.current_version,
+          updatedAt: info.updated_at,
+        });
+        addToast({ type: 'success', message: `Page ${op.type.replace('-', ' ')} done` });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Operation failed';
+        addToast({ type: 'error', message: msg });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [document, setLoading, setDocument, addToast],
+  );
+
+  /** Reorder pages from sidebar drag */
+  const handleReorder = useCallback(
+    async (newOrder: number[]) => {
+      if (!document) return;
+      try {
+        setLoading(true);
+        await api.reorderPages(document.sessionId, newOrder);
+        const info = await api.getDocumentInfo(document.sessionId);
+        setDocument({
+          ...document,
+          pageCount: info.page_count,
+          currentVersion: info.current_version,
+          updatedAt: info.updated_at,
+        });
+        addToast({ type: 'success', message: 'Pages reordered' });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Reorder failed';
+        addToast({ type: 'error', message: msg });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [document, setLoading, setDocument, addToast],
+  );
+
   useKeyboardShortcuts({
     'Ctrl+O': handleKeyboardOpen,
+    'Ctrl+S': handleSave,
+    'Ctrl+Shift+S': handleSaveAs,
   });
 
   // No document loaded: show welcome screen
@@ -173,12 +305,15 @@ export function App() {
             <ThumbnailSidebar
               sessionId={document.sessionId}
               onNavigate={handleNavigateToPage}
+              onPageOperation={handlePageOperation}
+              onReorder={handleReorder}
             />
           </aside>
         )}
         <main className="app-main" style={{ flexDirection: 'column', justifyContent: 'stretch' }}>
           <PdfViewer sessionId={document.sessionId} />
         </main>
+        <PropertyPanel />
       </div>
       <LoadingOverlay visible={loading} message="Processing..." />
       <ToastContainer />

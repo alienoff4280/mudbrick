@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { PageList, type PageListItem } from '../sidebar/PageList';
+import { PageList, type PageListItem, type PageOperation } from '../sidebar/PageList';
 import { OutlinePanel } from '../sidebar/OutlinePanel';
 import { useDocumentStore } from '../../stores/documentStore';
 import { useUIStore } from '../../stores/uiStore';
@@ -15,9 +15,11 @@ import { api } from '../../services/api';
 interface ThumbnailSidebarProps {
   sessionId: string;
   onNavigate: (pageNum: number) => void;
+  onPageOperation?: (op: PageOperation) => void;
+  onReorder?: (newOrder: number[]) => void;
 }
 
-export function ThumbnailSidebar({ sessionId, onNavigate }: ThumbnailSidebarProps) {
+export function ThumbnailSidebar({ sessionId, onNavigate, onPageOperation, onReorder }: ThumbnailSidebarProps) {
   const pageCount = useDocumentStore((s) => s.document?.pageCount ?? 0);
   const currentPage = useDocumentStore((s) => s.currentPage);
   const sidebarTab = useUIStore((s) => s.sidebarTab);
@@ -120,6 +122,9 @@ export function ThumbnailSidebar({ sessionId, onNavigate }: ThumbnailSidebarProp
             pages={pages}
             currentPage={currentPage}
             onPageClick={handlePageClick}
+            onReorder={onReorder}
+            onPageOperation={onPageOperation}
+            operationsEnabled={true}
           />
         )}
         {sidebarTab === 'outline' && (
