@@ -8,6 +8,7 @@
 import { useCallback } from 'react';
 import { WelcomeScreen } from './components/welcome/WelcomeScreen';
 import { LoadingOverlay } from './components/welcome/LoadingOverlay';
+import { PdfViewer } from './components/viewer/PdfViewer';
 import { ToastContainer } from './components/shared/Toast';
 import { OfflineIndicator } from './components/shared/OfflineIndicator';
 import { useDocumentStore } from './stores/documentStore';
@@ -159,11 +160,8 @@ export function App() {
             {/* ThumbnailSidebar will be mounted here by C5 */}
           </aside>
         )}
-        <main className="app-main">
-          <p style={{ color: 'var(--mb-text-inverse)' }}>
-            {document.fileName} ({document.pageCount} pages)
-          </p>
-          {/* PdfViewer will be mounted here by C4 */}
+        <main className="app-main" style={{ flexDirection: 'column', justifyContent: 'stretch' }}>
+          <PdfViewer sessionId={document.sessionId} />
         </main>
       </div>
       <LoadingOverlay visible={loading} message="Processing..." />
