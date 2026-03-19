@@ -1,0 +1,33 @@
+/* Mudbrick v2 -- Color Sampler Styles */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  cursor: crosshair;
+  z-index: 5000;
+}
+
+.preview {
+  position: fixed;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px;
+  background: rgba(0, 0, 0, 0.85);
+  border-radius: 4px;
+  pointer-events: none;
+  z-index: 5001;
+}
+
+.swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.hex {
+  color: #fff;
+  font-size: 12px;
+  font-family: monospace;
+}

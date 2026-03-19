@@ -1,0 +1,151 @@
+/* Mudbrick v2 -- Redaction Panel Styles */
+
+.panel {
+  padding: 16px;
+}
+
+.title {
+  margin: 0 0 4px;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mb-text);
+}
+
+.subtitle {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--mb-text-secondary);
+}
+
+.patterns {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.patternItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 4px;
+  transition: background-color 0.15s;
+}
+
+.patternItem:hover {
+  background: var(--mb-surface-hover);
+}
+
+.patternItem input[type='checkbox'] {
+  margin-top: 2px;
+  accent-color: var(--mb-brand);
+}
+
+.patternInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.patternLabel {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--mb-text);
+}
+
+.patternDesc {
+  font-size: 11px;
+  color: var(--mb-text-muted);
+}
+
+.customField {
+  margin-bottom: 16px;
+}
+
+.customLabel {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mb-text-secondary);
+  margin-bottom: 4px;
+}
+
+.customInput {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: monospace;
+  color: var(--mb-text);
+  background: var(--mb-surface);
+  box-sizing: border-box;
+}
+
+.customInput:focus {
+  outline: none;
+  border-color: var(--mb-accent);
+  box-shadow: 0 0 0 2px var(--mb-accent-light);
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.searchBtn {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--mb-brand);
+  color: var(--mb-text-inverse);
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.searchBtn:hover:not(:disabled) {
+  background: var(--mb-brand-light);
+}
+
+.searchBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.clearBtn {
+  padding: 8px 16px;
+  background: var(--mb-surface-alt);
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--mb-text);
+}
+
+.clearBtn:hover {
+  background: var(--mb-surface-hover);
+}
+
+.summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--mb-surface-alt);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.summaryCount {
+  font-weight: 600;
+  color: var(--mb-text);
+}
+
+.summaryPages {
+  color: var(--mb-text-secondary);
+}

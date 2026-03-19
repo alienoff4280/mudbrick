@@ -1,0 +1,122 @@
+/* Mudbrick v2 -- OCR Correction Mode Styles */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: rgba(41, 128, 185, 0.95);
+  color: #fff;
+  font-size: 13px;
+  z-index: 20;
+  pointer-events: auto;
+}
+
+.toolbarTitle {
+  font-weight: 600;
+}
+
+.filterLabel {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.filterLabel input[type='checkbox'] {
+  accent-color: #fff;
+}
+
+.stats {
+  margin-left: auto;
+  font-size: 12px;
+  opacity: 0.9;
+}
+
+.exitBtn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 3px;
+  color: #fff;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+.exitBtn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Word overlays */
+.wordOverlay {
+  position: absolute;
+  cursor: pointer;
+  pointer-events: auto;
+  border-radius: 2px;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.1s;
+  box-sizing: border-box;
+}
+
+.wordOverlay:hover {
+  outline: 2px solid var(--mb-accent, #2980b9);
+  z-index: 5;
+}
+
+.confHigh {
+  background: transparent;
+}
+
+.confMedium {
+  background: rgba(241, 196, 15, 0.25);
+  border-bottom: 2px solid rgba(241, 196, 15, 0.7);
+}
+
+.confLow {
+  background: rgba(231, 76, 60, 0.2);
+  border-bottom: 2px solid rgba(231, 76, 60, 0.7);
+}
+
+.wordText {
+  font-size: 10px;
+  line-height: 1;
+  color: transparent;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.wordOverlay:hover .wordText {
+  color: var(--mb-text, #1a1a1a);
+  background: rgba(255, 255, 255, 0.9);
+  padding: 1px 3px;
+  border-radius: 2px;
+  font-size: 11px;
+}
+
+.editInput {
+  width: 100%;
+  height: 100%;
+  border: 2px solid var(--mb-accent, #2980b9);
+  border-radius: 2px;
+  font-size: 12px;
+  padding: 0 4px;
+  background: #fff;
+  color: var(--mb-text, #1a1a1a);
+  box-sizing: border-box;
+  outline: none;
+}

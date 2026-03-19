@@ -1,0 +1,172 @@
+/* Mudbrick v2 -- Text Edit Mode Styles */
+
+.container {
+  position: absolute;
+  inset: 0;
+  z-index: 10;
+}
+
+.toolbar {
+  position: sticky;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+  background: rgba(44, 62, 80, 0.95);
+  color: #fff;
+  font-size: 13px;
+  z-index: 20;
+}
+
+.toolbarTitle {
+  font-weight: 600;
+}
+
+.toolbarInfo {
+  font-size: 12px;
+  opacity: 0.8;
+  margin-left: auto;
+}
+
+.commitBtn {
+  background: var(--mb-accent, #2980b9);
+  border: none;
+  border-radius: 3px;
+  color: #fff;
+  padding: 4px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.commitBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.commitBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.exitBtn {
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 3px;
+  color: #fff;
+  padding: 4px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.exitBtn:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Block overlays */
+.blockOverlay {
+  position: absolute;
+  cursor: pointer;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  transition: border-color 0.1s, background-color 0.1s;
+  box-sizing: border-box;
+}
+
+.blockOverlay:hover {
+  border-color: var(--mb-accent, #2980b9);
+  background: rgba(41, 128, 185, 0.08);
+}
+
+.blockOverlay.active {
+  border-color: var(--mb-accent, #2980b9);
+  background: rgba(41, 128, 185, 0.12);
+  z-index: 15;
+}
+
+.blockOverlay.edited {
+  background: rgba(46, 204, 113, 0.15);
+  border-color: rgba(46, 204, 113, 0.5);
+}
+
+/* Edit popover */
+.editPopover {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  min-width: 250px;
+  background: var(--mb-surface, #fff);
+  border: 1px solid var(--mb-border, #d0d0d0);
+  border-radius: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+  z-index: 30;
+  padding: 8px;
+}
+
+.editArea {
+  min-height: 24px;
+  padding: 6px 8px;
+  border: 1px solid var(--mb-border, #d0d0d0);
+  border-radius: 3px;
+  outline: none;
+  word-break: break-word;
+  white-space: pre-wrap;
+  margin-bottom: 6px;
+}
+
+.editArea:focus {
+  border-color: var(--mb-accent, #2980b9);
+}
+
+.editControls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.colorPicker {
+  width: 28px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--mb-border, #d0d0d0);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.sizeInput {
+  width: 50px;
+  padding: 3px 6px;
+  border: 1px solid var(--mb-border, #d0d0d0);
+  border-radius: 3px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.saveEditBtn {
+  padding: 3px 10px;
+  background: var(--mb-accent, #2980b9);
+  color: #fff;
+  border: none;
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.saveEditBtn:hover {
+  opacity: 0.9;
+}
+
+.cancelEditBtn {
+  padding: 3px 10px;
+  background: var(--mb-surface-alt, #eaeaea);
+  border: 1px solid var(--mb-border, #d0d0d0);
+  border-radius: 3px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--mb-text, #1a1a1a);
+}
+
+.cancelEditBtn:hover {
+  background: var(--mb-surface-hover, #e0e0e0);
+}

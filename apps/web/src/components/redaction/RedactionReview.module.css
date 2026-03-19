@@ -1,0 +1,248 @@
+/* Mudbrick v2 -- Redaction Review Styles */
+
+.panel {
+  padding: 16px;
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--mb-text);
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  font-size: 12px;
+  color: var(--mb-accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  text-decoration: underline;
+}
+
+.linkBtn:hover {
+  color: var(--mb-brand);
+}
+
+.summary {
+  font-size: 12px;
+  color: var(--mb-text-secondary);
+  margin-bottom: 12px;
+}
+
+.matchList {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  border: 1px solid var(--mb-border-light);
+  border-radius: 4px;
+}
+
+.pageGroup {
+  border-bottom: 1px solid var(--mb-border-light);
+}
+
+.pageGroup:last-child {
+  border-bottom: none;
+}
+
+.pageHeader {
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mb-text-secondary);
+  background: var(--mb-surface-alt);
+  position: sticky;
+  top: 0;
+}
+
+.matchItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.matchItem:hover {
+  background: var(--mb-surface-hover);
+}
+
+.matchSelected {
+  background: var(--mb-accent-light);
+}
+
+.matchItem input[type='checkbox'] {
+  margin-top: 2px;
+  accent-color: var(--mb-brand);
+}
+
+.matchInfo {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.matchText {
+  font-size: 13px;
+  color: var(--mb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.matchPattern {
+  font-size: 11px;
+  color: var(--mb-text-muted);
+  text-transform: capitalize;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+}
+
+.applyBtn {
+  flex: 1;
+  padding: 8px 16px;
+  background: var(--mb-danger, #c0392b);
+  color: var(--mb-text-inverse);
+  border: none;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.applyBtn:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.applyBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.skipBtn {
+  padding: 8px 16px;
+  background: var(--mb-surface-alt);
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--mb-text);
+}
+
+.skipBtn:hover {
+  background: var(--mb-surface-hover);
+}
+
+.empty {
+  text-align: center;
+  color: var(--mb-text-muted);
+  padding: 24px 0;
+  font-size: 13px;
+}
+
+.dismissBtn {
+  display: block;
+  margin: 0 auto;
+  padding: 8px 24px;
+  background: var(--mb-surface-alt);
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  font-size: 13px;
+  cursor: pointer;
+  color: var(--mb-text);
+}
+
+/* Confirmation Dialog */
+.confirmOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.confirmDialog {
+  background: var(--mb-surface);
+  border-radius: 8px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+  padding: 24px;
+  max-width: 420px;
+  width: 90%;
+}
+
+.confirmTitle {
+  margin: 0 0 12px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--mb-text);
+}
+
+.confirmText {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--mb-text);
+  line-height: 1.5;
+}
+
+.confirmWarning {
+  margin: 0 0 16px;
+  font-size: 13px;
+  color: var(--mb-danger, #c0392b);
+  font-weight: 500;
+}
+
+.confirmActions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.confirmBtn {
+  padding: 8px 20px;
+  background: var(--mb-danger, #c0392b);
+  color: var(--mb-text-inverse);
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.confirmBtn:hover {
+  opacity: 0.9;
+}
+
+.confirmCancel {
+  padding: 8px 20px;
+  background: var(--mb-surface-alt);
+  border: 1px solid var(--mb-border);
+  border-radius: 4px;
+  font-size: 14px;
+  cursor: pointer;
+  color: var(--mb-text);
+}
+
+.confirmCancel:hover {
+  background: var(--mb-surface-hover);
+}
