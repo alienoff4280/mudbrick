@@ -1,0 +1,65 @@
+/* Mudbrick v2 -- LeftPaneHost styles */
+
+.pane {
+  width: 220px;
+  min-width: 160px;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  background: var(--mb-sidebar-bg);
+  border-right: 1px solid var(--mb-border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--mb-text);
+  border-bottom: 1px solid var(--mb-border-light);
+  flex-shrink: 0;
+}
+
+.paneContent {
+  flex: 1;
+  overflow: auto;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--mb-text-muted);
+  font-size: 12px;
+  gap: 8px;
+  height: 100%;
+}
+
+.emptyStateIcon {
+  width: 32px;
+  height: 32px;
+  opacity: 0.4;
+}
+
+.searchInput {
+  width: 100%;
+  padding: 6px 10px;
+  border: 1px solid var(--mb-border);
+  border-radius: var(--mb-radius-sm);
+  background: var(--mb-surface);
+  color: var(--mb-text);
+  font-size: 12px;
+  margin: 8px 12px;
+  box-sizing: border-box;
+}
+
+.searchInput:focus {
+  outline: none;
+  box-shadow: var(--mb-focus-ring);
+}

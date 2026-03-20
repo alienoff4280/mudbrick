@@ -1,0 +1,54 @@
+/* Mudbrick v2 -- RibbonTabStrip styles */
+
+.strip {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  background: var(--mb-toolbar-bg);
+  padding: 0 8px;
+  gap: 0;
+  flex-shrink: 0;
+  user-select: none;
+  border-bottom: 1px solid var(--mb-toolbar-divider);
+}
+
+.tab {
+  padding: 4px 14px;
+  border: none;
+  background: none;
+  color: var(--mb-toolbar-text);
+  font-size: 12px;
+  font-weight: 400;
+  cursor: pointer;
+  border-radius: var(--mb-radius-xs) var(--mb-radius-xs) 0 0;
+  white-space: nowrap;
+  line-height: 1;
+  position: relative;
+  opacity: 0.8;
+  transition: opacity var(--mb-transition), background-color var(--mb-transition);
+}
+
+.tab:hover {
+  opacity: 1;
+  background: var(--mb-toolbar-hover);
+}
+
+.tab[data-active="true"] {
+  opacity: 1;
+  font-weight: 600;
+  background: var(--mb-toolbar-active);
+}
+
+.tab[data-active="true"]::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--mb-brand);
+}
+
+.tab:focus-visible {
+  box-shadow: var(--mb-focus-ring);
+}

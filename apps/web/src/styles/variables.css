@@ -85,6 +85,20 @@
   --mb-panel-width: 260px;
   --mb-pagenav-height: 36px;
 
+  /* Shell chrome */
+  --mb-shell-font: 'Segoe UI Variable', 'Segoe UI', Arial, sans-serif;
+  --mb-menu-height: 32px;
+  --mb-ribbon-tab-height: 28px;
+  --mb-ribbon-panel-height: 72px;
+  --mb-utility-bar-height: 32px;
+  --mb-left-rail-width: 48px;
+  --mb-left-pane-width: 220px;
+  --mb-left-pane-min: 160px;
+  --mb-left-pane-max: 400px;
+  --mb-right-pane-width: 280px;
+  --mb-right-pane-min: 200px;
+  --mb-right-pane-max: 400px;
+
   /* Transitions */
   --mb-transition: 150ms ease;
   --mb-transition-slow: 250ms ease;

@@ -1,0 +1,62 @@
+/* Mudbrick v2 -- LeftNavigationRail styles */
+
+.rail {
+  display: flex;
+  flex-direction: column;
+  width: 48px;
+  background: var(--mb-sidebar-bg);
+  border-right: 1px solid var(--mb-border);
+  padding: 4px 0;
+  gap: 2px;
+  align-items: center;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.railBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 44px;
+  gap: 2px;
+  border: none;
+  background: none;
+  color: var(--mb-text-secondary);
+  font-size: 9px;
+  cursor: pointer;
+  border-radius: var(--mb-radius-sm);
+  padding: 4px 0;
+  transition: background-color var(--mb-transition), color var(--mb-transition);
+  white-space: nowrap;
+}
+
+.railBtn:hover {
+  background: var(--mb-surface-hover);
+  color: var(--mb-text);
+}
+
+.railBtn[data-active="true"] {
+  background: var(--mb-brand-tint);
+  color: var(--mb-brand);
+}
+
+.railBtn:focus-visible {
+  box-shadow: var(--mb-focus-ring);
+}
+
+.railBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.railBtn:disabled:hover {
+  background: none;
+  color: var(--mb-text-secondary);
+}
+
+.railIcon {
+  width: 18px;
+  height: 18px;
+}

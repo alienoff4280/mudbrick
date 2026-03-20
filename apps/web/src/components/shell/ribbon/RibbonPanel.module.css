@@ -1,0 +1,96 @@
+/* Mudbrick v2 -- RibbonPanel styles */
+
+.panel {
+  display: flex;
+  align-items: stretch;
+  min-height: 64px;
+  padding: 6px 12px;
+  background: var(--mb-surface);
+  border-bottom: 1px solid var(--mb-border);
+  gap: 2px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  flex-shrink: 0;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0 8px;
+  gap: 2px;
+}
+
+.groupButtons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1;
+}
+
+.groupLabel {
+  font-size: 10px;
+  color: var(--mb-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  padding-top: 2px;
+  text-align: center;
+}
+
+.groupSeparator {
+  width: 1px;
+  align-self: stretch;
+  background: var(--mb-border-light);
+  margin: 4px 6px;
+  flex-shrink: 0;
+}
+
+.ribbonBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  min-width: 44px;
+  padding: 4px 6px;
+  border: none;
+  background: none;
+  color: var(--mb-text);
+  font-size: 10px;
+  cursor: pointer;
+  border-radius: var(--mb-radius-xs);
+  white-space: nowrap;
+  transition: background-color var(--mb-transition);
+}
+
+.ribbonBtn:hover {
+  background: var(--mb-surface-hover);
+}
+
+.ribbonBtn:active {
+  background: var(--mb-surface-active);
+}
+
+.ribbonBtn:focus-visible {
+  box-shadow: var(--mb-focus-ring);
+}
+
+.ribbonBtn[data-active="true"] {
+  background: var(--mb-brand-tint);
+  color: var(--mb-brand);
+}
+
+.ribbonBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.ribbonBtn:disabled:hover {
+  background: none;
+}
+
+.ribbonBtnIcon {
+  width: 20px;
+  height: 20px;
+}

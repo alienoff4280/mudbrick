@@ -40,9 +40,8 @@ export function PropertyPanel() {
   return (
     <div
       style={{
-        width: 'var(--mb-panel-width)',
+        width: '100%',
         backgroundColor: 'var(--mb-surface)',
-        borderLeft: '1px solid var(--mb-border)',
         padding: '12px',
         display: 'flex',
         flexDirection: 'column',

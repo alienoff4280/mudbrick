@@ -25,7 +25,7 @@ body {
   height: 100%;
 }
 
-/* App layout */
+/* App layout -- outer container only, shell grid is in AppShell.module.css */
 .app-layout {
   display: flex;
   flex-direction: column;
@@ -33,6 +33,7 @@ body {
   overflow: hidden;
 }
 
+/* Legacy classes kept for backward compat with v1 components */
 .app-toolbar {
   display: flex;
   align-items: center;
@@ -73,6 +74,24 @@ body {
   background: var(--mb-canvas-bg);
   overflow: auto;
   color: var(--mb-text-inverse);
+}
+
+/* -----------------------------------------------------------------------
+   Shell responsive rules
+   ----------------------------------------------------------------------- */
+@media (max-width: 1279px) {
+  /* Right pane becomes narrower on medium screens */
+  :root {
+    --mb-panel-width: 220px;
+  }
+}
+
+@media (max-width: 1023px) {
+  /* Minimal mode for small windows */
+  :root {
+    --mb-panel-width: 200px;
+    --mb-sidebar-width: 160px;
+  }
 }
 
 /* Scrollbar styling */

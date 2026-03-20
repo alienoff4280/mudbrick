@@ -1,0 +1,120 @@
+/* Mudbrick v2 -- ViewerUtilityBar styles */
+
+.bar {
+  display: flex;
+  align-items: center;
+  height: 32px;
+  padding: 0 12px;
+  background: var(--mb-surface);
+  border-bottom: 1px solid var(--mb-border);
+  gap: 8px;
+  flex-shrink: 0;
+  user-select: none;
+  font-size: 12px;
+  color: var(--mb-text);
+}
+
+.section {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  background: var(--mb-border-light);
+  margin: 0 4px;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  background: none;
+  color: var(--mb-text-secondary);
+  cursor: pointer;
+  border-radius: var(--mb-radius-xs);
+  padding: 0;
+  transition: background-color var(--mb-transition), color var(--mb-transition);
+}
+
+.btn:hover {
+  background: var(--mb-surface-hover);
+  color: var(--mb-text);
+}
+
+.btn:active {
+  background: var(--mb-surface-active);
+}
+
+.btn:focus-visible {
+  box-shadow: var(--mb-focus-ring);
+}
+
+.btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.btn:disabled:hover {
+  background: none;
+  color: var(--mb-text-secondary);
+}
+
+.btn[data-active="true"] {
+  background: var(--mb-brand-tint);
+  color: var(--mb-brand);
+}
+
+.pageInput {
+  width: 44px;
+  height: 22px;
+  text-align: center;
+  border: 1px solid var(--mb-border);
+  border-radius: var(--mb-radius-xs);
+  background: var(--mb-surface);
+  color: var(--mb-text);
+  font-size: 12px;
+  padding: 0 2px;
+}
+
+.pageInput:focus {
+  outline: none;
+  box-shadow: var(--mb-focus-ring);
+}
+
+.zoomText {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--mb-text-secondary);
+  min-width: 42px;
+  text-align: center;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--mb-radius-xs);
+}
+
+.zoomText:hover {
+  background: var(--mb-surface-hover);
+}
+
+.pageLabel {
+  font-size: 12px;
+  color: var(--mb-text-muted);
+  white-space: nowrap;
+}
+
+.modeBadge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: var(--mb-radius-sm);
+  background: var(--mb-brand-tint);
+  color: var(--mb-brand);
+  font-weight: 500;
+  white-space: nowrap;
+  margin-left: auto;
+}

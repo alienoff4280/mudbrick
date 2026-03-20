@@ -1,0 +1,31 @@
+/* Mudbrick v2 -- StatusBar styles */
+
+.bar {
+  display: flex;
+  align-items: center;
+  height: var(--mb-statusbar-height);
+  padding: 0 12px;
+  background: var(--mb-statusbar-bg);
+  color: var(--mb-statusbar-text);
+  font-size: 11px;
+  flex-shrink: 0;
+  gap: 16px;
+  user-select: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+.separator {
+  width: 1px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.15);
+}
+
+.spacer {
+  flex: 1;
+}

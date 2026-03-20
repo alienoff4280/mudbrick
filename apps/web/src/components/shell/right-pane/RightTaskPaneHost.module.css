@@ -1,0 +1,68 @@
+/* Mudbrick v2 -- RightTaskPaneHost styles */
+
+.pane {
+  width: 280px;
+  min-width: 200px;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  background: var(--mb-surface);
+  border-left: 1px solid var(--mb-border);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.paneHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--mb-text);
+  border-bottom: 1px solid var(--mb-border-light);
+  flex-shrink: 0;
+}
+
+.closeBtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: none;
+  color: var(--mb-text-secondary);
+  cursor: pointer;
+  border-radius: var(--mb-radius-xs);
+  padding: 0;
+  transition: background-color var(--mb-transition);
+}
+
+.closeBtn:hover {
+  background: var(--mb-surface-hover);
+  color: var(--mb-text);
+}
+
+.closeBtn:focus-visible {
+  box-shadow: var(--mb-focus-ring);
+}
+
+.paneContent {
+  flex: 1;
+  overflow: auto;
+  padding: 0;
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--mb-text-muted);
+  font-size: 12px;
+  gap: 8px;
+  height: 100%;
+}

@@ -1,0 +1,65 @@
+/* Mudbrick v2 -- AppShell layout */
+
+.shell {
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  grid-template-columns: auto auto 1fr auto;
+  grid-template-areas:
+    "menubar    menubar    menubar    menubar"
+    "ribbon     ribbon     ribbon     ribbon"
+    "utilbar    utilbar    utilbar    utilbar"
+    "leftrail   leftpane   workspace  rightpane"
+    "statusbar  statusbar  statusbar  statusbar";
+  height: 100%;
+  overflow: hidden;
+  background: var(--mb-bg);
+}
+
+.menubar {
+  grid-area: menubar;
+}
+
+.ribbon {
+  grid-area: ribbon;
+}
+
+.utilbar {
+  grid-area: utilbar;
+}
+
+.leftRail {
+  grid-area: leftrail;
+}
+
+.leftPane {
+  grid-area: leftpane;
+}
+
+.workspace {
+  grid-area: workspace;
+  overflow: auto;
+  background: var(--mb-canvas-bg);
+  position: relative;
+}
+
+.rightPane {
+  grid-area: rightpane;
+}
+
+.statusbar {
+  grid-area: statusbar;
+}
+
+/* When left pane is closed, collapse its columns */
+.shell[data-left-closed="true"] {
+  grid-template-columns: 0 0 1fr auto;
+}
+
+/* When right pane is closed, collapse its column */
+.shell[data-right-closed="true"] {
+  grid-template-columns: auto auto 1fr 0;
+}
+
+.shell[data-left-closed="true"][data-right-closed="true"] {
+  grid-template-columns: 0 0 1fr 0;
+}
