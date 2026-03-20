@@ -1,0 +1,1 @@
+-When running git commands, never use `cd path && git ...`. Always use `git -C <path> <command>` instead.
