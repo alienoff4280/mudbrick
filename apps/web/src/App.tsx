@@ -10,6 +10,7 @@ import { useCallback } from 'react';
 import { HomeShell } from './components/shell/HomeShell';
 import { AppShell } from './components/shell/AppShell';
 import { AppModalHost } from './components/shell/AppModalHost';
+import { useShellShortcuts, useRegionCycling } from './hooks/useShellShortcuts';
 import { LoadingOverlay } from './components/welcome/LoadingOverlay';
 import { PdfViewer } from './components/viewer/PdfViewer';
 import { SkipLink } from './components/a11y/SkipLink';
@@ -29,6 +30,8 @@ import type { PageOperation } from './components/sidebar/PageList';
 
 export function App() {
   useDarkMode();
+  useShellShortcuts();
+  useRegionCycling();
 
   const document = useDocumentStore((s) => s.document);
   const loading = useDocumentStore((s) => s.loading);

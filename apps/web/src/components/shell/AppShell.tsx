@@ -107,9 +107,9 @@ export function AppShell({
       data-left-closed={!leftPaneOpen}
       data-right-closed={!rightPaneOpen}
     >
-      <div className={styles.menubar}>
+      <header className={styles.menubar} role="banner">
         <AppMenuBar hasDocument={!!document} />
-      </div>
+      </header>
 
       <div className={styles.ribbon}>
         <RibbonTabStrip />
@@ -122,10 +122,10 @@ export function AppShell({
 
       {leftPaneOpen && (
         <>
-          <div className={styles.leftRail}>
+          <nav className={styles.leftRail} aria-label="Document navigation">
             <LeftNavigationRail />
-          </div>
-          <div className={styles.leftPane}>
+          </nav>
+          <aside className={styles.leftPane} aria-label="Left pane">
             <LeftPaneHost
               sessionId={sessionId}
               onNavigate={onNavigate}
@@ -133,7 +133,7 @@ export function AppShell({
               onReorder={onReorder}
               onDocumentUpdated={onDocumentUpdated}
             />
-          </div>
+          </aside>
         </>
       )}
 
