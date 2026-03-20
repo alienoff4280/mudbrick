@@ -5,7 +5,14 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Rect, Ellipse, Line, type Canvas as FabricCanvas, type FabricObject } from 'fabric';
+import {
+  Rect,
+  Ellipse,
+  Line,
+  type Canvas as FabricCanvas,
+  type FabricObject,
+  type TPointerEvent,
+} from 'fabric';
 import { useAnnotationStore } from '../../../stores/annotationStore';
 import type { ShapeId } from '@mudbrick/shared/src/constants';
 
@@ -31,7 +38,7 @@ export function ShapeTool({ canvas, active, onAnnotationAdded }: ShapeToolProps)
     canvas.selection = false;
     canvas.defaultCursor = 'crosshair';
 
-    const handleMouseDown = (opt: { e: MouseEvent }) => {
+    const handleMouseDown = (opt: { e: TPointerEvent }) => {
       const pointer = canvas.getScenePoint(opt.e);
       isDrawing.current = true;
       startPoint.current = { x: pointer.x, y: pointer.y };
@@ -43,7 +50,7 @@ export function ShapeTool({ canvas, active, onAnnotationAdded }: ShapeToolProps)
       }
     };
 
-    const handleMouseMove = (opt: { e: MouseEvent }) => {
+    const handleMouseMove = (opt: { e: TPointerEvent }) => {
       if (!isDrawing.current || !startPoint.current || !currentShape.current) return;
 
       const pointer = canvas.getScenePoint(opt.e);
@@ -99,9 +106,7 @@ function createShape(
     selectable: true,
     evented: true,
     opacity,
-    // @ts-expect-error custom property
     mudbrickType: 'shape',
-    // @ts-expect-error custom property
     shapeType: type,
   };
 

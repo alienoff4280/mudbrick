@@ -30,7 +30,7 @@ export function FindBar({ visible, onClose, onMatchesChange, onNavigateToPage }:
   const [matches, setMatches] = useState<SearchMatch[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [searching, setSearching] = useState(false);
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Focus input when opened
   useEffect(() => {

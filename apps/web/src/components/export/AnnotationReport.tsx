@@ -25,11 +25,10 @@ interface AnnotationEntry {
 }
 
 function describeAnnotation(annot: Annotation): AnnotationEntry {
-  const base = {
+  const base: AnnotationEntry = {
     page: annot.page,
     type: annot.type,
     content: '',
-    tool: undefined as string | undefined,
   };
 
   if ('tool' in annot) {
@@ -75,7 +74,7 @@ function describeAnnotation(annot: Annotation): AnnotationEntry {
       }
       break;
     default:
-      base.content = annot.type;
+      base.content = base.type;
   }
 
   return base;
@@ -133,7 +132,7 @@ function downloadBlob(content: string, filename: string, mimeType: string) {
 }
 
 export function AnnotationReport({ open, onClose }: AnnotationReportProps) {
-  const annotations = useAnnotationStore((s) => s.annotations);
+  const annotations = useAnnotationStore((s) => s.pageAnnotations);
   const document = useDocumentStore((s) => s.document);
   const addToast = useUIStore((s) => s.addToast);
 

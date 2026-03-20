@@ -15,11 +15,18 @@ import { useTauri } from '../../hooks/useTauri';
 
 interface WelcomeScreenProps {
   onOpenFile: (filePath: string) => void;
+  onCreateFromImages: (filePaths: string[]) => void | Promise<void>;
+  onMergeFiles: () => void | Promise<void>;
   loading: boolean;
 }
 
-export function WelcomeScreen({ onOpenFile, loading }: WelcomeScreenProps) {
-  const { openFile } = useTauri();
+export function WelcomeScreen({
+  onOpenFile,
+  onCreateFromImages,
+  onMergeFiles,
+  loading,
+}: WelcomeScreenProps) {
+  const { openFile, openImageFiles } = useTauri();
   const recentFiles = useSessionStore((s) => s.recentFiles);
   const removeRecentFile = useSessionStore((s) => s.removeRecentFile);
   const addToast = useUIStore((s) => s.addToast);
@@ -30,6 +37,13 @@ export function WelcomeScreen({ onOpenFile, loading }: WelcomeScreenProps) {
       onOpenFile(path);
     }
   }, [openFile, onOpenFile]);
+
+  const handleCreateFromImagesClick = useCallback(async () => {
+    const paths = await openImageFiles();
+    if (paths.length > 0) {
+      await onCreateFromImages(paths);
+    }
+  }, [onCreateFromImages, openImageFiles]);
 
   const handleFileDrop = useCallback(
     (paths: string[]) => {
@@ -156,6 +170,54 @@ export function WelcomeScreen({ onOpenFile, loading }: WelcomeScreenProps) {
           >
             Open PDF
           </button>
+          <button
+            onClick={handleCreateFromImagesClick}
+            disabled={loading}
+            style={{
+              padding: '10px 24px',
+              backgroundColor: 'transparent',
+              color: 'var(--mb-text)',
+              border: '1px solid var(--mb-border)',
+              borderRadius: 'var(--mb-radius-sm)',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              transition: 'background-color var(--mb-transition), opacity var(--mb-transition)',
+            }}
+            onMouseOver={(e) => {
+              if (!loading) e.currentTarget.style.backgroundColor = 'var(--mb-surface-hover)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            Create PDF from Images
+          </button>
+          <button
+            onClick={onMergeFiles}
+            disabled={loading}
+            style={{
+              padding: '10px 24px',
+              backgroundColor: 'transparent',
+              color: 'var(--mb-text)',
+              border: '1px solid var(--mb-border)',
+              borderRadius: 'var(--mb-radius-sm)',
+              fontSize: '14px',
+              fontWeight: 600,
+              cursor: loading ? 'not-allowed' : 'pointer',
+              opacity: loading ? 0.6 : 1,
+              transition: 'background-color var(--mb-transition), opacity var(--mb-transition)',
+            }}
+            onMouseOver={(e) => {
+              if (!loading) e.currentTarget.style.backgroundColor = 'var(--mb-surface-hover)';
+            }}
+            onMouseOut={(e) => {
+              e.currentTarget.style.backgroundColor = 'transparent';
+            }}
+          >
+            Merge PDFs
+          </button>
         </div>
       </DropZone>
 
@@ -191,85 +253,99 @@ export function WelcomeScreen({ onOpenFile, loading }: WelcomeScreenProps) {
             }}
           >
             {recentFiles.map((file) => (
-              <button
+              <div
                 key={file.filePath}
-                onClick={() => handleRecentFileClick(file)}
-                disabled={loading}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '12px',
                   padding: '10px 12px',
-                  backgroundColor: 'var(--mb-surface)',
-                  border: 'none',
-                  cursor: loading ? 'not-allowed' : 'pointer',
-                  textAlign: 'left',
                   width: '100%',
-                  transition: 'background-color var(--mb-transition)',
-                  color: 'var(--mb-text)',
-                }}
-                onMouseOver={(e) => {
-                  if (!loading) e.currentTarget.style.backgroundColor = 'var(--mb-surface-hover)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.backgroundColor = 'var(--mb-surface)';
+                  backgroundColor: 'var(--mb-surface)',
                 }}
               >
-                {/* PDF icon */}
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="var(--mb-brand)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  style={{ flexShrink: 0 }}
+                <button
+                  type="button"
+                  onClick={() => handleRecentFileClick(file)}
+                  disabled={loading}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    padding: '10px 12px',
+                    backgroundColor: 'transparent',
+                    border: 'none',
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    textAlign: 'left',
+                    flex: 1,
+                    color: 'var(--mb-text)',
+                    transition: 'background-color var(--mb-transition)',
+                  }}
+                  onMouseOver={(e) => {
+                    if (!loading) {
+                      e.currentTarget.parentElement!.style.backgroundColor = 'var(--mb-surface-hover)';
+                    }
+                  }}
+                  onMouseOut={(e) => {
+                    e.currentTarget.parentElement!.style.backgroundColor = 'var(--mb-surface)';
+                  }}
                 >
-                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                  <polyline points="14 2 14 8 20 8" />
-                </svg>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div
-                    style={{
-                      fontSize: '13px',
-                      fontWeight: 500,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      whiteSpace: 'nowrap',
-                    }}
+                  {/* PDF icon */}
+                  <svg
+                    width="20"
+                    height="20"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="var(--mb-brand)"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    style={{ flexShrink: 0 }}
                   >
-                    {file.fileName}
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                    <polyline points="14 2 14 8 20 8" />
+                  </svg>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {file.fileName}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: '11px',
+                        color: 'var(--mb-text-muted)',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {file.filePath}
+                    </div>
                   </div>
                   <div
                     style={{
                       fontSize: '11px',
                       color: 'var(--mb-text-muted)',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
                       whiteSpace: 'nowrap',
+                      flexShrink: 0,
                     }}
                   >
-                    {file.filePath}
+                    <span>{formatFileSize(file.fileSize)}</span>
+                    <span style={{ margin: '0 4px' }}>·</span>
+                    <span>{file.pageCount} pg</span>
+                    <span style={{ margin: '0 4px' }}>·</span>
+                    <span>{formatDate(file.openedAt)}</span>
                   </div>
-                </div>
-                <div
-                  style={{
-                    fontSize: '11px',
-                    color: 'var(--mb-text-muted)',
-                    whiteSpace: 'nowrap',
-                    flexShrink: 0,
-                  }}
-                >
-                  <span>{formatFileSize(file.fileSize)}</span>
-                  <span style={{ margin: '0 4px' }}>·</span>
-                  <span>{file.pageCount} pg</span>
-                  <span style={{ margin: '0 4px' }}>·</span>
-                  <span>{formatDate(file.openedAt)}</span>
-                </div>
-                {/* Remove button */}
+                </button>
                 <button
+                  type="button"
                   onClick={(e) => handleRemoveRecent(e, file.filePath)}
                   aria-label={`Remove ${file.fileName} from recent files`}
                   style={{
@@ -277,7 +353,7 @@ export function WelcomeScreen({ onOpenFile, loading }: WelcomeScreenProps) {
                     border: 'none',
                     cursor: 'pointer',
                     color: 'var(--mb-text-muted)',
-                    padding: '2px 4px',
+                    padding: '2px 8px',
                     fontSize: '14px',
                     opacity: 0.5,
                     flexShrink: 0,
@@ -291,7 +367,7 @@ export function WelcomeScreen({ onOpenFile, loading }: WelcomeScreenProps) {
                 >
                   &times;
                 </button>
-              </button>
+              </div>
             ))}
           </div>
         </div>

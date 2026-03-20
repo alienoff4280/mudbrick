@@ -8,6 +8,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { PageList, type PageListItem, type PageOperation } from '../sidebar/PageList';
 import { OutlinePanel } from '../sidebar/OutlinePanel';
+import { AttachmentsPanel } from '../sidebar/AttachmentsPanel';
 import { useDocumentStore } from '../../stores/documentStore';
 import { useUIStore } from '../../stores/uiStore';
 import { api } from '../../services/api';
@@ -17,9 +18,16 @@ interface ThumbnailSidebarProps {
   onNavigate: (pageNum: number) => void;
   onPageOperation?: (op: PageOperation) => void;
   onReorder?: (newOrder: number[]) => void;
+  onDocumentUpdated?: () => void | Promise<void>;
 }
 
-export function ThumbnailSidebar({ sessionId, onNavigate, onPageOperation, onReorder }: ThumbnailSidebarProps) {
+export function ThumbnailSidebar({
+  sessionId,
+  onNavigate,
+  onPageOperation,
+  onReorder,
+  onDocumentUpdated,
+}: ThumbnailSidebarProps) {
   const pageCount = useDocumentStore((s) => s.document?.pageCount ?? 0);
   const currentPage = useDocumentStore((s) => s.currentPage);
   const sidebarTab = useUIStore((s) => s.sidebarTab);
@@ -108,6 +116,11 @@ export function ThumbnailSidebar({ sessionId, onNavigate, onPageOperation, onReo
           onClick={() => setSidebarTab('outline')}
           label="Outline"
         />
+        <TabButton
+          active={sidebarTab === 'attachments'}
+          onClick={() => setSidebarTab('attachments')}
+          label="Files"
+        />
       </div>
 
       {/* Tab content */}
@@ -129,6 +142,9 @@ export function ThumbnailSidebar({ sessionId, onNavigate, onPageOperation, onReo
         )}
         {sidebarTab === 'outline' && (
           <OutlinePanel items={[]} onNavigate={handlePageClick} />
+        )}
+        {sidebarTab === 'attachments' && (
+          <AttachmentsPanel sessionId={sessionId} onDocumentUpdated={onDocumentUpdated} />
         )}
       </div>
 

@@ -26,7 +26,14 @@ interface PageListProps {
 }
 
 export interface PageOperation {
-  type: 'rotate-cw' | 'rotate-ccw' | 'delete' | 'insert-after';
+  type:
+    | 'rotate-cw'
+    | 'rotate-ccw'
+    | 'duplicate'
+    | 'insert-after'
+    | 'insert-from-pdf'
+    | 'replace-page'
+    | 'delete';
   pageNum: number;
 }
 
@@ -252,7 +259,10 @@ function ContextMenuOverlay({
   const menuItems: Array<{ label: string; type: PageOperation['type'] }> = [
     { label: 'Rotate clockwise', type: 'rotate-cw' },
     { label: 'Rotate counter-clockwise', type: 'rotate-ccw' },
+    { label: 'Duplicate page', type: 'duplicate' },
     { label: 'Insert blank page after', type: 'insert-after' },
+    { label: 'Insert pages from PDF...', type: 'insert-from-pdf' },
+    { label: 'Replace page from file...', type: 'replace-page' },
     { label: 'Delete page', type: 'delete' },
   ];
 

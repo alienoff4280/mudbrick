@@ -46,17 +46,20 @@ function RecentFileItem({
   onRemove: (e: React.MouseEvent) => void;
 }) {
   return (
-    <button className={styles.fileItem} onClick={onOpen} title={file.filePath}>
-      <span className={styles.fileIcon}>PDF</span>
-      <div className={styles.fileInfo}>
-        <div className={styles.fileName}>{file.fileName}</div>
-        <div className={styles.fileMeta}>
-          <span>{formatFileSize(file.fileSize)}</span>
-          <span>{file.pageCount} pages</span>
-          <span>{formatDate(file.openedAt)}</span>
+    <div className={styles.fileItem} title={file.filePath}>
+      <button type="button" className={styles.fileItem} onClick={onOpen}>
+        <span className={styles.fileIcon}>PDF</span>
+        <div className={styles.fileInfo}>
+          <div className={styles.fileName}>{file.fileName}</div>
+          <div className={styles.fileMeta}>
+            <span>{formatFileSize(file.fileSize)}</span>
+            <span>{file.pageCount} pages</span>
+            <span>{formatDate(file.openedAt)}</span>
+          </div>
         </div>
-      </div>
+      </button>
       <button
+        type="button"
         className={styles.removeBtn}
         onClick={onRemove}
         aria-label={`Remove ${file.fileName} from recent files`}
@@ -64,7 +67,7 @@ function RecentFileItem({
       >
         x
       </button>
-    </button>
+    </div>
   );
 }
 

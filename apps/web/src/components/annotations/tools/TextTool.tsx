@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { IText, type Canvas as FabricCanvas } from 'fabric';
+import { IText, type Canvas as FabricCanvas, type TPointerEvent } from 'fabric';
 import { useAnnotationStore } from '../../../stores/annotationStore';
 
 interface TextToolProps {
@@ -27,7 +27,7 @@ export function TextTool({ canvas, active, onAnnotationAdded }: TextToolProps) {
     canvas.selection = false;
     canvas.defaultCursor = 'text';
 
-    const handleMouseDown = (opt: { e: MouseEvent }) => {
+    const handleMouseDown = (opt: { e: TPointerEvent }) => {
       // Don't place a new text if clicking on an existing object
       if (canvas.findTarget(opt.e)) return;
       if (isPlacing.current) return;
@@ -46,9 +46,7 @@ export function TextTool({ canvas, active, onAnnotationAdded }: TextToolProps) {
         textAlign: 'left',
         editable: true,
         selectable: true,
-        // @ts-expect-error custom property
         mudbrickType: 'text',
-        // @ts-expect-error custom property
         tool: 'text',
       });
 

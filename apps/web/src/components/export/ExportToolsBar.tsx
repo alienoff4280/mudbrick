@@ -1,6 +1,8 @@
 interface ExportToolsBarProps {
   onOpenPdfExport: () => void;
   onOpenImageExport: () => void;
+  onFlattenAnnotations: () => void;
+  onOptimizeDocument: () => void;
 }
 
 const buttonStyle = {
@@ -22,6 +24,8 @@ const buttonStyle = {
 export function ExportToolsBar({
   onOpenPdfExport,
   onOpenImageExport,
+  onFlattenAnnotations,
+  onOptimizeDocument,
 }: ExportToolsBarProps) {
   return (
     <div
@@ -40,6 +44,12 @@ export function ExportToolsBar({
       </button>
       <button type="button" onClick={onOpenImageExport} style={buttonStyle}>
         Export Images
+      </button>
+      <button type="button" onClick={onOptimizeDocument} style={buttonStyle}>
+        Optimize PDF
+      </button>
+      <button type="button" onClick={onFlattenAnnotations} style={buttonStyle}>
+        Flatten
       </button>
     </div>
   );

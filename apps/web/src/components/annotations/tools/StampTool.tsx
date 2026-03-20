@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { FabricText, type Canvas as FabricCanvas } from 'fabric';
+import { FabricText, type Canvas as FabricCanvas, type TPointerEvent } from 'fabric';
 
 interface StampToolProps {
   canvas: FabricCanvas | null;
@@ -43,7 +43,7 @@ export function StampTool({ canvas, active, onAnnotationAdded }: StampToolProps)
     canvas.selection = false;
     canvas.defaultCursor = 'copy';
 
-    const handleMouseDown = (opt: { e: MouseEvent }) => {
+    const handleMouseDown = (opt: { e: TPointerEvent }) => {
       if (canvas.findTarget(opt.e)) return;
       if (isPlacing.current) return;
 
@@ -64,9 +64,7 @@ export function StampTool({ canvas, active, onAnnotationAdded }: StampToolProps)
         padding: 8,
         selectable: true,
         evented: true,
-        // @ts-expect-error custom property
         mudbrickType: 'stamp',
-        // @ts-expect-error custom property
         tool: 'stamp',
       });
 

@@ -7,7 +7,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Rect, type Canvas as FabricCanvas } from 'fabric';
+import { Rect, type Canvas as FabricCanvas, type TPointerEvent } from 'fabric';
 
 interface RedactToolProps {
   canvas: FabricCanvas | null;
@@ -26,7 +26,7 @@ export function RedactTool({ canvas, active, onAnnotationAdded }: RedactToolProp
     canvas.selection = false;
     canvas.defaultCursor = 'crosshair';
 
-    const handleMouseDown = (opt: { e: MouseEvent }) => {
+    const handleMouseDown = (opt: { e: TPointerEvent }) => {
       const pointer = canvas.getScenePoint(opt.e);
       isDrawing.current = true;
       startPoint.current = { x: pointer.x, y: pointer.y };
@@ -40,9 +40,7 @@ export function RedactTool({ canvas, active, onAnnotationAdded }: RedactToolProp
         opacity: 1,
         selectable: true,
         evented: true,
-        // @ts-expect-error custom property
         tool: 'redact',
-        // @ts-expect-error custom property
         mudbrickType: 'redact',
       });
 
@@ -50,7 +48,7 @@ export function RedactTool({ canvas, active, onAnnotationAdded }: RedactToolProp
       canvas.add(rect);
     };
 
-    const handleMouseMove = (opt: { e: MouseEvent }) => {
+    const handleMouseMove = (opt: { e: TPointerEvent }) => {
       if (!isDrawing.current || !startPoint.current || !currentRect.current) return;
 
       const pointer = canvas.getScenePoint(opt.e);

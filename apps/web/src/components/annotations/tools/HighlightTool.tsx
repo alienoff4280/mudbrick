@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useRef } from 'react';
-import { Rect, type Canvas as FabricCanvas } from 'fabric';
+import { Rect, type Canvas as FabricCanvas, type TPointerEvent } from 'fabric';
 import { useAnnotationStore } from '../../../stores/annotationStore';
 
 interface HighlightToolProps {
@@ -33,7 +33,7 @@ export function HighlightTool({ canvas, active, onAnnotationAdded }: HighlightTo
     canvas.selection = false;
     canvas.defaultCursor = 'crosshair';
 
-    const handleMouseDown = (opt: { e: MouseEvent }) => {
+    const handleMouseDown = (opt: { e: TPointerEvent }) => {
       const pointer = canvas.getScenePoint(opt.e);
       isDrawing.current = true;
       startPoint.current = { x: pointer.x, y: pointer.y };
@@ -47,9 +47,7 @@ export function HighlightTool({ canvas, active, onAnnotationAdded }: HighlightTo
         opacity: opacity * 0.4,
         selectable: true,
         evented: true,
-        // @ts-expect-error custom property for serialization
         tool: 'highlight',
-        // @ts-expect-error custom property
         mudbrickType: 'highlight',
       });
 
@@ -57,7 +55,7 @@ export function HighlightTool({ canvas, active, onAnnotationAdded }: HighlightTo
       canvas.add(rect);
     };
 
-    const handleMouseMove = (opt: { e: MouseEvent }) => {
+    const handleMouseMove = (opt: { e: TPointerEvent }) => {
       if (!isDrawing.current || !startPoint.current || !currentRect.current) return;
 
       const pointer = canvas.getScenePoint(opt.e);
