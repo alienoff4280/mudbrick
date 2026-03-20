@@ -32,7 +32,7 @@ export function getNextZoom(currentZoom: number, direction: 1 | -1): number {
  * Find the nearest discrete zoom level to a given value.
  */
 export function snapToZoomLevel(zoom: number): number {
-  let closest = ZOOM_LEVELS[0] ?? 1;
+  let closest: number = ZOOM_LEVELS[0] ?? 1;
   let minDist = Math.abs(zoom - closest);
 
   for (const z of ZOOM_LEVELS) {

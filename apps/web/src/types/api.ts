@@ -55,6 +55,16 @@ export interface SaveResponse {
   file_path: string;
 }
 
+export interface OptimizeResponse {
+  success: boolean;
+  optimized: boolean;
+  page_count: number;
+  original_size: number;
+  optimized_size: number;
+  bytes_saved: number;
+  new_version: number | null;
+}
+
 export interface ExportResponse {
   success: boolean;
   file_path: string;
@@ -73,6 +83,43 @@ export interface ImageExportResponse {
   format: string;
   exported_count: number;
   file_paths: string[];
+}
+
+export interface FlattenAnnotationsResponse {
+  success: boolean;
+  page_count: number;
+  new_version: number;
+}
+
+export interface AttachmentInfo {
+  name: string;
+  file_name: string;
+  description: string;
+  size: number;
+  creation_date: string;
+  mod_date: string;
+}
+
+export interface AttachmentListResponse {
+  attachments: AttachmentInfo[];
+  total: number;
+}
+
+export interface AttachmentAddResponse {
+  success: boolean;
+  attachments_added: number;
+  attachment_names: string[];
+  total_attachments: number;
+}
+
+export interface AttachmentExportResponse {
+  success: boolean;
+  file_path: string;
+}
+
+export interface AttachmentDeleteResponse {
+  success: boolean;
+  total_attachments: number;
 }
 
 export interface BatesRequest {

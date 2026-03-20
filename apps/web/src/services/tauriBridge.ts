@@ -13,6 +13,22 @@ export interface AppUpdateStatus {
   latestVersion: string | null;
 }
 
+export interface DialogFilter {
+  name: string;
+  extensions: string[];
+}
+
+const PDF_DIALOG_FILTERS: DialogFilter[] = [
+  {
+    name: 'PDF Documents',
+    extensions: ['pdf'],
+  },
+  {
+    name: 'All Files',
+    extensions: ['*'],
+  },
+];
+
 /** Check if running inside a Tauri WebView */
 export function isTauri(): boolean {
   return typeof window !== 'undefined' && '__TAURI__' in window;
@@ -22,25 +38,19 @@ export function isTauri(): boolean {
  * Open a file dialog to select one or more PDF files.
  * Returns an array of local file paths.
  */
-export async function openFileDialog(multiple = false): Promise<string[]> {
+export async function openFileDialog(
+  multiple = false,
+  filters: DialogFilter[] = PDF_DIALOG_FILTERS,
+): Promise<string[]> {
   if (!isTauri()) {
     // Browser fallback: use standard file input
-    return browserFileDialog(multiple);
+    return browserFileDialog(multiple, filters);
   }
 
   const { open } = await import('@tauri-apps/plugin-dialog');
   const result = await open({
     multiple,
-    filters: [
-      {
-        name: 'PDF Documents',
-        extensions: ['pdf'],
-      },
-      {
-        name: 'All Files',
-        extensions: ['*'],
-      },
-    ],
+    filters,
   });
 
   if (!result) return [];
@@ -52,7 +62,10 @@ export async function openFileDialog(multiple = false): Promise<string[]> {
  * Open a save dialog for choosing where to save a file.
  * Returns the chosen file path, or null if cancelled.
  */
-export async function saveFileDialog(defaultName = 'document.pdf'): Promise<string | null> {
+export async function saveFileDialog(
+  defaultName = 'document.pdf',
+  filters: DialogFilter[] = PDF_DIALOG_FILTERS,
+): Promise<string | null> {
   if (!isTauri()) {
     // Browser fallback: return a fake path
     return null;
@@ -61,12 +74,7 @@ export async function saveFileDialog(defaultName = 'document.pdf'): Promise<stri
   const { save } = await import('@tauri-apps/plugin-dialog');
   const result = await save({
     defaultPath: defaultName,
-    filters: [
-      {
-        name: 'PDF Documents',
-        extensions: ['pdf'],
-      },
-    ],
+    filters,
   });
 
   return result;
@@ -128,11 +136,14 @@ export async function installAppUpdate(): Promise<boolean> {
 
 // -- Browser fallback for file dialog --
 
-function browserFileDialog(multiple: boolean): Promise<string[]> {
+function browserFileDialog(multiple: boolean, filters: DialogFilter[]): Promise<string[]> {
   return new Promise((resolve) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.pdf,application/pdf';
+    input.accept = filters
+      .flatMap((filter) => filter.extensions)
+      .map((extension) => (extension === '*' ? '*/*' : `.${extension}`))
+      .join(',');
     input.multiple = multiple;
 
     input.onchange = () => {

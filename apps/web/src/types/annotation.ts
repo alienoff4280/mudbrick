@@ -5,7 +5,7 @@
  * canonical annotation exchange format between frontend and backend.
  */
 
-import type { ToolId, ShapeId } from '@mudbrick/shared/src/constants';
+import type { ShapeId } from '@mudbrick/shared/src/constants';
 
 export interface AnnotationBase {
   id: string;

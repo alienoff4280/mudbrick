@@ -14,9 +14,11 @@ import type {
   ExportResponse,
   ImageExportRequest,
   ImageExportResponse,
+  FlattenAnnotationsResponse,
   PageOperationResponse,
   MergeResponse,
   SaveResponse,
+  OptimizeResponse,
   BatesRequest,
   BatesResponse,
   HeaderFooterRequest,
@@ -50,6 +52,10 @@ import type {
   MetadataUpdateRequest,
   MetadataUpdateResponse,
   SanitizeResponse,
+  AttachmentListResponse,
+  AttachmentAddResponse,
+  AttachmentExportResponse,
+  AttachmentDeleteResponse,
 } from '../types/api';
 import type { PageAnnotations } from '../types/annotation';
 
@@ -112,6 +118,14 @@ class ApiClient {
     });
   }
 
+  async createPdfFromImages(filePaths: string[]): Promise<SessionCreateResponse> {
+    return this.request('/documents/from-images', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_paths: filePaths }),
+    });
+  }
+
   async getDocumentInfo(sessionId: string): Promise<SessionInfoResponse> {
     return this.request(`/documents/${sessionId}`);
   }
@@ -136,6 +150,10 @@ class ApiClient {
 
   async closeDocument(sessionId: string): Promise<{ success: boolean }> {
     return this.request(`/documents/${sessionId}/close`, { method: 'POST' });
+  }
+
+  async optimizeDocument(sessionId: string): Promise<OptimizeResponse> {
+    return this.request(`/documents/${sessionId}/optimize`, { method: 'POST' });
   }
 
   async undo(sessionId: string): Promise<UndoRedoResponse> {
@@ -194,6 +212,51 @@ class ApiClient {
     });
   }
 
+  async duplicatePages(
+    sessionId: string,
+    pages: number[],
+  ): Promise<PageOperationResponse> {
+    return this.request(`/pages/${sessionId}/duplicate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pages }),
+    });
+  }
+
+  async insertPagesFromFile(
+    sessionId: string,
+    filePath: string,
+    after: number,
+    pages?: number[],
+  ): Promise<PageOperationResponse> {
+    return this.request(`/pages/${sessionId}/insert-from-file`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        file_path: filePath,
+        after,
+        pages: pages ?? undefined,
+      }),
+    });
+  }
+
+  async replacePage(
+    sessionId: string,
+    page: number,
+    filePath: string,
+    sourcePage = 1,
+  ): Promise<PageOperationResponse> {
+    return this.request(`/pages/${sessionId}/replace`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        page,
+        file_path: filePath,
+        source_page: sourcePage,
+      }),
+    });
+  }
+
   async getThumbnail(sessionId: string, page: number, width = 200): Promise<string> {
     const blob = await this.requestBlob(
       `/pages/${sessionId}/${page}/thumbnail?width=${width}`,
@@ -211,6 +274,46 @@ class ApiClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ file_paths: filePaths }),
+    });
+  }
+
+  // -- Attachments --
+
+  async listAttachments(sessionId: string): Promise<AttachmentListResponse> {
+    return this.request(`/attachments/${sessionId}`);
+  }
+
+  async addAttachments(
+    sessionId: string,
+    filePaths: string[],
+  ): Promise<AttachmentAddResponse> {
+    return this.request(`/attachments/${sessionId}/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ file_paths: filePaths }),
+    });
+  }
+
+  async exportAttachment(
+    sessionId: string,
+    name: string,
+    outputPath: string,
+  ): Promise<AttachmentExportResponse> {
+    return this.request(`/attachments/${sessionId}/export`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, output_path: outputPath }),
+    });
+  }
+
+  async deleteAttachment(
+    sessionId: string,
+    name: string,
+  ): Promise<AttachmentDeleteResponse> {
+    return this.request(`/attachments/${sessionId}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name }),
     });
   }
 
@@ -248,6 +351,21 @@ class ApiClient {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(request),
+    });
+  }
+
+  async flattenAnnotations(
+    sessionId: string,
+    annotations: Record<number, PageAnnotations>,
+    options: Record<string, unknown> = {},
+  ): Promise<FlattenAnnotationsResponse> {
+    return this.request(`/export/${sessionId}/flatten`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        annotations,
+        options,
+      }),
     });
   }
 

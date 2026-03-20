@@ -69,7 +69,7 @@ export function useAnnotations({
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const json = canvas.toJSON(CUSTOM_PROPS) as PageAnnotations;
+    const json = canvas.toObject(CUSTOM_PROPS) as PageAnnotations;
     setPageAnnotations(currentPage, json);
   }, [currentPage, setPageAnnotations]);
 
