@@ -121,10 +121,6 @@
   --mb-toolbar-hover: var(--mb-bg-elevated);
   --mb-toolbar-active: var(--mb-bg-hover);
   --mb-toolbar-divider: var(--mb-border);
-  --mb-sidebar-bg: var(--mb-bg-secondary);
-  --mb-sidebar-thumb-bg: var(--mb-bg-elevated);
-  --mb-sidebar-thumb-border: var(--mb-border);
-  --mb-sidebar-thumb-active: var(--mb-accent);
   --mb-statusbar-bg: var(--mb-bg-primary);
   --mb-statusbar-text: var(--mb-text-subtle);
   --mb-surface-sunken: var(--mb-bg-secondary);
@@ -137,8 +133,6 @@
   --mb-accent-light: var(--mb-accent-subtle);
   --mb-toolbar-height: var(--mb-titlebar-height);
   --mb-panel-width: 220px;
-  --mb-pagenav-height: 0px;
-  --mb-sidebar-width: 0px;
   --mb-danger: var(--mb-danger);
 }
 

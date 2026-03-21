@@ -3030,23 +3030,4 @@ html[data-theme="light"] .crop-shade {
   }
 }
 
-/* ═══════════════════════════════════════
-   LEGACY COMPATIBILITY
-   Ribbon, sidebar, and old layout selectors
-   kept for JS modules that reference them
-   ═══════════════════════════════════════ */
-
-#ribbon-tabs,
-#ribbon-panel,
-#sidebar {
-  display: none;
-}
-
-.ribbon-content,
-.ribbon-tab,
-.ribbon-group,
-.ribbon-btn,
-.sidebar-tab,
-.sidebar-panel {
-  display: none;
-}
+/* Legacy ribbon/sidebar elements removed from HTML in UI overhaul */

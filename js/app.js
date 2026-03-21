@@ -3357,9 +3357,6 @@ function refreshNotesSidebar() {
         <p class="sidebar-empty-hint">Add sticky notes to pages to see them here.</p>
       </div>`;
     replaceIcons();
-    // Update badge
-    const badge = document.querySelector('.sidebar-tab[data-sidebar="notes"] .sidebar-tab-label');
-    if (badge) badge.dataset.count = '';
     return;
   }
 
@@ -3395,10 +3392,6 @@ function refreshNotesSidebar() {
   });
 
   panel.appendChild(list);
-
-  // Update badge count
-  const badge = document.querySelector('.sidebar-tab[data-sidebar="notes"] .sidebar-tab-label');
-  if (badge) badge.dataset.count = notes.length;
 }
 
 /* ═══════════════════ Modal Focus Trapping ═══════════════════ */
