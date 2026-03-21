@@ -3038,8 +3038,7 @@ html[data-theme="light"] .crop-shade {
 
 #ribbon-tabs,
 #ribbon-panel,
-#sidebar,
-#main-container {
+#sidebar {
   display: none;
 }
 

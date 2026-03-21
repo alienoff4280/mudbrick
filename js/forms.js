@@ -1,17 +1,18 @@
 /**
  * Mudbrick — Forms (Phase 6)
- * PDF form field detection and filling via pdf-lib.
+ * PDF form field detection and filling via pdf-lib, with PDF.js fallback.
  *
  * Architecture:
- * - Detects AcroForm fields using pdf-lib's getForm() API
+ * - Primary: Detects AcroForm fields using pdf-lib's getForm() API
+ * - Fallback: Uses PDF.js page.getAnnotations() for PDFs that pdf-lib can't parse
  * - Renders HTML overlays positioned over form fields
- * - Writes filled values back to pdf-lib on export
+ * - Writes filled values back to pdf-lib on export (when available)
  *
  * Supported field types:
- * - Text fields (PDFTextField)
- * - Checkboxes (PDFCheckBox)
- * - Dropdowns (PDFDropdown)
- * - Radio buttons (PDFRadioGroup)
+ * - Text fields (PDFTextField / Widget.Tx)
+ * - Checkboxes (PDFCheckBox / Widget.Btn)
+ * - Dropdowns (PDFDropdown / Widget.Ch)
+ * - Radio buttons (PDFRadioGroup / Widget.Btn)
  */
 
 const getPDFLib = () => window.PDFLib;
@@ -20,11 +21,12 @@ const getPDFLib = () => window.PDFLib;
 
 let formFieldValues = {}; // { fieldName: value }
 let formOverlayContainer = null;
+let _pdjsFieldSource = false; // true when fields came from PDF.js fallback
 
 /* ═══════════════════ Detection ═══════════════════ */
 
 /**
- * Detect all form fields in the PDF.
+ * Detect all form fields in the PDF via pdf-lib.
  * @param {PDFDocument} pdfLibDoc - pdf-lib document
  * @returns {Array} Field descriptors
  */
@@ -35,11 +37,97 @@ export function detectFormFields(pdfLibDoc) {
   try {
     const form = pdfLibDoc.getForm();
     const fields = form.getFields();
-    return fields.map(field => describeField(field, PDFLib));
+    const result = fields.map(field => describeField(field, PDFLib));
+    _pdjsFieldSource = false;
+    return result;
   } catch (e) {
-    // PDF has no form
+    // PDF has no form or pdf-lib can't parse it
     return [];
   }
+}
+
+/**
+ * Fallback: detect form fields using PDF.js annotations API.
+ * Works on complex PDFs that pdf-lib can't parse (e.g. USCIS forms).
+ * @param {PDFDocumentProxy} pdfJsDoc - PDF.js document
+ * @returns {Promise<Array>} Field descriptors with per-page rect info
+ */
+export async function detectFormFieldsPdfJs(pdfJsDoc) {
+  if (!pdfJsDoc) return [];
+
+  const allFields = [];
+  const seenNames = new Set();
+
+  for (let i = 1; i <= pdfJsDoc.numPages; i++) {
+    const page = await pdfJsDoc.getPage(i);
+    const annotations = await page.getAnnotations({ intent: 'display' });
+    const viewport = page.getViewport({ scale: 1.0 });
+
+    for (const annot of annotations) {
+      if (annot.subtype !== 'Widget') continue;
+
+      const name = annot.fieldName || `field_${annot.id}`;
+      const rect = annot.rect; // [x1, y1, x2, y2] in PDF coords (bottom-left origin)
+      if (!rect || rect.length < 4) continue;
+
+      const type = mapPdfJsFieldType(annot);
+      if (type === 'button' || type === 'signature') continue;
+
+      const descriptor = {
+        name,
+        type,
+        readOnly: annot.readOnly || false,
+        value: extractPdfJsValue(annot, type),
+        _pdfjs: true, // mark as PDF.js-sourced
+        _page: i, // 1-based page number
+        _rect: rect, // raw PDF coords [x1, y1, x2, y2]
+        _pageHeight: viewport.height / viewport.scale,
+      };
+
+      if (type === 'dropdown' || type === 'radio') {
+        descriptor.options = annot.options?.map(o => o.displayValue || o.exportValue || '') || [];
+      }
+      if (annot.maxLen) descriptor.maxLength = annot.maxLen;
+
+      // Dedupe by name+page (some forms have multiple widgets per field)
+      const key = `${name}::${i}`;
+      if (!seenNames.has(key)) {
+        seenNames.add(key);
+        allFields.push(descriptor);
+      }
+    }
+  }
+
+  _pdjsFieldSource = allFields.length > 0;
+  return allFields;
+}
+
+function mapPdfJsFieldType(annot) {
+  const ft = annot.fieldType;
+  if (ft === 'Tx') return 'text';
+  if (ft === 'Ch') return annot.combo ? 'dropdown' : 'dropdown';
+  if (ft === 'Btn') {
+    if (annot.radioButton) return 'radio';
+    if (annot.checkBox) return 'checkbox';
+    return 'button';
+  }
+  if (ft === 'Sig') return 'signature';
+  return 'text'; // default to text for unknown widget types
+}
+
+function extractPdfJsValue(annot, type) {
+  switch (type) {
+    case 'text': return annot.fieldValue || '';
+    case 'checkbox': return annot.fieldValue === annot.exportValue || annot.fieldValue === 'Yes';
+    case 'dropdown': return annot.fieldValue || '';
+    case 'radio': return annot.fieldValue || '';
+    default: return '';
+  }
+}
+
+/** @returns {boolean} Whether fields were detected via PDF.js fallback */
+export function isUsingPdfJsFallback() {
+  return _pdjsFieldSource;
 }
 
 function describeField(field, PDFLib) {
@@ -109,7 +197,6 @@ export function renderFormOverlay(pageContainer, fields, pdfLibDoc, pageIndex, z
 
   if (!fields || fields.length === 0) return;
 
-  const PDFLib = getPDFLib();
   formOverlayContainer = document.createElement('div');
   formOverlayContainer.id = 'form-overlay';
   formOverlayContainer.style.cssText = `
@@ -121,63 +208,100 @@ export function renderFormOverlay(pageContainer, fields, pdfLibDoc, pageIndex, z
   `;
   pageContainer.appendChild(formOverlayContainer);
 
-  const form = pdfLibDoc.getForm();
-  const page = pdfLibDoc.getPage(pageIndex);
-  const { width: pdfW, height: pdfH } = page.getSize();
+  // Check if fields are from PDF.js fallback
+  const isPdfJs = fields[0]?._pdfjs;
+
+  if (isPdfJs) {
+    _renderPdfJsFields(fields, pageIndex, zoom);
+  } else {
+    _renderPdfLibFields(fields, pdfLibDoc, pageIndex, zoom);
+  }
+}
+
+/** Render fields detected via PDF.js annotations */
+function _renderPdfJsFields(fields, pageIndex, zoom) {
+  const pageNum = pageIndex + 1; // 1-based
+  const pageFields = fields.filter(f => f._page === pageNum);
+
+  for (const fieldDesc of pageFields) {
+    if (fieldDesc.readOnly || fieldDesc.type === 'button' || fieldDesc.type === 'signature') continue;
+
+    const [x1, y1, x2, y2] = fieldDesc._rect;
+    const pdfH = fieldDesc._pageHeight;
+    // PDF coords: bottom-left origin → CSS: top-left origin
+    const w = (x2 - x1) * zoom;
+    const h = (y2 - y1) * zoom;
+    const x = x1 * zoom;
+    const y = (pdfH - y2) * zoom;
+
+    _appendFieldElement(fieldDesc, x, y, w, h);
+  }
+}
+
+/** Render fields detected via pdf-lib */
+function _renderPdfLibFields(fields, pdfLibDoc, pageIndex, zoom) {
+  const PDFLib = getPDFLib();
+  if (!pdfLibDoc || !PDFLib) return;
+
+  let form, pdfH;
+  try {
+    form = pdfLibDoc.getForm();
+    const page = pdfLibDoc.getPage(pageIndex);
+    pdfH = page.getSize().height;
+  } catch { return; }
 
   for (const fieldDesc of fields) {
     if (fieldDesc.readOnly || fieldDesc.type === 'button' || fieldDesc.type === 'signature') continue;
 
-    const field = form.getField(fieldDesc.name);
+    let field;
+    try { field = form.getField(fieldDesc.name); } catch { continue; }
     if (!field) continue;
 
-    // Get widget annotations for this field on this page
     const widgets = field.acroField?.getWidgets?.() || [];
 
     for (const widget of widgets) {
       const rect = widget.getRectangle();
       if (!rect) continue;
 
-      // Check if widget is on this page
       const widgetPage = widget.P?.();
       const pageRef = pdfLibDoc.getPage(pageIndex).ref;
-      // If we can't determine page, show it anyway (single-page forms)
       if (widgetPage && pageRef && widgetPage !== pageRef) continue;
 
-      // Convert PDF coords (bottom-left origin) to CSS coords (top-left origin)
       const x = rect.x * zoom;
       const y = (pdfH - rect.y - rect.height) * zoom;
       const w = rect.width * zoom;
       const h = rect.height * zoom;
 
-      const el = createFieldElement(fieldDesc, w, h);
-      if (!el) continue;
-
-      el.style.position = 'absolute';
-      el.style.left = x + 'px';
-      el.style.top = y + 'px';
-      el.style.width = w + 'px';
-      el.style.height = h + 'px';
-      el.style.pointerEvents = 'auto';
-
-      // Restore previously filled value
-      if (formFieldValues[fieldDesc.name] !== undefined) {
-        setElementValue(el, fieldDesc.type, formFieldValues[fieldDesc.name]);
-        // Trigger background sync for restored values
-        el.dispatchEvent(new Event('input'));
-      }
-
-      // Save value on change
-      el.addEventListener('change', () => {
-        formFieldValues[fieldDesc.name] = getElementValue(el, fieldDesc.type);
-      });
-      el.addEventListener('input', () => {
-        formFieldValues[fieldDesc.name] = getElementValue(el, fieldDesc.type);
-      });
-
-      formOverlayContainer.appendChild(el);
+      _appendFieldElement(fieldDesc, x, y, w, h);
     }
   }
+}
+
+/** Create and position a form field element in the overlay */
+function _appendFieldElement(fieldDesc, x, y, w, h) {
+  const el = createFieldElement(fieldDesc, w, h);
+  if (!el) return;
+
+  el.style.position = 'absolute';
+  el.style.left = x + 'px';
+  el.style.top = y + 'px';
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+  el.style.pointerEvents = 'auto';
+
+  if (formFieldValues[fieldDesc.name] !== undefined) {
+    setElementValue(el, fieldDesc.type, formFieldValues[fieldDesc.name]);
+    el.dispatchEvent(new Event('input'));
+  }
+
+  el.addEventListener('change', () => {
+    formFieldValues[fieldDesc.name] = getElementValue(el, fieldDesc.type);
+  });
+  el.addEventListener('input', () => {
+    formFieldValues[fieldDesc.name] = getElementValue(el, fieldDesc.type);
+  });
+
+  formOverlayContainer.appendChild(el);
 }
 
 function createFieldElement(fieldDesc, w, h) {

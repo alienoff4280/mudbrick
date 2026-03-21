@@ -47,7 +47,7 @@ import {
 import { icon } from './icons.js';
 
 import {
-  detectFormFields, renderFormOverlay, clearFormOverlay,
+  detectFormFields, detectFormFieldsPdfJs, renderFormOverlay, clearFormOverlay,
   writeFormValues, hasFormFields, resetFormState,
 } from './forms.js';
 
@@ -569,18 +569,28 @@ async function openPDF(bytes, fileName, fileSize) {
   document.querySelectorAll('.tool-btn[data-tool], .mb-flyout-item[data-tool], .mb-rail-item[data-tool]').forEach(btn => { btn.disabled = false; });
   document.querySelectorAll('.sig-open-btn').forEach(btn => { btn.disabled = false; });
 
-  // Detect form fields via pdf-lib
+  // Detect form fields via pdf-lib (primary) then PDF.js fallback
   try {
     const PDFLib = window.PDFLib;
     if (PDFLib) {
       State.pdfLibDoc = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
       State.formFields = detectFormFields(State.pdfLibDoc);
-      if (State.formFields.length > 0) {
-        toast(`Detected ${State.formFields.length} form field${State.formFields.length !== 1 ? 's' : ''}`, 'info');
-      }
     }
   } catch (e) {
-    console.warn('Form detection failed:', e);
+    console.warn('pdf-lib load failed (will try PDF.js fallback):', e);
+  }
+
+  // If pdf-lib found nothing, try PDF.js annotations fallback
+  if (State.formFields.length === 0 && pdfDoc) {
+    try {
+      State.formFields = await detectFormFieldsPdfJs(pdfDoc);
+    } catch (e) {
+      console.warn('PDF.js form detection fallback failed:', e);
+    }
+  }
+
+  if (State.formFields.length > 0) {
+    toast(`Detected ${State.formFields.length} form field${State.formFields.length !== 1 ? 's' : ''}`, 'info');
   }
 
   // Add to recent files
@@ -1036,7 +1046,7 @@ async function renderThumbnailForItem(item, pageNum) {
   // Guard: skip if placeholder was already replaced (e.g. double-queued)
   if (!item.querySelector('.thumbnail-placeholder')) return;
   try {
-    const thumbWidth = DOM.sidebar.clientWidth - 24; // minus padding
+    const thumbWidth = (DOM.thumbnailList.clientWidth || 180) - 24; // minus padding
     const canvas = await renderThumbnail(State.pdfDoc, pageNum, thumbWidth);
 
     // Replace placeholder with rendered canvas
@@ -5216,6 +5226,130 @@ function wireEvents() {
       input.click();
     });
   }
+
+  // ── Flyout: Pages panel buttons ──
+  $('btn-rotate-cw').addEventListener('click', async () => {
+    if (!State.pdfBytes) return;
+    showLoading('Rotating page…');
+    try {
+      const newBytes = await rotatePage(State.pdfBytes, State.currentPage - 1, 90);
+      await reloadAfterEdit(newBytes);
+      toast('Rotated page right', 'success');
+    } catch (err) { toast('Rotate failed: ' + err.message, 'error'); }
+    finally { hideLoading(); }
+  });
+
+  $('btn-rotate-ccw').addEventListener('click', async () => {
+    if (!State.pdfBytes) return;
+    showLoading('Rotating page…');
+    try {
+      const newBytes = await rotatePage(State.pdfBytes, State.currentPage - 1, -90);
+      await reloadAfterEdit(newBytes);
+      toast('Rotated page left', 'success');
+    } catch (err) { toast('Rotate failed: ' + err.message, 'error'); }
+    finally { hideLoading(); }
+  });
+
+  $('btn-delete-page').addEventListener('click', async () => {
+    if (!State.pdfBytes || State.totalPages <= 1) return;
+    if (!confirm(`Delete page ${State.currentPage}? This cannot be undone.`)) return;
+    showLoading('Deleting page…');
+    try {
+      const newBytes = await deletePage(State.pdfBytes, State.currentPage - 1);
+      if (State.currentPage > 1) State.currentPage--;
+      await reloadAfterEdit(newBytes);
+      toast('Page deleted', 'success');
+    } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
+    finally { hideLoading(); }
+  });
+
+  $('btn-add-page').addEventListener('click', async () => {
+    if (!State.pdfBytes) return;
+    showLoading('Inserting page…');
+    try {
+      const newBytes = await insertBlankPage(State.pdfBytes, State.currentPage - 1);
+      State.currentPage = State.currentPage + 1;
+      await reloadAfterEdit(newBytes);
+      toast('Inserted blank page', 'success');
+    } catch (err) { toast('Insert page failed: ' + err.message, 'error'); }
+    finally { hideLoading(); }
+  });
+
+  // ── Flyout: Forms panel buttons ──
+  $('btn-detect-fields').addEventListener('click', async () => {
+    if (!State.pdfDoc && !State.pdfLibDoc) { toast('Open a PDF first', 'error'); return; }
+    try {
+      // Try pdf-lib first
+      if (State.pdfLibDoc) {
+        State.formFields = detectFormFields(State.pdfLibDoc);
+      }
+      // Fall back to PDF.js if pdf-lib found nothing
+      if (State.formFields.length === 0 && State.pdfDoc) {
+        State.formFields = await detectFormFieldsPdfJs(State.pdfDoc);
+      }
+      if (State.formFields.length > 0) {
+        toast(`Detected ${State.formFields.length} form field${State.formFields.length !== 1 ? 's' : ''}`, 'info');
+        await renderCurrentPage();
+      } else {
+        toast('No form fields detected', 'info');
+      }
+    } catch (err) { toast('Form detection failed: ' + err.message, 'error'); }
+  });
+
+  $('btn-fill-mode').addEventListener('click', () => {
+    if (!State.formFields.length) {
+      toast('No form fields detected. Click "Detect Fields" first.', 'info');
+      return;
+    }
+    renderCurrentPage();
+    toast('Fill mode active — click form fields to fill them', 'info');
+  });
+
+  $('btn-create-field').addEventListener('click', () => {
+    createFormFieldInteractive('text');
+  });
+
+  $('btn-import-form-data').addEventListener('click', () => {
+    if (!State.pdfLibDoc) { toast('Open a PDF first', 'error'); return; }
+    const backdrop = $('form-data-modal-backdrop');
+    if (backdrop) backdrop.classList.remove('hidden');
+  });
+
+  $('btn-export-form-data').addEventListener('click', () => {
+    if (!State.pdfLibDoc) { toast('Open a PDF first', 'error'); return; }
+    executeFormDataExport('json');
+  });
+
+  $('btn-flatten-forms').addEventListener('click', () => {
+    executeFormFlatten();
+  });
+
+  $('btn-tab-order').addEventListener('click', () => {
+    showTabOrder();
+  });
+
+  // ── Flyout: Edit Image button ──
+  $('btn-edit-image')?.addEventListener('click', () => {
+    if (!State.pdfDoc) return;
+    if (isImageEditActive()) {
+      exitImageEditMode();
+    } else {
+      enterImageEditMode(State.pdfDoc, State.currentPage, DOM.pageContainer, State.zoom);
+    }
+  });
+
+  // ── Flyout: OCR Correction Mode ──
+  $('btn-ocr-correct-flyout')?.addEventListener('click', () => {
+    if (!hasOCRResults()) { toast('Run OCR first', 'info'); return; }
+    enableCorrectionMode();
+    toast('OCR correction mode enabled', 'info');
+  });
+
+  // ── Flyout: Custom Stamp ──
+  $('btn-custom-stamp')?.addEventListener('click', () => {
+    selectTool('stamp');
+    toast('Select a stamp type from the toolbar', 'info');
+  });
 }
 
 /* ═══════════════════ Sidebar Drop Helpers ═══════════════════ */
