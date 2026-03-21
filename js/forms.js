@@ -511,3 +511,30 @@ export function resetFormState() {
   formFieldValues = {};
   clearFormOverlay();
 }
+
+/* ═══════════════════ Session Backup ═══════════════════ */
+
+let _backupTimer = null;
+
+export function startFormBackup() {
+  if (_backupTimer) clearInterval(_backupTimer);
+  _backupTimer = setInterval(() => {
+    if (Object.keys(formFieldValues).length > 0) {
+      try {
+        sessionStorage.setItem('mb-form-values', JSON.stringify(formFieldValues));
+      } catch { /* quota exceeded — ignore */ }
+    }
+  }, 30000);
+}
+
+export function restoreFormBackup() {
+  try {
+    const saved = sessionStorage.getItem('mb-form-values');
+    if (saved) {
+      const restored = JSON.parse(saved);
+      Object.assign(formFieldValues, restored);
+      return Object.keys(restored).length;
+    }
+  } catch { /* ignore */ }
+  return 0;
+}

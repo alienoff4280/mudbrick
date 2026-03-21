@@ -8,31 +8,29 @@
  */
 
 import {
-  initPdfJs, loadDocument, renderPage, renderTextLayer,
-  renderThumbnail, getNextZoom, calculateFitWidth, calculateFitPage,
-  cleanupPage, getCleanupDistance,
+  initPdfJs, loadDocument,
 } from './pdf-engine.js';
 
 import {
   toast, showLoading, hideLoading, updateLoadingProgress, readFileAsArrayBuffer,
-  formatFileSize, initDragDrop, debounce, downloadBlob, parsePageRanges,
+  formatFileSize, initDragDrop, downloadBlob, parsePageRanges,
 } from './utils.js';
 
 import {
   resetPdfLib, ensurePdfLib, rotatePage, deletePage,
-  reorderPages, mergePDFs, splitPDF, addWatermark, addImageWatermark, appendPages,
+  mergePDFs, splitPDF, addWatermark, addImageWatermark, appendPages,
   insertBlankPage, cropPages, replacePages, normalizePageSizes,
 } from './pdf-edit.js';
 
 import {
   initAnnotations, setTool, savePageAnnotations,
-  loadPageAnnotations, resizeOverlay, deleteSelected,
-  updateToolOptions, getCanvas, hasAnnotations, getAnnotations, insertImage,
+  loadPageAnnotations, deleteSelected,
+  getCanvas, hasAnnotations, getAnnotations, insertImage,
   undoAnnotation, redoAnnotation,
   bringToFront, sendToBack, bringForward, sendBackward,
   duplicateSelected, copySelected, pasteClipboard,
   lockSelected, unlockSelected,
-  getAllStickyNotes, updateSelectedNoteText, setOnStickyNoteSelected,
+  getAllStickyNotes, setOnStickyNoteSelected,
   addAnnotationToPage, setOnRequestToolSwitch, clearAllAnnotations,
 } from './annotations.js';
 
@@ -47,32 +45,31 @@ import {
 import { icon } from './icons.js';
 
 import {
-  detectFormFields, detectFormFieldsPdfJs, renderFormOverlay, clearFormOverlay,
-  writeFormValues, hasFormFields, resetFormState,
+  detectFormFields, detectFormFieldsPdfJs, clearFormOverlay,
+  writeFormValues, resetFormState,
+  startFormBackup, restoreFormBackup,
 } from './forms.js';
 
 import {
   buildTextIndex, clearTextIndex, searchText, findNext as findNextMatch,
   findPrevious as findPrevMatch, getMatchInfo, renderHighlights,
-  scrollToActiveHighlight, isFindOpen, setFindOpen, hasMatches,
-  augmentTextIndex, getCurrentMatchInfo, getAllMatchInfos,
+  scrollToActiveHighlight, setFindOpen,
+  getCurrentMatchInfo, getAllMatchInfos,
   removeCurrentMatch, clearMatches,
 } from './find.js';
 
 import { applyBatesNumbers, previewBatesLabel } from './bates.js';
 import { applyHeadersFooters, previewHeaderText } from './headers.js';
-import { openSignatureModal, closeSignatureModal, initSignatureEvents } from './signatures.js';
+import { initSignatureEvents } from './signatures.js';
 import {
-  runOCR, hasOCRResults, renderOCRTextLayer, getOCRTextEntries,
-  clearOCRResults, terminateOCR, isPageScanned,
-  enableCorrectionMode, disableCorrectionMode, exportOCRText, getOCRStats,
+  clearOCRResults, isPageScanned,
 } from './ocr.js';
 
 import { encryptPDF, removeMetadata, getMetadata, setMetadata, sanitizeDocument } from './security.js';
-import { REDACTION_PATTERNS, searchPatterns } from './redact-patterns.js';
+import { searchPatterns } from './redact-patterns.js';
 import { exportPagesToImages, createPDFFromImages, optimizePDF } from './export-image.js';
 import {
-  addFormField, removeFormField, getTabOrder, setTabOrder,
+  addFormField, getTabOrder,
   exportFormDataJSON, importFormDataJSON, exportFormDataXFDF,
   importFormDataXFDF, exportFormDataCSV, importFormDataCSV,
   flattenFormFields,
@@ -83,91 +80,54 @@ import {
 } from './comment-summary.js';
 import { compareDocuments, generateCompareReport, renderComparisonView } from './doc-compare.js';
 import { pushDocState, undoDoc, redoDoc, canUndoDoc, canRedoDoc, clearDocHistory } from './doc-history.js';
-import { followLink, normalizeURL, extractLinksFromPage, createLinkRect } from './links.js';
-import { getAuthorName, setAuthorName, addReply, setThreadStatus, getAllThreads, exportThreadsXFDF } from './comments.js';
+import { getAllThreads } from './comments.js';
 import { restoreFonts } from './font-manager.js';
-import { canUndo, canRedo, initPageState } from './history.js';
-import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges, canUndoImage, undoImageAction, extractImagePositions } from './text-edit.js';
-import { addExhibitStamp, setExhibitOptions, resetExhibitCount, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
-import { setLabelRange, getPageLabel, getLabelRanges, clearLabels, removeLabelRange, previewLabels, LABEL_FORMATS } from './page-labels.js';
-import { trapFocus as a11yTrapFocus, releaseFocus as a11yReleaseFocus, announceToScreenReader, cycleRegion } from './a11y.js';
+import { canUndo, canRedo } from './history.js';
+import { enterTextEditMode, exitTextEditMode, commitTextEdits, isTextEditActive, hasTextEditChanges, enterImageEditMode, exitImageEditMode, commitImageEdits, isImageEditActive, hasImageEditChanges, canUndoImage, undoImageAction } from './text-edit.js';
+import { addExhibitStamp, setExhibitOptions, countExistingExhibits, EXHIBIT_FORMATS } from './exhibit-stamps.js';
+import { setLabelRange, getLabelRanges, clearLabels, previewLabels, LABEL_FORMATS } from './page-labels.js';
 import { initOnboarding, showTip } from './onboarding.js';
 import { initMenuActions } from './menu-actions.js';
 import { parseIntegrationParams, postToCallback } from './integration.js';
+import State from './state.js';
+import { DOM, $, resolveDOMRefs } from './dom-refs.js';
+import {
+  renderCurrentPage, setZoom, zoomIn, zoomOut,
+  fitWidth, fitPage, updateZoomDisplay, replaceIcons, setRendererCallbacks,
+  _captureScrollRatio,
+} from './renderer.js';
+import {
+  goToPage,
+  updatePageNav, setNavCallbacks,
+} from './navigation.js';
+import {
+  generateThumbnails, highlightActiveThumbnail,
+  renderThumbnailForItem, setThumbnailCallbacks,
+} from './thumbnails.js';
+import {
+  initDropdownMenus,
+  showContextMenu,
+  setMenuCallbacks,
+} from './menus.js';
+import {
+  wireEvents, selectTool, setEventCallbacks,
+} from './event-wiring.js';
 
-/* ═══════════════════ State ═══════════════════ */
-
-const State = {
-  pdfDoc: null,
-  pdfBytes: null,
-  fileName: '',
-  fileSize: 0,
-  currentPage: 1,
-  totalPages: 0,
-  zoom: 1.0,
-  pageAnnotations: {},
-  activeTool: 'select',
-  sidebarOpen: true,
-  panelOpen: false,
-  formFields: [],  // detected form field descriptors
-  pdfLibDoc: null,  // pdf-lib document for form support
-  _viewport: null,  // cached viewport for find highlights
-  integration: null, // integration params when launched from external dashboard
-};
-
-/* ═══════════════════ DOM References ═══════════════════ */
-
-const _nullEl = new Proxy({}, { get: () => () => {}, set: () => true });
-const $ = id => document.getElementById(id) || _nullEl;
-
-const DOM = {
-  welcomeScreen: $('welcome-screen'),
-  app: $('app'),
-  pdfCanvas: $('pdf-canvas'),
-  textLayer: $('text-layer'),
-  fabricWrapper: $('fabric-canvas-wrapper'),
-  canvasArea: $('canvas-area'),
-  pageContainer: $('page-container'),
-  thumbnailList: $('thumbnail-list'),
-  sidebar: $('sidebar'),
-  pageInput: $('page-input'),
-  totalPages: $('total-pages'),
-  zoomBtn: $('btn-zoom-level'),
-  statusFilename: $('status-filename'),
-  statusBarFilename: $('statusbar-filename'),
-  statusPagesSize: $('status-pages-size'),
-  statusZoom: $('status-zoom'),
-  statusBates: $('status-bates'),
-  statusBadgeEncrypted: $('status-badge-encrypted'),
-  statusBadgeTagged: $('status-badge-tagged'),
-  statusZoomIn: $('status-zoom-in'),
-  statusZoomOut: $('status-zoom-out'),
-  fileInput: $('file-input'),
-  btnPrev: $('btn-prev-page'),
-  btnNext: $('btn-next-page'),
-  btnFirst: $('btn-first-page'),
-  btnLast: $('btn-last-page'),
-  propertiesPanel: $('properties-panel'),
-  btnUndo: $('btn-undo'),
-  btnRedo: $('btn-redo'),
-  btnEditText: $('btn-edit-text'),
-  btnEditImage: $('btn-edit-image'),
-};
+// Expose selectTool globally for UIController
+window.selectTool = selectTool;
 
 /* ═══════════════════ Initialization ═══════════════════ */
-
-/** Replace all [data-icon] elements with inline SVGs from the icon system */
-function replaceIcons() {
-  document.querySelectorAll('[data-icon]').forEach(el => {
-    const name = el.dataset.icon;
-    const size = parseInt(el.dataset.iconSize) || 16;
-    el.innerHTML = icon(name, size);
-  });
-}
 
 async function boot() {
   // Initialize centralized error handling first (before anything else)
   initErrorHandler();
+
+  window.addEventListener('unhandledrejection', (e) => {
+    console.error('Unhandled rejection:', e.reason);
+    toast('Something went wrong. Try reloading if the editor is unresponsive.', 'error');
+  });
+
+  resolveDOMRefs();
 
   // Initialize new icon rail + flyout panel UI
   if (typeof UIController !== 'undefined') {
@@ -198,14 +158,82 @@ async function boot() {
       selectTool(toolName);
     });
 
+    // Register event callbacks (feature handlers still in app.js)
+    setEventCallbacks({
+      handleFiles, handleEditText, handleCommitTextEdits, handleCancelTextEdits,
+      handleEditImage, handleCommitImageEdits, handleCancelImageEdits,
+      handleImageInsert, onImageFileSelected, handleAddPages,
+      openMergeModal, addMergeFiles, executeMerge, closeMergeModal,
+      openSplitModal, updateSplitPreview, executeSplit, closeSplitModal,
+      openBatesModal, closeBatesModal, executeBates, updateBatesPreview,
+      openHfModal, closeHfModal, executeHeadersFooters, updateHfPreview, insertHfToken,
+      setLastFocusedHfZone: (input) => { lastFocusedHfZone = input; },
+      openCropModal, closeCropModal, executeCrop, initCropDragHandlers, setCropFromPreset,
+      getCropState: () => cropState,
+      openWatermarkModal, closeWatermarkModal, executeWatermark,
+      closeModal, closePrintModal, closeExportModal,
+      toggleDarkMode, togglePropertiesPanel, updatePanelToolTitle,
+      showNotePropsPanel, hideNotePropsPanel, showLinkPropsPanel, hideLinkPropsPanel,
+      toggleLinkTypeFields, showCommentThreadPanel, hideCommentThreadPanel,
+      renderCommentReplies, refreshCommentsSidebar, refreshNotesSidebar,
+      updateUndoRedoButtons, updateUnsavedIndicator,
+      handleExport, _switchExportTab, _updateImgSizeHint, executeExport,
+      executePrint, reloadAfterEdit, getDropTarget, clearDropIndicators,
+      executeEncrypt, openMetadataModal, executeMetadataSave, executeMetadataRemove,
+      executeRedactSearch, executeRedactApply,
+      addImagesToList, executeCreateFromImages, executeExportImage,
+      resetImagesToPdf: () => { _imagesToPdf = []; },
+      executeOptimize, loadCompareFile, executeCompare, renderCurrentCompare,
+      navigateCompare, downloadCompareReport,
+      resetCompareDocB: () => { _compareDocB = null; },
+      openCommentSummaryModal, downloadCommentSummary, executeFlattenAnnotations,
+      createFormFieldInteractive, showTabOrder, executeFormFlatten,
+      executeFormDataImport, executeFormDataExport,
+      setFormDataFile: (file) => { _formDataFile = file; },
+      openExhibitModal, updateExhibitPreview, executeExhibitPlace,
+      openSanitizeModal, executeSanitize,
+      openPageLabelsModal, addLabelRangeRow, executePageLabels,
+      getSavedLabelRanges: () => _savedLabelRanges,
+      openReplacePagesModal, executeReplacePages, loadReplaceSource,
+      executeNormalize,
+      performSearch, navigateMatch, openFindBar, closeFindBar,
+      toggleReplaceRow, executeReplace, executeReplaceAll,
+      handlePrint, handleSave, handleSaveDownload,
+      handleUndo, handleRedo, openShortcutsModal,
+      getSelectedLinkObj: () => _selectedLinkObj,
+      getSelectedCommentObj: () => _selectedCommentObj,
+    });
+
     // Wire up all UI events
     wireEvents();
-    initDropdownMenus();
+
+    // Register menu callbacks for context menus (before initDropdownMenus)
+    setMenuCallbacks({
+      // Context menu callbacks
+      showLoading, hideLoading, toast, reloadAfterEdit,
+      insertBlankPage, handleAddPages, rotatePage, deletePage,
+      splitPDF, downloadBlob,
+      // Annotation context menu callbacks
+      getCanvas, copySelected, pasteClipboard, duplicateSelected,
+      bringToFront, sendToBack, bringForward, sendBackward,
+      lockSelected, unlockSelected, deleteSelected,
+    });
+
+    initDropdownMenus(_getMenuActions());
     initMenuActions();
 
     // Listen for actual size event from menu-actions
     document.addEventListener('mudbrick:actualsize', () => setZoom(1.0));
     initModalFocusTrapping();
+
+    // Register renderer callbacks (avoids circular imports)
+    setRendererCallbacks({ updateUndoRedoButtons, refreshNotesSidebar });
+
+    // Register navigation callbacks
+    setNavCallbacks({ highlightActiveThumbnail });
+
+    // Register thumbnail callbacks (avoid circular imports)
+    setThumbnailCallbacks({ goToPage, showContextMenu, clearDropIndicators });
 
     // Replace emoji placeholders with SVG icons
     replaceIcons();
@@ -298,6 +326,11 @@ function showRecoveryBanner(fileName, timestamp) {
         if (data.pageAnnotations && Object.keys(data.pageAnnotations).length > 0) {
           State.pageAnnotations = data.pageAnnotations;
           loadPageAnnotations(State.currentPage);
+        }
+        // Restore form field values from sessionStorage backup
+        const restoredCount = restoreFormBackup();
+        if (restoredCount > 0) {
+          console.log(`Restored ${restoredCount} form field value(s) from backup`);
         }
         toast('Session recovered successfully.', 'success');
         await clearRecoveryData();
@@ -591,6 +624,7 @@ async function openPDF(bytes, fileName, fileSize) {
 
   if (State.formFields.length > 0) {
     toast(`Detected ${State.formFields.length} form field${State.formFields.length !== 1 ? 's' : ''}`, 'info');
+    startFormBackup();
   }
 
   // Add to recent files
@@ -635,444 +669,7 @@ async function openPDF(bytes, fileName, fileSize) {
   }, 1000);
 }
 
-/* ═══════════════════ Page Rendering ═══════════════════ */
-
-// Render-pipeline state: generation counter for cancellation, debounce for navigation
-let _renderGeneration = 0;       // incremented each time we start a new render
-let _navDebounceTimer = null;    // timer for debounced page navigation
-const NAV_DEBOUNCE_MS = 16;      // ~60fps batching for arrow-key holding
-
-async function renderCurrentPage() {
-  if (!State.pdfDoc) return;
-
-  // Exit edit modes when navigating to a different page (warn if unsaved)
-  if (isTextEditActive()) {
-    if (hasTextEditChanges() && !confirm('You have unsaved text edits on this page. Discard changes?')) return;
-    exitTextEditMode();
-    DOM.btnEditText.classList.remove('active');
-  }
-  if (isImageEditActive()) {
-    if (hasImageEditChanges() && !confirm('You have unsaved image edits on this page. Discard changes?')) return;
-    exitImageEditMode();
-    DOM.btnEditImage.classList.remove('active');
-  }
-
-  // Save annotations from the page we're leaving
-  if (State._prevPage && State._prevPage !== State.currentPage) {
-    savePageAnnotations(State._prevPage);
-  }
-  State._prevPage = State.currentPage;
-
-  // Bump generation counter so any in-flight render knows it has been superseded
-  const generation = ++_renderGeneration;
-
-  const result = await renderPage(
-    State.pdfDoc,
-    State.currentPage,
-    State.zoom,
-    DOM.pdfCanvas
-  );
-
-  if (!result) return; // render was cancelled by pdf-engine (a newer render started)
-
-  // If another renderCurrentPage() call started while we were awaiting, bail out
-  if (generation !== _renderGeneration) return;
-
-  const { viewport, page } = result;
-  const renderedPage = State.currentPage; // snapshot page number in case of async race
-
-  // Render text layer
-  await renderTextLayer(page, viewport, DOM.textLayer);
-  if (generation !== _renderGeneration) return;
-
-  // Store viewport and render find highlights
-  State._viewport = viewport;
-  if (hasMatches()) {
-    renderHighlights(renderedPage, DOM.textLayer, viewport);
-  }
-
-  // Inject OCR text layer if this page has been OCR'd
-  if (hasOCRResults(renderedPage)) {
-    renderOCRTextLayer(renderedPage, DOM.textLayer, viewport);
-  }
-
-  // Size the Fabric wrapper to match
-  const w = Math.floor(viewport.width);
-  const h = Math.floor(viewport.height);
-  DOM.fabricWrapper.style.width = w + 'px';
-  DOM.fabricWrapper.style.height = h + 'px';
-
-  // Resize and reload annotation overlay
-  resizeOverlay(w, h, State.zoom);
-  loadPageAnnotations(renderedPage);
-
-  // Extract existing PDF link annotations if no Fabric annotations are saved for this page
-  const annotations = getAnnotations();
-  if (!annotations[renderedPage] && State.pdfLibDoc) {
-    try {
-      const pdfPage = State.pdfLibDoc.getPage(renderedPage - 1);
-      const { height: pageH } = pdfPage.getSize();
-      const pdfLinks = extractLinksFromPage(pdfPage, pageH);
-      if (pdfLinks.length > 0) {
-        const fabCanvas = getCanvas();
-        const { width: pageW } = pdfPage.getSize();
-        const sx = w / pageW;
-        const sy = h / pageH;
-        for (const link of pdfLinks) {
-          createLinkRect(fabCanvas, link.x * sx, link.y * sy, link.width * sx, link.height * sy, {
-            linkType: link.type,
-            linkURL: link.url,
-            linkPage: link.page,
-          });
-        }
-        fabCanvas.discardActiveObject();
-        fabCanvas.renderAll();
-        savePageAnnotations(renderedPage);
-      }
-    } catch (_e) { /* ignore extraction errors */ }
-  }
-
-  // Ensure undo history has a baseline state for this page
-  const canvas = getCanvas();
-  if (canvas) {
-    initPageState(renderedPage, canvas.toJSON());
-  }
-
-  // Render form field overlays
-  clearFormOverlay();
-  if (State.formFields.length > 0 && State.pdfLibDoc) {
-    renderFormOverlay(
-      DOM.pageContainer,
-      State.formFields,
-      State.pdfLibDoc,
-      renderedPage - 1, // 0-based page index
-      State.zoom,
-      { width: viewport.width / State.zoom, height: viewport.height / State.zoom }
-    );
-  }
-
-  // Size the page container
-  DOM.pageContainer.style.width = Math.floor(viewport.width) + 'px';
-  DOM.pageContainer.style.height = Math.floor(viewport.height) + 'px';
-
-  // Restore scroll position after zoom-triggered resize
-  if (_pendingScrollRestore) {
-    const sr = _pendingScrollRestore;
-    _pendingScrollRestore = null;
-    const el = DOM.canvasArea;
-    if (sr.type === 'point') {
-      // Cursor-anchored: keep the same page point under the cursor
-      el.scrollLeft = sr.pageX * State.zoom - sr.clientX;
-      el.scrollTop = sr.pageY * State.zoom - sr.clientY;
-    } else {
-      // Ratio-based: preserve relative scroll position
-      const maxX = el.scrollWidth - el.clientWidth;
-      const maxY = el.scrollHeight - el.clientHeight;
-      el.scrollLeft = sr.rx * maxX;
-      el.scrollTop = sr.ry * maxY;
-    }
-  }
-
-  // Refresh Notes sidebar
-  refreshNotesSidebar();
-
-  // Cleanup distant pages using a distance that adapts to memory pressure
-  const _cleanupDist = getCleanupDistance();
-  for (let i = 1; i <= State.totalPages; i++) {
-    if (Math.abs(i - renderedPage) > _cleanupDist) {
-      cleanupPage(State.pdfDoc, i);
-    }
-  }
-
-  updateUndoRedoButtons();
-
-  // Pre-warm adjacent pages during idle time so next/prev navigation feels instant.
-  // Uses a detached off-screen canvas so the main canvas is never disturbed.
-  if (typeof requestIdleCallback === 'function') {
-    requestIdleCallback(() => {
-      if (!State.pdfDoc || generation !== _renderGeneration) return;
-      const preWarm = (pNum) => {
-        if (pNum < 1 || pNum > State.totalPages) return;
-        const offCanvas = document.createElement('canvas');
-        State.pdfDoc.getPage(pNum).then(pg => {
-          const vp = pg.getViewport({ scale: State.zoom });
-          offCanvas.width = Math.floor(vp.width);
-          offCanvas.height = Math.floor(vp.height);
-          const ctx = offCanvas.getContext('2d');
-          return pg.render({ canvasContext: ctx, viewport: vp }).promise;
-        }).catch(() => {}); // best-effort warm-up; ignore errors
-      };
-      preWarm(renderedPage - 1);
-      preWarm(renderedPage + 1);
-    }, { timeout: 2000 });
-  }
-}
-
-/* ═══════════════════ Navigation ═══════════════════ */
-
-function goToPage(pageNum) {
-  const clamped = Math.max(1, Math.min(pageNum, State.totalPages));
-  if (clamped === State.currentPage) return;
-
-  State.currentPage = clamped;
-  updatePageNav();
-  highlightActiveThumbnail();
-
-  // Scroll thumbnail into view (within thumbnail list only — prevent app-level scroll)
-  const thumb = DOM.thumbnailList.querySelector(`[data-page="${clamped}"]`);
-  if (thumb) {
-    thumb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    // Prevent scrollIntoView from scrolling the #app grid container
-    DOM.app.scrollLeft = 0;
-    DOM.app.scrollTop = 0;
-  }
-
-  // Scroll canvas area to top on page change
-  DOM.canvasArea.scrollTo({ top: 0, behavior: 'smooth' });
-
-  // Debounce rapid calls (e.g. holding arrow key) — only render at ~60fps
-  if (_navDebounceTimer !== null) clearTimeout(_navDebounceTimer);
-  _navDebounceTimer = setTimeout(() => {
-    _navDebounceTimer = null;
-    renderCurrentPage();
-  }, NAV_DEBOUNCE_MS);
-}
-
-function prevPage() { goToPage(State.currentPage - 1); }
-function nextPage() { goToPage(State.currentPage + 1); }
-function firstPage() { goToPage(1); }
-function lastPage() { goToPage(State.totalPages); }
-
-function updatePageNav() {
-  const label = typeof getPageLabel === 'function' ? getPageLabel(State.currentPage) : null;
-  DOM.pageInput.value = label || State.currentPage;
-  DOM.pageInput.max = State.totalPages;
-  DOM.totalPages.textContent = State.totalPages;
-  const atFirst = State.currentPage <= 1;
-  const atLast = State.currentPage >= State.totalPages;
-  if (DOM.btnFirst) DOM.btnFirst.disabled = atFirst;
-  DOM.btnPrev.disabled = atFirst;
-  DOM.btnNext.disabled = atLast;
-  if (DOM.btnLast) DOM.btnLast.disabled = atLast;
-}
-
-/* ═══════════════════ Zoom ═══════════════════ */
-
-// Zoom throttle state — ensures Ctrl+scroll updates happen at most once per frame
-let _zoomRafPending = false;
-let _pendingZoom = null;
-const ZOOM_THROTTLE_MS = 16; // ~60fps
-
-// Scroll restore state — preserves viewport position across zoom changes.
-// Two modes:
-//   { type: 'ratio', rx, ry }                          — ratio-based (button zoom)
-//   { type: 'point', pageX, pageY, clientX, clientY }  — cursor-anchored (Ctrl+scroll)
-let _pendingScrollRestore = null;
-
-function _captureScrollRatio() {
-  const el = DOM.canvasArea;
-  const maxX = el.scrollWidth - el.clientWidth;
-  const maxY = el.scrollHeight - el.clientHeight;
-  _pendingScrollRestore = {
-    type: 'ratio',
-    rx: maxX > 0 ? el.scrollLeft / maxX : 0.5,
-    ry: maxY > 0 ? el.scrollTop / maxY : 0.5,
-  };
-}
-
-function setZoom(newZoom) {
-  _captureScrollRatio();
-  State.zoom = Math.max(0.25, Math.min(5.0, newZoom));
-  updateZoomDisplay();
-  renderCurrentPage();
-}
-
-/**
- * Throttled zoom setter for Ctrl+scroll — batches rapid wheel events to 60fps.
- * The display is updated immediately for smooth visual feedback; the expensive
- * re-render only fires once per animation frame.
- */
-function setZoomThrottled(newZoom) {
-  // Scroll restore is set by the wheel handler (cursor-anchored), not here
-  _pendingZoom = Math.max(0.25, Math.min(5.0, newZoom));
-  State.zoom = _pendingZoom;   // update state immediately so display feels snappy
-  updateZoomDisplay();
-
-  if (!_zoomRafPending) {
-    _zoomRafPending = true;
-    requestAnimationFrame(() => {
-      _zoomRafPending = false;
-      if (_pendingZoom !== null) {
-        const zoom = _pendingZoom;
-        _pendingZoom = null;
-        State.zoom = zoom;
-        renderCurrentPage();
-      }
-    });
-  }
-}
-
-function zoomIn() { setZoom(getNextZoom(State.zoom, 1)); }
-function zoomOut() { setZoom(getNextZoom(State.zoom, -1)); }
-
-function fitWidth() {
-  if (!State.pdfDoc) return;
-  State.pdfDoc.getPage(State.currentPage).then(page => {
-    const viewport = page.getViewport({ scale: 1 });
-    const container = DOM.canvasArea;
-    const newZoom = calculateFitWidth(viewport.width, container.clientWidth);
-    setZoom(newZoom);
-  }).catch(() => {});
-}
-
-function fitPage() {
-  if (!State.pdfDoc) return;
-  State.pdfDoc.getPage(State.currentPage).then(page => {
-    const viewport = page.getViewport({ scale: 1 });
-    const container = DOM.canvasArea;
-    const newZoom = calculateFitPage(
-      viewport.width, viewport.height,
-      container.clientWidth, container.clientHeight
-    );
-    setZoom(newZoom);
-  }).catch(() => {});
-}
-
-function updateZoomDisplay() {
-  const pct = Math.round(State.zoom * 100) + '%';
-  DOM.zoomBtn.textContent = pct;
-  DOM.statusZoom.textContent = pct;
-}
-
-/* ═══════════════════ Thumbnails ═══════════════════ */
-
-// Thumbnail render queue — limits concurrent PDF.js thumbnail renders
-let _thumbQueue = [];
-let _thumbActiveCount = 0;
-const THUMB_CONCURRENCY = 3;
-let _thumbObserver = null; // current IntersectionObserver; disconnected on regenerate
-
-function generateThumbnails() {
-  DOM.thumbnailList.innerHTML = '';
-
-  // Disconnect previous observer and reset queue state
-  if (_thumbObserver) {
-    _thumbObserver.disconnect();
-    _thumbObserver = null;
-  }
-  _thumbQueue = [];
-  _thumbActiveCount = 0;
-
-  // Create placeholder items for all pages
-  for (let i = 1; i <= State.totalPages; i++) {
-    const item = document.createElement('div');
-    item.className = 'thumbnail-item' + (i === State.currentPage ? ' active' : '');
-    item.dataset.page = i;
-    item.draggable = true;
-    // Accessibility: thumbnail acts as a listbox option
-    item.setAttribute('role', 'option');
-    item.setAttribute('tabindex', '0');
-    item.setAttribute('aria-selected', i === State.currentPage ? 'true' : 'false');
-    item.setAttribute('aria-label', `Page ${getPageLabel(i)}`);
-    // Placeholder: light-gray background + centered page number
-    item.innerHTML = `
-      <div class="thumbnail-placeholder" style="display:flex;align-items:center;justify-content:center;background:#e8e8e8;aspect-ratio:8.5/11;width:100%;font-size:12px;color:#888;border-radius:2px;">${i}</div>
-      <span class="page-number">${getPageLabel(i)}</span>
-    `;
-    item.addEventListener('click', () => goToPage(i));
-    item.addEventListener('keydown', ev => {
-      if (ev.key === 'Enter' || ev.key === ' ') {
-        ev.preventDefault();
-        goToPage(i);
-      }
-    });
-    item.addEventListener('contextmenu', e => showContextMenu(e, i));
-
-    // Drag-and-drop reordering
-    item.draggable = true;
-    item.addEventListener('dragstart', e => {
-      e.dataTransfer.setData('text/x-mudbrick-page', String(i));
-      e.dataTransfer.effectAllowed = 'move';
-      item.classList.add('dragging');
-    });
-    item.addEventListener('dragend', () => {
-      item.classList.remove('dragging');
-      clearDropIndicators();
-    });
-
-    DOM.thumbnailList.appendChild(item);
-  }
-
-  // Use IntersectionObserver to render only thumbnails near the viewport.
-  // rootMargin of 300px pre-loads thumbnails before the user actually scrolls
-  // to them, so placeholders are rarely visible even when scrolling quickly.
-  _thumbObserver = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (!entry.isIntersecting) return;
-      const item = entry.target;
-      // Only enqueue once — skip items already queued or already rendered
-      if (!item.dataset.thumbQueued && item.querySelector('.thumbnail-placeholder')) {
-        item.dataset.thumbQueued = '1';
-        const pageNum = parseInt(item.dataset.page);
-        // Give pages close to the current page higher priority (front of queue)
-        const dist = Math.abs(pageNum - State.currentPage);
-        if (dist <= 2) {
-          _thumbQueue.unshift({ item, pageNum });
-        } else {
-          _thumbQueue.push({ item, pageNum });
-        }
-        _drainThumbQueue();
-      }
-      _thumbObserver.unobserve(item);
-    });
-  }, {
-    root: DOM.thumbnailList,
-    rootMargin: '300px', // pre-render 300px above/below the visible area
-  });
-
-  DOM.thumbnailList.querySelectorAll('.thumbnail-item').forEach(item => {
-    _thumbObserver.observe(item);
-  });
-}
-
-/** Pull entries off _thumbQueue while a concurrency slot is available */
-function _drainThumbQueue() {
-  while (_thumbActiveCount < THUMB_CONCURRENCY && _thumbQueue.length > 0) {
-    const { item, pageNum } = _thumbQueue.shift();
-    _thumbActiveCount++;
-    renderThumbnailForItem(item, pageNum).finally(() => {
-      _thumbActiveCount--;
-      _drainThumbQueue(); // check for more work once a slot frees up
-    });
-  }
-}
-
-async function renderThumbnailForItem(item, pageNum) {
-  // Guard: skip if placeholder was already replaced (e.g. double-queued)
-  if (!item.querySelector('.thumbnail-placeholder')) return;
-  try {
-    const thumbWidth = (DOM.thumbnailList.clientWidth || 180) - 24; // minus padding
-    const canvas = await renderThumbnail(State.pdfDoc, pageNum, thumbWidth);
-
-    // Replace placeholder with rendered canvas
-    const placeholder = item.querySelector('.thumbnail-placeholder');
-    if (placeholder) {
-      item.replaceChild(canvas, placeholder);
-    }
-  } catch (e) {
-    console.warn(`Thumbnail render failed for page ${pageNum}:`, e);
-  }
-}
-
-function highlightActiveThumbnail() {
-  DOM.thumbnailList.querySelectorAll('.thumbnail-item').forEach(item => {
-    const isActive = parseInt(item.dataset.page) === State.currentPage;
-    item.classList.toggle('active', isActive);
-    item.setAttribute('aria-selected', isActive ? 'true' : 'false');
-  });
-  // Announce page change to screen readers
-  announceToScreenReader(`Page ${State.currentPage} of ${State.totalPages}`);
-}
+/* ═══════════════════ Thumbnails (see js/thumbnails.js) ═══════════════════ */
 
 /* ═══════════════════ Reload After Edit ═══════════════════ */
 
@@ -1638,249 +1235,7 @@ async function loadBookmarks() {
   }
 }
 
-/* ═══════════════════ Thumbnail Context Menu ═══════════════════ */
-
-let contextMenu = null;
-
-function showContextMenu(e, pageNum) {
-  e.preventDefault();
-  hideContextMenu();
-
-  contextMenu = document.createElement('div');
-  contextMenu.className = 'context-menu';
-  contextMenu.innerHTML = `
-    <button data-action="insert-before">${icon('file-plus', 14)} Insert Page Before</button>
-    <button data-action="insert-after">${icon('file-plus', 14)} Insert Page After</button>
-    <button data-action="insert-blank">${icon('file-plus', 14)} Insert Blank Page</button>
-    <button data-action="duplicate">${icon('files', 14)} Duplicate Page</button>
-    <div class="context-menu-separator"></div>
-    <button data-action="rotate-cw">${icon('rotate-cw', 14)} Rotate Right</button>
-    <button data-action="rotate-ccw">${icon('rotate-ccw', 14)} Rotate Left</button>
-    <button data-action="rotate-180">${icon('flip-vertical', 14)} Rotate 180°</button>
-    <div class="context-menu-separator"></div>
-    <button data-action="delete" ${State.totalPages <= 1 ? 'disabled' : ''}>${icon('trash', 14)} Delete Page</button>
-    <button data-action="extract">${icon('file-output', 14)} Extract Page</button>
-  `;
-
-  // Position at mouse
-  contextMenu.style.left = e.clientX + 'px';
-  contextMenu.style.top = e.clientY + 'px';
-  document.body.appendChild(contextMenu);
-
-  // Clamp to viewport
-  const rect = contextMenu.getBoundingClientRect();
-  if (rect.right > window.innerWidth) {
-    contextMenu.style.left = (window.innerWidth - rect.width - 8) + 'px';
-  }
-  if (rect.bottom > window.innerHeight) {
-    contextMenu.style.top = (window.innerHeight - rect.height - 8) + 'px';
-  }
-
-  // Handle clicks
-  contextMenu.addEventListener('click', async (ev) => {
-    const btn = ev.target.closest('[data-action]');
-    if (!btn || btn.disabled) return;
-    hideContextMenu();
-
-    const action = btn.dataset.action;
-    const idx = pageNum - 1; // 0-based
-
-    // Insert blank page
-    if (action === 'insert-blank') {
-      showLoading('Inserting page…');
-      try {
-        const newBytes = await insertBlankPage(State.pdfBytes, idx);
-        State.currentPage = pageNum + 1; // navigate to the new blank page
-        await reloadAfterEdit(newBytes);
-        toast('Inserted blank page', 'success');
-      } catch (err) {
-        console.error('Insert blank page failed:', err);
-        toast('Insert blank page failed: ' + err.message, 'error');
-      } finally {
-        hideLoading();
-      }
-      return;
-    }
-
-    // Insert page needs a file picker — not a loading operation
-    if (action === 'insert-before' || action === 'insert-after') {
-      const input = document.createElement('input');
-      input.type = 'file';
-      input.accept = '.pdf';
-      input.multiple = true;
-      input.addEventListener('change', e => {
-        const files = Array.from(e.target.files);
-        if (!files.length) return;
-        const insertAfter = action === 'insert-before' ? idx - 1 : idx;
-        handleAddPages(files, insertAfter);
-      });
-      input.click();
-      return;
-    }
-
-    // Duplicate page via pdf-lib
-    if (action === 'duplicate') {
-      showLoading('Duplicating page…');
-      try {
-        const PDFLib = window.PDFLib;
-        const doc = await PDFLib.PDFDocument.load(State.pdfBytes, { ignoreEncryption: true });
-        const [copied] = await doc.copyPages(doc, [idx]);
-        doc.insertPage(idx + 1, copied);
-        const newBytes = await doc.save();
-        State.currentPage = pageNum + 1;
-        await reloadAfterEdit(newBytes);
-        toast(`Duplicated page ${pageNum}`, 'success');
-      } catch (err) {
-        console.error('Duplicate page failed:', err);
-        toast('Duplicate failed: ' + err.message, 'error');
-      } finally {
-        hideLoading();
-      }
-      return;
-    }
-
-    showLoading('Editing page…');
-    try {
-      let newBytes;
-      switch (action) {
-        case 'rotate-cw':
-          newBytes = await rotatePage(State.pdfBytes, idx, 90);
-          await reloadAfterEdit(newBytes);
-          toast('Rotated page right', 'success');
-          break;
-        case 'rotate-ccw':
-          newBytes = await rotatePage(State.pdfBytes, idx, -90);
-          await reloadAfterEdit(newBytes);
-          toast('Rotated page left', 'success');
-          break;
-        case 'rotate-180':
-          newBytes = await rotatePage(State.pdfBytes, idx, 180);
-          await reloadAfterEdit(newBytes);
-          toast('Rotated page 180°', 'success');
-          break;
-        case 'delete':
-          if (State.totalPages <= 1) return;
-          if (!confirm(`Delete page ${pageNum}? This cannot be undone.`)) return;
-          newBytes = await deletePage(State.pdfBytes, idx);
-          // If we deleted the current page or a page before it, adjust
-          if (pageNum <= State.currentPage && State.currentPage > 1) {
-            State.currentPage--;
-          }
-          await reloadAfterEdit(newBytes);
-          toast(`Deleted page ${pageNum}`, 'success');
-          break;
-        case 'extract': {
-          const extracted = await splitPDF(State.pdfBytes, [[idx]]);
-          const part = extracted[0];
-          const name = State.fileName.replace('.pdf', '') + `_${part.label}.pdf`;
-          downloadBlob(part.bytes, name);
-          toast(`Extracted ${part.label}`, 'success');
-          break;
-        }
-      }
-    } catch (err) {
-      console.error('Page operation failed:', err);
-      toast('Operation failed: ' + err.message, 'error');
-    } finally {
-      hideLoading();
-    }
-  });
-
-  // Close on click outside or Escape
-  setTimeout(() => {
-    document.addEventListener('click', hideContextMenu, { once: true });
-    document.addEventListener('keydown', function onKey(ev) {
-      if (ev.key === 'Escape') {
-        hideContextMenu();
-        document.removeEventListener('keydown', onKey);
-      }
-    });
-  }, 0);
-}
-
-function hideContextMenu() {
-  if (contextMenu) {
-    contextMenu.remove();
-    contextMenu = null;
-  }
-}
-
-/* ═══════════════════ Annotation Context Menu ═══════════════════ */
-
-function showAnnotationContextMenu(e, target) {
-  e.preventDefault();
-  e.stopPropagation();
-  hideContextMenu();
-
-  const canvas = getCanvas();
-  if (!canvas) return;
-
-  const locked = target ? !!target.lockMovementX : false;
-  const hasSelection = !!target;
-
-  contextMenu = document.createElement('div');
-  contextMenu.className = 'context-menu';
-  contextMenu.innerHTML = `
-    <button data-action="anno-copy" ${!hasSelection ? 'disabled' : ''}>${icon('copy', 14)} Copy</button>
-    <button data-action="anno-paste">${icon('clipboard-paste', 14)} Paste</button>
-    <button data-action="anno-duplicate" ${!hasSelection ? 'disabled' : ''}>${icon('files', 14)} Duplicate</button>
-    <div class="context-menu-separator"></div>
-    <button data-action="anno-front" ${!hasSelection ? 'disabled' : ''}>${icon('arrow-up-to-line', 14)} Bring to Front</button>
-    <button data-action="anno-forward" ${!hasSelection ? 'disabled' : ''}>${icon('chevron-up', 14)} Bring Forward</button>
-    <button data-action="anno-backward" ${!hasSelection ? 'disabled' : ''}>${icon('chevron-down', 14)} Send Backward</button>
-    <button data-action="anno-back" ${!hasSelection ? 'disabled' : ''}>${icon('arrow-down-to-line', 14)} Send to Back</button>
-    <div class="context-menu-separator"></div>
-    <button data-action="anno-lock" ${!hasSelection ? 'disabled' : ''}>${locked ? icon('lock', 14) + ' Unlock' : icon('lock-open', 14) + ' Lock'}</button>
-    <button data-action="anno-delete" ${!hasSelection ? 'disabled' : ''}>${icon('trash', 14)} Delete</button>
-  `;
-
-  // Position at mouse
-  contextMenu.style.left = e.clientX + 'px';
-  contextMenu.style.top = e.clientY + 'px';
-  document.body.appendChild(contextMenu);
-
-  // Clamp to viewport
-  const rect = contextMenu.getBoundingClientRect();
-  if (rect.right > window.innerWidth) {
-    contextMenu.style.left = (window.innerWidth - rect.width - 8) + 'px';
-  }
-  if (rect.bottom > window.innerHeight) {
-    contextMenu.style.top = (window.innerHeight - rect.height - 8) + 'px';
-  }
-
-  // Handle clicks
-  contextMenu.addEventListener('click', (ev) => {
-    const btn = ev.target.closest('[data-action]');
-    if (!btn || btn.disabled) return;
-    hideContextMenu();
-
-    switch (btn.dataset.action) {
-      case 'anno-copy':      copySelected(); break;
-      case 'anno-paste':     pasteClipboard(); break;
-      case 'anno-duplicate': duplicateSelected(); break;
-      case 'anno-front':     bringToFront(); break;
-      case 'anno-forward':   bringForward(); break;
-      case 'anno-backward':  sendBackward(); break;
-      case 'anno-back':      sendToBack(); break;
-      case 'anno-lock':
-        if (locked) unlockSelected();
-        else lockSelected();
-        break;
-      case 'anno-delete':    deleteSelected(); break;
-    }
-  });
-
-  // Close on click outside or Escape
-  setTimeout(() => {
-    document.addEventListener('click', hideContextMenu, { once: true });
-    document.addEventListener('keydown', function onKey(ev) {
-      if (ev.key === 'Escape') {
-        hideContextMenu();
-        document.removeEventListener('keydown', onKey);
-      }
-    });
-  }, 0);
-}
+/* Context menu functions extracted to js/menus.js */
 
 /* ═══════════════════ Merge Modal ═══════════════════ */
 
@@ -3497,287 +2852,7 @@ function initModalFocusTrapping() {
   });
 }
 
-/* ═══════════════════ Title Bar Dropdown Menus ═══════════════════ */
-
-let _activeDropdown = null;
-
-function closeDropdown() {
-  if (_activeDropdown) {
-    if (_activeDropdown._keyHandler) {
-      document.removeEventListener('keydown', _activeDropdown._keyHandler);
-    }
-    _activeDropdown.remove();
-    _activeDropdown = null;
-  }
-  // Remove any lingering submenus
-  document.querySelectorAll('.dropdown-submenu').forEach(s => s.remove());
-  document.querySelectorAll('.menu-item.active').forEach(el => {
-    el.classList.remove('active');
-    el.setAttribute('aria-expanded', 'false');
-  });
-}
-
-function openDropdown(menuBtn, items) {
-  closeDropdown();
-  hideContextMenu();
-
-  menuBtn.classList.add('active');
-  menuBtn.setAttribute('aria-expanded', 'true');
-  const rect = menuBtn.getBoundingClientRect();
-  const menu = document.createElement('div');
-  menu.className = 'dropdown-menu';
-  menu.setAttribute('role', 'menu');
-
-  for (const item of items) {
-    if (item === '---') {
-      const sep = document.createElement('div');
-      sep.className = 'dropdown-menu-separator';
-      sep.setAttribute('role', 'separator');
-      menu.appendChild(sep);
-      continue;
-    }
-    const btn = document.createElement('button');
-    btn.setAttribute('role', 'menuitem');
-    const needsDoc = item.needsDoc !== false;
-    const isDisabled = (needsDoc && !State.pdfBytes) || item.disabled;
-    btn.disabled = isDisabled;
-
-    // Submenu arrow indicator
-    const submenuArrow = item.submenu ? `<span class="submenu-arrow">${icon('chevron-right', 12)}</span>` : '';
-    const shortcutHtml = item.shortcut && !item.submenu ? `<span class="shortcut-hint">${item.shortcut}</span>` : '';
-
-    btn.innerHTML = `${icon(item.icon, 14)}<span>${item.label}</span>${shortcutHtml}${submenuArrow}`;
-
-    if (item.submenu) {
-      // Submenu on hover
-      let submenuEl = null;
-      let submenuTimeout = null;
-      btn.addEventListener('mouseenter', () => {
-        clearTimeout(submenuTimeout);
-        // Remove any other open submenus
-        menu.querySelectorAll('.dropdown-submenu').forEach(s => s.remove());
-        const subItems = item.submenu();
-        submenuEl = document.createElement('div');
-        submenuEl.className = 'dropdown-menu dropdown-submenu';
-        submenuEl.setAttribute('role', 'menu');
-        for (const si of subItems) {
-          if (si === '---') {
-            const sep = document.createElement('div');
-            sep.className = 'dropdown-menu-separator';
-            submenuEl.appendChild(sep);
-            continue;
-          }
-          const subBtn = document.createElement('button');
-          subBtn.setAttribute('role', 'menuitem');
-          const subNeedsDoc = si.needsDoc !== false;
-          subBtn.disabled = (subNeedsDoc && !State.pdfBytes) || si.disabled;
-          subBtn.innerHTML = `${icon(si.icon, 14)}<span>${si.label}</span>${si.shortcut ? `<span class="shortcut-hint">${si.shortcut}</span>` : ''}`;
-          subBtn.addEventListener('click', () => {
-            closeDropdown();
-            si.action();
-          });
-          submenuEl.appendChild(subBtn);
-        }
-        const btnRect = btn.getBoundingClientRect();
-        submenuEl.style.left = btnRect.right + 'px';
-        submenuEl.style.top = btnRect.top + 'px';
-        document.body.appendChild(submenuEl);
-        // Keep submenu in viewport
-        const subRect = submenuEl.getBoundingClientRect();
-        if (subRect.right > window.innerWidth) {
-          submenuEl.style.left = (btnRect.left - subRect.width) + 'px';
-        }
-        if (subRect.bottom > window.innerHeight) {
-          submenuEl.style.top = (window.innerHeight - subRect.height - 8) + 'px';
-        }
-      });
-      btn.addEventListener('mouseleave', (e) => {
-        submenuTimeout = setTimeout(() => {
-          if (submenuEl && !submenuEl.matches(':hover')) {
-            submenuEl.remove();
-            submenuEl = null;
-          }
-        }, 200);
-      });
-    } else {
-      btn.addEventListener('click', () => {
-        closeDropdown();
-        item.action();
-      });
-    }
-    menu.appendChild(btn);
-  }
-
-  menu.style.left = rect.left + 'px';
-  menu.style.top = rect.bottom + 'px';
-  document.body.appendChild(menu);
-
-  // Keep menu within viewport
-  const menuRect = menu.getBoundingClientRect();
-  if (menuRect.right > window.innerWidth) {
-    menu.style.left = (window.innerWidth - menuRect.width - 8) + 'px';
-  }
-
-  _activeDropdown = menu;
-
-  // Focus first enabled button for keyboard navigation
-  const firstBtn = menu.querySelector('button:not(:disabled)');
-  if (firstBtn) firstBtn.focus();
-
-  // Close on click outside
-  const onOutsideClick = (e) => {
-    if (!menu.contains(e.target) && !e.target.closest('.menu-item') && !e.target.closest('.dropdown-submenu')) {
-      closeDropdown();
-      document.removeEventListener('mousedown', onOutsideClick);
-    }
-  };
-  setTimeout(() => document.addEventListener('mousedown', onOutsideClick), 0);
-
-  // Keyboard navigation: Arrow keys, Enter, Escape
-  const onKey = (e) => {
-    const buttons = Array.from(menu.querySelectorAll('button:not(:disabled)'));
-    const focused = document.activeElement;
-    const idx = buttons.indexOf(focused);
-
-    if (e.key === 'Escape') {
-      closeDropdown();
-      menuBtn.focus();
-      document.removeEventListener('keydown', onKey);
-      e.preventDefault();
-    } else if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      const next = idx < buttons.length - 1 ? idx + 1 : 0;
-      buttons[next]?.focus();
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prev = idx > 0 ? idx - 1 : buttons.length - 1;
-      buttons[prev]?.focus();
-    } else if (e.key === 'ArrowRight') {
-      // Open submenu if item has one, or move to next menu
-      const item = items.filter(i => i !== '---')[idx];
-      if (item && item.submenu) {
-        // Trigger mouseenter to open submenu
-        focused.dispatchEvent(new MouseEvent('mouseenter'));
-        setTimeout(() => {
-          const sub = document.querySelector('.dropdown-submenu button:not(:disabled)');
-          if (sub) sub.focus();
-        }, 50);
-        e.preventDefault();
-      } else {
-        // Move to next menu item in title bar
-        const allMenuBtns = Array.from(document.querySelectorAll('.menu-item'));
-        const menuIdx = allMenuBtns.indexOf(menuBtn);
-        if (menuIdx < allMenuBtns.length - 1) {
-          allMenuBtns[menuIdx + 1].click();
-          e.preventDefault();
-        }
-      }
-    } else if (e.key === 'ArrowLeft') {
-      // Move to previous menu item in title bar
-      const allMenuBtns = Array.from(document.querySelectorAll('.menu-item'));
-      const menuIdx = allMenuBtns.indexOf(menuBtn);
-      if (menuIdx > 0) {
-        allMenuBtns[menuIdx - 1].click();
-        e.preventDefault();
-      }
-    } else if (e.key === 'Home') {
-      e.preventDefault();
-      buttons[0]?.focus();
-    } else if (e.key === 'End') {
-      e.preventDefault();
-      buttons[buttons.length - 1]?.focus();
-    }
-  };
-  document.addEventListener('keydown', onKey);
-  // Store cleanup reference
-  menu._keyHandler = onKey;
-}
-
-function getMenuDefinitions() {
-  return {
-    'File': [
-      { icon: 'file-plus', label: 'New Blank PDF', needsDoc: false, action: handleNewBlankPdf },
-      { icon: 'folder-open', label: 'Open', shortcut: 'Ctrl+O', needsDoc: false, action: () => DOM.fileInput.click() },
-      { icon: 'clock', label: 'Open Recent', needsDoc: false, submenu: () => buildRecentSubmenu() },
-      '---',
-      { icon: 'save', label: 'Save', shortcut: 'Ctrl+S', action: handleSave },
-      { icon: 'download', label: 'Save & Download', shortcut: 'Ctrl+Shift+S', action: handleSaveDownload },
-      { icon: 'file-output', label: 'Export…', action: handleExport },
-      { icon: 'download', label: 'Export as Image', action: () => $('btn-export-image').click() },
-      '---',
-      { icon: 'printer', label: 'Print', shortcut: 'Ctrl+P', action: handlePrint },
-      { icon: 'info', label: 'Properties', action: () => togglePropertiesPanel(true) },
-      { icon: 'x', label: 'Close', action: handleCloseDocument },
-    ],
-    'Edit': [
-      { icon: 'undo', label: 'Undo', shortcut: 'Ctrl+Z', action: handleUndo },
-      { icon: 'redo', label: 'Redo', shortcut: 'Ctrl+Shift+Z', action: handleRedo },
-      '---',
-      { icon: 'scissors', label: 'Cut', shortcut: 'Ctrl+X', action: () => document.execCommand('cut') },
-      { icon: 'copy', label: 'Copy', shortcut: 'Ctrl+C', action: () => copySelected() },
-      { icon: 'clipboard-paste', label: 'Paste', shortcut: 'Ctrl+V', action: () => pasteClipboard() },
-      { icon: 'trash', label: 'Delete', shortcut: 'Del', action: deleteSelected },
-      '---',
-      { icon: 'maximize', label: 'Select All', shortcut: 'Ctrl+A', action: () => { const c = getCanvas(); if (c) { c.discardActiveObject(); const sel = new fabric.ActiveSelection(c.getObjects(), { canvas: c }); c.setActiveObject(sel); c.requestRenderAll(); } } },
-      '---',
-      { icon: 'search', label: 'Find & Replace', shortcut: 'Ctrl+F', action: () => openFindBar(true) },
-    ],
-    'View': [
-      { icon: 'zoom-in', label: 'Zoom In', shortcut: 'Ctrl+=', action: zoomIn },
-      { icon: 'zoom-out', label: 'Zoom Out', shortcut: 'Ctrl+\u2212', action: zoomOut },
-      '---',
-      { icon: 'columns', label: 'Fit Width', action: fitWidth },
-      { icon: 'maximize', label: 'Fit Page', action: fitPage },
-      { icon: 'scan', label: 'Actual Size', shortcut: 'Ctrl+0', action: () => setZoom(1.0) },
-      '---',
-      { icon: 'panel-left-open', label: 'Toggle Sidebar', needsDoc: false, action: toggleSidebar },
-      { icon: 'panel-right-open', label: 'Toggle Properties Panel', action: () => togglePropertiesPanel() },
-      '---',
-      { icon: 'moon', label: 'Dark Mode', needsDoc: false, action: toggleDarkMode },
-      { icon: 'maximize', label: 'Full Screen', shortcut: 'F11', needsDoc: false, action: () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); else document.exitFullscreen(); } },
-    ],
-    'Insert': [
-      { icon: 'file-plus', label: 'Blank Page', action: () => $('btn-add-page').click() },
-      { icon: 'files', label: 'Pages from File', action: openMergeModal },
-      '---',
-      { icon: 'image', label: 'Image', action: handleImageInsert },
-      { icon: 'type', label: 'Text Annotation', shortcut: 'T', action: () => setTool('text') },
-      { icon: 'stamp', label: 'Stamp', action: () => setTool('stamp') },
-      '---',
-      { icon: 'pen-tool', label: 'Signature', action: () => $('btn-signature').click() },
-      { icon: 'droplet', label: 'Watermark', action: openWatermarkModal },
-      { icon: 'align-justify', label: 'Header / Footer', action: openHfModal },
-      '---',
-      { icon: 'hash', label: 'Bates Numbers', action: openBatesModal },
-      { icon: 'tag', label: 'Page Labels', action: openPageLabelsModal },
-      { icon: 'gavel', label: 'Exhibit Stamps', action: openExhibitModal },
-    ],
-    'Tools': [
-      { icon: 'type', label: 'Text Edit Mode', action: handleEditText },
-      '---',
-      { icon: 'form-input', label: 'Form Filler', action: () => { const btn = document.querySelector('[data-panel="forms"]'); if (btn) btn.click(); $('btn-detect-fields').click(); } },
-      { icon: 'list-ordered', label: 'Form Creator', action: () => { const btn = document.querySelector('[data-panel="forms"]'); if (btn) btn.click(); } },
-      '---',
-      { icon: 'file-scan', label: 'OCR', action: () => $('btn-ocr').click() },
-      { icon: 'shield-off', label: 'Redaction Patterns', action: () => $('btn-redact-search').click() },
-      { icon: 'git-compare', label: 'Document Compare', action: () => $('btn-compare').click() },
-      '---',
-      { icon: 'lock', label: 'Security', action: () => $('btn-encrypt').click() },
-      { icon: 'message-square', label: 'Comment Summary', action: openCommentSummaryModal },
-      '---',
-      { icon: 'maximize', label: 'Normalize Page Sizes', action: openNormalizePagesModal },
-      '---',
-      { icon: 'zap', label: 'Optimize / Compress', action: () => { $('optimize-result').textContent = ''; $('optimize-result').classList.add('hidden'); $('optimize-modal-backdrop').classList.remove('hidden'); } },
-    ],
-    'Help': [
-      { icon: 'info', label: 'Keyboard Shortcuts', shortcut: '?', needsDoc: false, action: openShortcutsModal },
-      { icon: 'play', label: 'Start Tour', needsDoc: false, action: () => window.__mbStartTour && window.__mbStartTour() },
-      '---',
-      { icon: 'zap', label: 'About Mudbrick', needsDoc: false, action: openAboutModal },
-      { icon: 'link', label: 'GitHub Repository', needsDoc: false, action: () => window.open('https://github.com/niclas-nicol/mudbrick', '_blank') },
-    ],
-  };
-}
+/* Dropdown menu functions extracted to js/menus.js */
 
 function handleNewBlankPdf() {
   ensurePdfLib().then(async () => {
@@ -3816,22 +2891,6 @@ function handleCloseDocument() {
   toast('Document closed');
 }
 
-function buildRecentSubmenu() {
-  const recent = getRecentFiles();
-  if (recent.length === 0) {
-    return [{ icon: 'info', label: 'No recent files', needsDoc: false, disabled: true, action: () => {} }];
-  }
-  const items = recent.map(f => ({
-    icon: 'file',
-    label: f.name.length > 35 ? f.name.slice(0, 32) + '\u2026' : f.name,
-    needsDoc: false,
-    action: () => DOM.fileInput.click(),
-  }));
-  items.push('---');
-  items.push({ icon: 'trash', label: 'Clear Recent', needsDoc: false, action: () => { clearRecentFiles(); toast('Recent files cleared'); } });
-  return items;
-}
-
 function openShortcutsModal() {
   $('shortcuts-modal-backdrop').classList.remove('hidden');
 }
@@ -3840,27 +2899,66 @@ function openAboutModal() {
   $('about-modal-backdrop').classList.remove('hidden');
 }
 
-function initDropdownMenus() {
-  const defs = getMenuDefinitions();
-  document.querySelectorAll('.menu-item').forEach(btn => {
-    const label = btn.textContent.trim();
-    const items = defs[label];
-    if (!items) return;
-    btn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      if (_activeDropdown && btn.classList.contains('active')) {
-        closeDropdown();
-      } else {
-        openDropdown(btn, items);
-      }
-    });
-    // Open on hover when another menu is already open
-    btn.addEventListener('mouseenter', () => {
-      if (_activeDropdown) {
-        openDropdown(btn, items);
-      }
-    });
-  });
+/**
+ * Build the actions object for getMenuDefinitions / initDropdownMenus.
+ * Maps action names to the app-level functions they invoke.
+ */
+function _getMenuActions() {
+  return {
+    handleNewBlankPdf,
+    openFile: () => DOM.fileInput.click(),
+    getRecentFiles,
+    clearRecentFiles: () => { clearRecentFiles(); toast('Recent files cleared'); },
+    handleSave,
+    handleSaveDownload,
+    handleExport,
+    exportAsImage: () => $('btn-export-image').click(),
+    handlePrint,
+    showProperties: () => togglePropertiesPanel(true),
+    handleCloseDocument,
+    handleUndo,
+    handleRedo,
+    cut: () => document.execCommand('cut'),
+    copy: () => copySelected(),
+    paste: () => pasteClipboard(),
+    deleteSelected,
+    selectAll: () => { const c = getCanvas(); if (c) { c.discardActiveObject(); const sel = new fabric.ActiveSelection(c.getObjects(), { canvas: c }); c.setActiveObject(sel); c.requestRenderAll(); } },
+    openFindBar: () => openFindBar(true),
+    zoomIn,
+    zoomOut,
+    fitWidth,
+    fitPage,
+    actualSize: () => setZoom(1.0),
+    toggleSidebar,
+    togglePropertiesPanel: () => togglePropertiesPanel(),
+    toggleDarkMode,
+    fullScreen: () => { if (!document.fullscreenElement) document.documentElement.requestFullscreen().catch(() => {}); else document.exitFullscreen(); },
+    addBlankPage: () => $('btn-add-page').click(),
+    openMergeModal,
+    handleImageInsert,
+    setToolText: () => setTool('text'),
+    setToolStamp: () => setTool('stamp'),
+    openSignature: () => $('btn-signature').click(),
+    openWatermarkModal,
+    openHfModal,
+    openBatesModal,
+    openPageLabelsModal,
+    openExhibitModal,
+    handleEditText,
+    formFiller: () => { const btn = document.querySelector('[data-panel="forms"]'); if (btn) btn.click(); $('btn-detect-fields').click(); },
+    formCreator: () => { const btn = document.querySelector('[data-panel="forms"]'); if (btn) btn.click(); },
+    ocr: () => $('btn-ocr').click(),
+    redactSearch: () => $('btn-redact-search').click(),
+    docCompare: () => $('btn-compare').click(),
+    security: () => $('btn-encrypt').click(),
+    openCommentSummaryModal,
+    openNormalizePagesModal,
+    optimize: () => { $('optimize-result').textContent = ''; $('optimize-result').classList.add('hidden'); $('optimize-modal-backdrop').classList.remove('hidden'); },
+    openShortcutsModal,
+    startTour: () => window.__mbStartTour && window.__mbStartTour(),
+    openAboutModal,
+    openGitHub: () => window.open('https://github.com/niclas-nicol/mudbrick', '_blank'),
+  };
 }
 
 /* ═══════════════════ Modal Focus Management Helpers ═══════════════════ */
@@ -3892,1467 +2990,6 @@ function closeModal(backdropId) {
   // that was set when trapFocus() was called on modal open.
   releaseFocus();
 }
-
-/* ═══════════════════ Event Wiring ═══════════════════ */
-
-function wireEvents() {
-  // File open
-  const openBtn = $('open-file-btn') || $('btn-open');
-  if (openBtn) openBtn.addEventListener('click', () => DOM.fileInput.click());
-  DOM.fileInput.addEventListener('change', e => {
-    if (e.target.files.length) handleFiles(Array.from(e.target.files));
-    e.target.value = ''; // reset so same file can be reopened
-  });
-
-  // Draggable floating toolbar
-  {
-    const ftbar = $('floating-toolbar');
-    let dragging = false, startX = 0, startY = 0, origLeft = 0, origTop = 0;
-
-    ftbar.addEventListener('mousedown', e => {
-      // Don't drag if clicking a tool button
-      if (e.target.closest('.float-btn')) return;
-      dragging = true;
-      startX = e.clientX;
-      startY = e.clientY;
-      const rect = ftbar.getBoundingClientRect();
-      const parentRect = ftbar.offsetParent.getBoundingClientRect();
-      origLeft = rect.left - parentRect.left;
-      origTop = rect.top - parentRect.top;
-      ftbar.classList.add('is-dragging');
-      // Remove centering transform on first drag
-      ftbar.style.transform = 'none';
-      ftbar.style.left = origLeft + 'px';
-      ftbar.style.top = origTop + 'px';
-      ftbar.style.bottom = 'auto';
-      e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', e => {
-      if (!dragging) return;
-      const dx = e.clientX - startX;
-      const dy = e.clientY - startY;
-      ftbar.style.left = (origLeft + dx) + 'px';
-      ftbar.style.top = (origTop + dy) + 'px';
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (!dragging) return;
-      dragging = false;
-      ftbar.classList.remove('is-dragging');
-    });
-  }
-
-  // Hand-tool panning + middle-click panning (click-and-drag to scroll canvas-area)
-  {
-    let panning = false, panStartX = 0, panStartY = 0, scrollStartX = 0, scrollStartY = 0;
-
-    DOM.canvasArea.addEventListener('mousedown', e => {
-      const isHand = State.activeTool === 'hand' && e.button === 0;
-      const isMiddle = e.button === 1; // middle-click pans regardless of tool
-      if (!isHand && !isMiddle) return;
-      // Don't interfere with sidebar or toolbar clicks
-      if (e.target.closest('#sidebar') || e.target.closest('#floating-toolbar')) return;
-      panning = true;
-      panStartX = e.clientX;
-      panStartY = e.clientY;
-      scrollStartX = DOM.canvasArea.scrollLeft;
-      scrollStartY = DOM.canvasArea.scrollTop;
-      DOM.canvasArea.style.cursor = 'grabbing';
-      e.preventDefault();
-    });
-
-    document.addEventListener('mousemove', e => {
-      if (!panning) return;
-      const dx = e.clientX - panStartX;
-      const dy = e.clientY - panStartY;
-      DOM.canvasArea.scrollLeft = scrollStartX - dx;
-      DOM.canvasArea.scrollTop = scrollStartY - dy;
-    });
-
-    document.addEventListener('mouseup', () => {
-      if (!panning) return;
-      panning = false;
-      DOM.canvasArea.style.cursor = '';
-    });
-  }
-
-  // Undo / Redo
-  DOM.btnUndo.addEventListener('click', handleUndo);
-  DOM.btnRedo.addEventListener('click', handleRedo);
-
-  // Edit Text
-  DOM.btnEditText.addEventListener('click', handleEditText);
-
-  // Double-click on text layer — detect if click hit an image or text
-  DOM.textLayer.addEventListener('dblclick', async (e) => {
-    if (!State.pdfDoc || isTextEditActive()) return;
-    if (isImageEditActive()) return;
-
-    // If the click landed directly on a text span, prioritize text editing
-    const clickedEl = e.target;
-    if (clickedEl && clickedEl.tagName === 'SPAN' && clickedEl.closest('#text-layer') &&
-        clickedEl.textContent.trim().length > 0) {
-      handleEditText();
-      return;
-    }
-
-    // Check if the click landed on an image region
-    const rect = DOM.pageContainer.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
-
-    try {
-      const page = await State.pdfDoc.getPage(State.currentPage);
-      const images = await extractImagePositions(page, State._viewport);
-      const hitImage = images.find(img =>
-        clickX >= img.left && clickX <= img.left + img.width &&
-        clickY >= img.top && clickY <= img.top + img.height
-      );
-
-      if (hitImage) {
-        // Enter image edit mode — this creates overlay divs with dblclick handlers
-        const ok = await enterImageEditMode(State.currentPage, State.pdfDoc, State._viewport, DOM.textLayer);
-        if (!ok) return;
-        DOM.btnEditImage.classList.add('active');
-
-        // Find the overlay that matches the hit image and trigger its dblclick
-        const overlays = DOM.textLayer.querySelectorAll('.image-edit-overlay');
-        for (const ov of overlays) {
-          const ovLeft = parseFloat(ov.style.left);
-          const ovTop = parseFloat(ov.style.top);
-          if (Math.abs(ovLeft - hitImage.left) < 5 && Math.abs(ovTop - hitImage.top) < 5) {
-            ov.dispatchEvent(new MouseEvent('dblclick', { bubbles: false }));
-            break;
-          }
-        }
-        return;
-      }
-    } catch (err) {
-      console.warn('Image detection on dblclick failed:', err);
-    }
-
-    // No image hit — enter text edit mode
-    handleEditText();
-  });
-
-  // Edit Image
-  if (DOM.btnEditImage) DOM.btnEditImage.addEventListener('click', handleEditImage);
-
-  // Text edit toolbar (event delegation on page container)
-  DOM.pageContainer.addEventListener('click', e => {
-    if (e.target.classList.contains('text-edit-commit')) {
-      handleCommitTextEdits();
-    } else if (e.target.classList.contains('text-edit-cancel')) {
-      handleCancelTextEdits();
-    }
-  });
-
-  // Image edit toolbar (custom events dispatched from toolbar buttons)
-  document.addEventListener('image-undo-changed', () => updateUndoRedoButtons());
-  document.addEventListener('image-edit-commit', () => handleCommitImageEdits());
-  document.addEventListener('image-edit-cancel', () => handleCancelImageEdits());
-
-  // Page navigation
-  if (DOM.btnFirst) DOM.btnFirst.addEventListener('click', firstPage);
-  DOM.btnPrev.addEventListener('click', prevPage);
-  DOM.btnNext.addEventListener('click', nextPage);
-  if (DOM.btnLast) DOM.btnLast.addEventListener('click', lastPage);
-  DOM.pageInput.addEventListener('change', () => {
-    const val = parseInt(DOM.pageInput.value);
-    if (!isNaN(val)) goToPage(val);
-  });
-  DOM.pageInput.addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      const val = parseInt(DOM.pageInput.value);
-      if (!isNaN(val)) goToPage(val);
-      DOM.pageInput.blur();
-    }
-  });
-
-  // Zoom (ribbon)
-  $('btn-zoom-in').addEventListener('click', zoomIn);
-  $('btn-zoom-out').addEventListener('click', zoomOut);
-  $('btn-zoom-level').addEventListener('click', () => setZoom(1.0));
-  $('btn-fit-width').addEventListener('click', fitWidth);
-  $('btn-fit-page').addEventListener('click', fitPage);
-
-  // Zoom (status bar)
-  DOM.statusZoomIn.addEventListener('click', zoomIn);
-  DOM.statusZoomOut.addEventListener('click', zoomOut);
-  DOM.statusZoom.addEventListener('click', () => setZoom(1.0));
-
-  // Ctrl+scroll zoom on canvas area — cursor-anchored, throttled to 60fps
-  DOM.canvasArea.addEventListener('wheel', e => {
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const oldZoom = State.zoom;
-      const next = getNextZoom(oldZoom, e.deltaY < 0 ? 1 : -1);
-      if (next === oldZoom) return;
-
-      // Cursor position relative to canvas-area viewport
-      const rect = DOM.canvasArea.getBoundingClientRect();
-      const clientX = e.clientX - rect.left;
-      const clientY = e.clientY - rect.top;
-
-      // Content-space point under cursor (zoom-independent)
-      const pageX = (DOM.canvasArea.scrollLeft + clientX) / oldZoom;
-      const pageY = (DOM.canvasArea.scrollTop + clientY) / oldZoom;
-
-      _pendingScrollRestore = { type: 'point', pageX, pageY, clientX, clientY };
-      setZoomThrottled(next);
-    }
-  }, { passive: false });
-
-  // Merge modal
-  $('btn-merge').addEventListener('click', openMergeModal);
-  $('merge-drop-zone').addEventListener('click', () => $('merge-file-input').click());
-  $('merge-file-input').addEventListener('change', e => {
-    if (e.target.files.length) addMergeFiles(Array.from(e.target.files));
-    e.target.value = '';
-  });
-  $('merge-drop-zone').addEventListener('dragover', e => e.preventDefault());
-  $('merge-drop-zone').addEventListener('drop', e => {
-    e.preventDefault();
-    const files = Array.from(e.dataTransfer.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
-    if (files.length) addMergeFiles(files);
-  });
-  $('btn-merge-execute').addEventListener('click', executeMerge);
-
-  // Split modal
-  $('btn-split').addEventListener('click', openSplitModal);
-  $('split-range-input').addEventListener('input', updateSplitPreview);
-  $('btn-split-execute').addEventListener('click', executeSplit);
-
-  // Close modals — delegates to dedicated close functions for complex modals,
-  // uses generic closeModal() for simple backdrop-only ones so focus is restored.
-  document.querySelectorAll('[data-close-modal]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const modal = btn.dataset.closeModal;
-      if (modal === 'merge') closeMergeModal();
-      if (modal === 'split') closeSplitModal();
-      if (modal === 'watermark') closeWatermarkModal();
-      if (modal === 'bates') closeBatesModal();
-      if (modal === 'hf') closeHfModal();
-      if (modal === 'crop') closeCropModal();
-      if (modal === 'signature') closeSignatureModal();
-      if (modal === 'ocr') closeModal('ocr-modal-backdrop');
-      if (modal === 'encrypt') closeModal('encrypt-modal-backdrop');
-      if (modal === 'metadata') closeModal('metadata-modal-backdrop');
-      if (modal === 'redact-search') closeModal('redact-search-modal-backdrop');
-      if (modal === 'export-image') closeModal('export-image-modal-backdrop');
-      if (modal === 'create-from-images') closeModal('create-from-images-modal-backdrop');
-      if (modal === 'optimize') closeModal('optimize-modal-backdrop');
-      if (modal === 'compare') closeModal('compare-modal-backdrop');
-      if (modal === 'comment-summary') closeModal('comment-summary-modal-backdrop');
-      if (modal === 'form-data') closeModal('form-data-modal-backdrop');
-      if (modal === 'exhibit') closeModal('exhibit-modal-backdrop');
-      if (modal === 'sanitize') closeModal('sanitize-modal-backdrop');
-      if (modal === 'shortcuts') closeModal('shortcuts-modal-backdrop');
-      if (modal === 'about') closeModal('about-modal-backdrop');
-      if (modal === 'normalize') closeModal('normalize-modal-backdrop');
-      if (modal === 'page-labels') {
-        closeModal('page-labels-modal-backdrop');
-        // Restore previously saved ranges on cancel
-        clearLabels();
-        _savedLabelRanges.forEach(r => setLabelRange(r.startPage, r.endPage, r.format, r.prefix, r.startNum));
-      }
-      if (modal === 'replace-pages') closeModal('replace-pages-modal-backdrop');
-      if (modal === 'print') closePrintModal();
-      if (modal === 'export') closeExportModal();
-    });
-  });
-
-  // Close modal on backdrop click (click on the overlay, not the dialog content)
-  document.addEventListener('click', e => {
-    if (e.target.classList.contains('modal-backdrop') && !e.target.classList.contains('hidden')) {
-      const closeBtn = e.target.querySelector('[data-close-modal]');
-      if (closeBtn) closeBtn.click();
-    }
-  });
-
-  // Annotation tool buttons (sync active state across all ribbon panels + flyout items)
-  document.querySelectorAll('.tool-btn[data-tool], .mb-flyout-item[data-tool], .mb-rail-item[data-tool]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.disabled) return;
-      selectTool(btn.dataset.tool);
-    });
-  });
-
-  // Floating toolbar tool buttons
-  document.querySelectorAll('.float-btn[data-tool]').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (btn.dataset.tool === 'image') {
-        handleImageInsert();
-      } else {
-        selectTool(btn.dataset.tool);
-      }
-    });
-  });
-
-  // Sidebar tab switching — removed (sidebar replaced by flyout panels)
-  // Sidebar toggle — removed (sidebar replaced by flyout panels)
-
-  // Properties panel close
-  $('btn-close-panel').addEventListener('click', () => togglePropertiesPanel(false));
-
-  // --- Helper: apply a color/stroke change to the active selected object ---
-  function applyToSelected(props) {
-    const canvas = getCanvas();
-    if (!canvas) return;
-    const obj = canvas.getActiveObject();
-    if (!obj) return;
-    if (props.color) {
-      obj.set('stroke', props.color);
-      if (obj.fill && obj.fill !== 'transparent') obj.set('fill', props.color);
-      // For text objects update fill instead of stroke
-      if (obj.mudbrickType === 'text') obj.set('fill', props.color);
-      // For groups (arrow, xmark), update children
-      if (obj._objects) {
-        obj._objects.forEach(child => {
-          if (child.stroke) child.set('stroke', props.color);
-          if (child.fill && child.fill !== 'transparent') child.set('fill', props.color);
-        });
-      }
-    }
-    if (props.strokeWidth != null) {
-      obj.set('strokeWidth', props.strokeWidth);
-      if (obj._objects) {
-        obj._objects.forEach(child => {
-          if (child.stroke) child.set('strokeWidth', props.strokeWidth);
-        });
-      }
-    }
-    if (props.opacity != null) obj.set('opacity', props.opacity);
-    if (props.fontSize != null) obj.set('fontSize', props.fontSize);
-    if (props.fontFamily != null) obj.set('fontFamily', props.fontFamily);
-    canvas.renderAll();
-  }
-
-  // --- Helper: sync panel UI from selected object ---
-  function syncPanelFromObject(obj) {
-    if (!obj) return;
-    const color = obj.stroke || obj.fill || '#000000';
-    // Update color swatches
-    document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => {
-      s.classList.toggle('active', s.dataset.color === color);
-    });
-    const cp = $('prop-color-picker');
-    if (cp) cp.value = color;
-    // Update opacity
-    const os = $('prop-opacity');
-    const ov = $('prop-opacity-value');
-    if (os && obj.opacity != null) {
-      os.value = Math.round(obj.opacity * 100);
-      if (ov) ov.textContent = os.value + '%';
-    }
-    // Update stroke width
-    const ss = $('prop-stroke-width');
-    const sv = $('prop-stroke-width-value');
-    if (ss && obj.strokeWidth != null) {
-      ss.value = Math.round(obj.strokeWidth);
-      if (sv) sv.textContent = ss.value + 'px';
-    }
-    // Update font size
-    const fs = $('prop-font-size');
-    if (fs && obj.fontSize != null) fs.value = obj.fontSize;
-    // Update font family
-    const ff = $('prop-font-family');
-    if (ff && obj.fontFamily) ff.value = obj.fontFamily;
-  }
-
-  // Properties panel — color swatches
-  document.querySelectorAll('#panel-tool-props .color-swatch').forEach(swatch => {
-    swatch.addEventListener('click', () => {
-      document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
-      swatch.classList.add('active');
-      updateToolOptions({ color: swatch.dataset.color });
-      applyToSelected({ color: swatch.dataset.color });
-    });
-  });
-
-  // Properties panel — color picker input
-  const colorPicker = $('prop-color-picker');
-  if (colorPicker) {
-    colorPicker.addEventListener('input', () => {
-      document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
-      updateToolOptions({ color: colorPicker.value });
-      applyToSelected({ color: colorPicker.value });
-    });
-  }
-
-  // Properties panel — eyedropper
-  const eyedropperBtn = $('prop-eyedropper');
-  if (eyedropperBtn) {
-    eyedropperBtn.addEventListener('click', () => {
-      if (typeof window.EyeDropper === 'function') {
-        const dropper = new window.EyeDropper();
-        dropper.open().then(result => {
-          const color = result.sRGBHex;
-          document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
-          if (colorPicker) colorPicker.value = color;
-          updateToolOptions({ color });
-          applyToSelected({ color });
-        }).catch(() => {});
-      } else {
-        toast('EyeDropper not supported in this browser', 'info');
-      }
-    });
-  }
-
-  // Properties panel — opacity slider
-  const opacitySlider = $('prop-opacity');
-  const opacityValue = $('prop-opacity-value');
-  if (opacitySlider && opacityValue) {
-    opacitySlider.addEventListener('input', () => {
-      opacityValue.textContent = opacitySlider.value + '%';
-      const val = parseInt(opacitySlider.value) / 100;
-      updateToolOptions({ opacity: val });
-      applyToSelected({ opacity: val });
-    });
-  }
-
-  // Properties panel — font size input
-  const fontSizeInput = $('prop-font-size');
-  if (fontSizeInput) {
-    fontSizeInput.addEventListener('change', () => {
-      const size = parseInt(fontSizeInput.value) || 16;
-      updateToolOptions({ fontSize: size });
-      applyToSelected({ fontSize: size });
-    });
-  }
-
-  // Properties panel — font family dropdown
-  const fontFamilySelect = $('prop-font-family');
-  if (fontFamilySelect) {
-    fontFamilySelect.addEventListener('change', () => {
-      updateToolOptions({ fontFamily: fontFamilySelect.value });
-      applyToSelected({ fontFamily: fontFamilySelect.value });
-    });
-  }
-
-  // Properties panel — shape picker
-  document.querySelectorAll('#shape-picker .shape-pick').forEach(btn => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#shape-picker .shape-pick').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      updateToolOptions({ shapeType: btn.dataset.shape });
-    });
-  });
-
-  // Properties panel — stroke width slider
-  const strokeSlider = $('prop-stroke-width');
-  const strokeValue = $('prop-stroke-width-value');
-  if (strokeSlider && strokeValue) {
-    strokeSlider.addEventListener('input', () => {
-      strokeValue.textContent = strokeSlider.value + 'px';
-      const val = parseInt(strokeSlider.value);
-      updateToolOptions({ strokeWidth: val });
-      applyToSelected({ strokeWidth: val });
-    });
-  }
-
-  // Dark mode
-  $('btn-dark-mode').addEventListener('click', toggleDarkMode);
-
-  // Ribbon tab switching — removed (ribbon replaced by icon rail + flyout panels)
-
-  // Signature modal
-  $('btn-signature').addEventListener('click', openSignatureModal);
-  // Also wire sig-open-btn class (Annotate ribbon + floating toolbar duplicates)
-  document.querySelectorAll('.sig-open-btn').forEach(btn => {
-    btn.addEventListener('click', openSignatureModal);
-  });
-
-  // Watermark modal
-  $('btn-watermark').addEventListener('click', openWatermarkModal);
-  $('btn-watermark-execute').addEventListener('click', executeWatermark);
-  $('watermark-opacity').addEventListener('input', () => {
-    $('watermark-opacity-value').textContent = Math.round(parseFloat($('watermark-opacity').value) * 100) + '%';
-  });
-
-  // Watermark tab switching (text / image)
-  $('watermark-tab-text')?.addEventListener('click', () => {
-    $('watermark-tab-text').classList.add('active');
-    $('watermark-tab-image').classList.remove('active');
-    $('watermark-text-fields').classList.remove('hidden');
-    $('watermark-image-fields').classList.add('hidden');
-  });
-  $('watermark-tab-image')?.addEventListener('click', () => {
-    $('watermark-tab-image').classList.add('active');
-    $('watermark-tab-text').classList.remove('active');
-    $('watermark-image-fields').classList.remove('hidden');
-    $('watermark-text-fields').classList.add('hidden');
-  });
-  // Image watermark controls
-  $('watermark-image-file')?.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const thumb = $('watermark-image-thumb');
-      thumb.src = URL.createObjectURL(file);
-      $('watermark-image-preview').classList.remove('hidden');
-    }
-  });
-  $('watermark-image-scale')?.addEventListener('input', (e) => {
-    $('watermark-image-scale-value').textContent = Math.round(parseFloat(e.target.value) * 100) + '%';
-  });
-  $('watermark-image-opacity')?.addEventListener('input', (e) => {
-    $('watermark-image-opacity-value').textContent = Math.round(parseFloat(e.target.value) * 100) + '%';
-  });
-
-  // Link tool events
-  document.addEventListener('link-created', (e) => {
-    const obj = e.detail.obj;
-    showLinkPropsPanel(obj);
-    togglePropertiesPanel(true);
-  });
-  document.addEventListener('link-follow', (e) => {
-    const obj = e.detail.obj;
-    followLink(obj, goToPage);
-  });
-  $('link-type-select')?.addEventListener('change', (e) => {
-    toggleLinkTypeFields(e.target.value);
-  });
-  $('btn-link-save')?.addEventListener('click', () => {
-    if (!_selectedLinkObj) return;
-    _selectedLinkObj.linkType = $('link-type-select').value;
-    _selectedLinkObj.linkURL = normalizeURL($('link-url-input').value);
-    _selectedLinkObj.linkPage = parseInt($('link-page-input').value) || 1;
-    toast('Link saved', 'success');
-  });
-  $('btn-link-follow')?.addEventListener('click', () => {
-    if (_selectedLinkObj) followLink(_selectedLinkObj, goToPage);
-  });
-  $('btn-link-remove')?.addEventListener('click', () => {
-    if (!_selectedLinkObj) return;
-    const canvas = getCanvas();
-    if (canvas) {
-      canvas.remove(_selectedLinkObj);
-      canvas.renderAll();
-    }
-    hideLinkPropsPanel();
-    toast('Link removed', 'info');
-  });
-
-  // Comment thread events
-  $('btn-comment-reply')?.addEventListener('click', () => {
-    if (!_selectedCommentObj?.commentThread) return;
-    const input = $('comment-reply-input');
-    const text = input.value.trim();
-    if (!text) return;
-    addReply(_selectedCommentObj.commentThread, text);
-    input.value = '';
-    renderCommentReplies(_selectedCommentObj.commentThread);
-    savePageAnnotations(State.currentPage);
-    refreshCommentsSidebar();
-  });
-  $('comment-reply-input')?.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') $('btn-comment-reply')?.click();
-  });
-  $('comment-status')?.addEventListener('change', (e) => {
-    if (!_selectedCommentObj?.commentThread) return;
-    setThreadStatus(_selectedCommentObj.commentThread, e.target.value);
-    savePageAnnotations(State.currentPage);
-    refreshCommentsSidebar();
-  });
-  $('comment-filter-status')?.addEventListener('change', () => refreshCommentsSidebar());
-  $('btn-export-comments-xfdf')?.addEventListener('click', () => {
-    const xml = exportThreadsXFDF(getAnnotations());
-    const blob = new Blob([xml], { type: 'application/xml' });
-    downloadBlob(blob, (State.fileName || 'document').replace(/\.pdf$/i, '') + '-comments.xfdf');
-    toast('Comments exported as XFDF', 'success');
-  });
-  // Author name
-  const authorInput = $('author-name-input');
-  if (authorInput) {
-    authorInput.value = getAuthorName();
-    authorInput.addEventListener('change', () => setAuthorName(authorInput.value));
-  }
-
-  // Normalize Page Sizes modal
-  $('btn-normalize-execute').addEventListener('click', executeNormalize);
-
-  // Bates Numbering modal
-  $('btn-bates').addEventListener('click', openBatesModal);
-  $('btn-bates-execute').addEventListener('click', executeBates);
-  // Live preview update on any Bates input change
-  ['bates-prefix', 'bates-suffix', 'bates-start', 'bates-pad'].forEach(id => {
-    $(id).addEventListener('input', updateBatesPreview);
-  });
-  // Toggle custom range visibility
-  $('bates-page-range').addEventListener('change', () => {
-    const custom = $('bates-custom-range');
-    if ($('bates-page-range').value === 'custom') {
-      custom.classList.remove('hidden');
-    } else {
-      custom.classList.add('hidden');
-    }
-  });
-
-  // Headers & Footers modal
-  $('btn-headers-footers').addEventListener('click', openHfModal);
-  $('btn-hf-execute').addEventListener('click', executeHeadersFooters);
-  // Track last-focused zone input for token insertion
-  document.querySelectorAll('.hf-zone').forEach(input => {
-    input.addEventListener('focus', () => { lastFocusedHfZone = input; });
-    input.addEventListener('input', updateHfPreview);
-  });
-  // Token buttons
-  document.querySelectorAll('.hf-token-btn').forEach(btn => {
-    btn.addEventListener('click', () => insertHfToken(btn.dataset.token));
-  });
-  // Toggle custom range
-  $('hf-page-range').addEventListener('change', () => {
-    const custom = $('hf-custom-range');
-    if ($('hf-page-range').value === 'custom') {
-      custom.classList.remove('hidden');
-    } else {
-      custom.classList.add('hidden');
-    }
-  });
-
-  // Visual Crop
-  $('btn-crop-page').addEventListener('click', openCropModal);
-  $('btn-crop-execute').addEventListener('click', executeCrop);
-  $('btn-crop-cancel').addEventListener('click', closeCropModal);
-  initCropDragHandlers();
-  // Preset buttons set crop from PDF-point values
-  document.querySelectorAll('.crop-preset').forEach(btn => {
-    btn.addEventListener('click', () => {
-      if (!cropState.active) return;
-      setCropFromPreset(
-        parseFloat(btn.dataset.top),
-        parseFloat(btn.dataset.bottom),
-        parseFloat(btn.dataset.left),
-        parseFloat(btn.dataset.right),
-      );
-    });
-  });
-
-  // OCR modal
-  $('btn-ocr').addEventListener('click', () => {
-    $('ocr-modal-backdrop').classList.remove('hidden');
-    $('ocr-progress-area').classList.add('hidden');
-    $('btn-ocr-run').disabled = false;
-    // Default to current page
-    const radios = document.querySelectorAll('input[name="ocr-scope"]');
-    radios[0].checked = true;
-  });
-
-  $('btn-ocr-run').addEventListener('click', async () => {
-    if (!State.pdfDoc) return;
-
-    // Determine page numbers
-    const scope = document.querySelector('input[name="ocr-scope"]:checked').value;
-    let pageNumbers = [];
-
-    if (scope === 'current') {
-      pageNumbers = [State.currentPage];
-    } else if (scope === 'all') {
-      pageNumbers = Array.from({ length: State.totalPages }, (_, i) => i + 1);
-    } else if (scope === 'range') {
-      const rangeStr = $('ocr-range-input').value.trim();
-      if (!rangeStr) {
-        toast('Enter a page range', 'warning');
-        return;
-      }
-      const parsed = parsePageRanges(rangeStr, State.totalPages);
-      if (!parsed || !parsed.length) {
-        toast('Invalid page range', 'error');
-        return;
-      }
-      // Flatten array-of-arrays and convert from 0-based to 1-based
-      pageNumbers = parsed.flat().map(p => p + 1);
-    }
-
-    // Show progress
-    $('ocr-progress-area').classList.remove('hidden');
-    $('btn-ocr-run').disabled = true;
-
-    try {
-      const language = $('ocr-language')?.value || 'eng';
-      await runOCR(State.pdfDoc, pageNumbers, (info) => {
-        $('ocr-progress-label').textContent = info.status;
-        $('ocr-progress-pct').textContent = Math.round(info.progress) + '%';
-        $('ocr-progress-bar').style.width = info.progress + '%';
-      }, { language });
-
-      // Augment find text index with OCR results
-      const ocrEntries = getOCRTextEntries();
-      if (ocrEntries.length > 0) {
-        augmentTextIndex(ocrEntries);
-      }
-
-      // Update status bar
-      const ocrBadge = $('status-ocr');
-      if (ocrBadge) {
-        ocrBadge.textContent = `OCR ✓ (${pageNumbers.length} pg${pageNumbers.length !== 1 ? 's' : ''})`;
-        ocrBadge.classList.remove('hidden');
-      }
-
-      // Show OCR stats in results area
-      const stats = getOCRStats();
-      if (stats) {
-        $('ocr-results-area')?.classList.remove('hidden');
-        const statsEl = $('ocr-stats');
-        if (statsEl) {
-          statsEl.textContent = `${stats.pagesProcessed} pages, ${stats.totalWords} words, ` +
-            `${stats.avgConfidence}% avg confidence` +
-            (stats.lowConfidenceWords ? `, ${stats.lowConfidenceWords} low-confidence words` : '');
-        }
-      }
-
-      // Store embed preference
-      State.ocrEmbedText = $('ocr-embed-text')?.checked ?? true;
-
-      // Re-render current page to show OCR text layer
-      await renderCurrentPage();
-
-      toast(`OCR complete — ${pageNumbers.length} page${pageNumbers.length !== 1 ? 's' : ''} processed`, 'success');
-    } catch (err) {
-      toast('OCR failed: ' + err.message, 'error');
-      console.error('OCR error:', err);
-    } finally {
-      $('btn-ocr-run').disabled = false;
-    }
-  });
-
-  // OCR enhancement event listeners
-  $('ocr-show-confidence')?.addEventListener('change', (e) => {
-    DOM.textLayer?.classList.toggle('ocr-confidence-toggle', e.target.checked);
-  });
-  $('btn-ocr-export-text')?.addEventListener('click', () => {
-    const text = exportOCRText();
-    if (!text) { toast('No OCR results to export', 'warning'); return; }
-    const blob = new Blob([text], { type: 'text/plain' });
-    downloadBlob(blob, (State.fileName || 'document').replace(/\.pdf$/i, '') + '-ocr.txt');
-    toast('OCR text exported', 'success');
-  });
-  $('btn-ocr-correct')?.addEventListener('click', () => {
-    enableCorrectionMode(State.currentPage, DOM.textLayer);
-    $('ocr-modal-backdrop')?.classList.add('hidden');
-    toast('OCR correction mode active. Click on words to edit. Press Escape to exit.', 'info');
-  });
-
-  // Edit ribbon — Insert Blank Page
-  $('btn-insert-blank').addEventListener('click', async () => {
-    if (!State.pdfBytes) return;
-    showLoading('Inserting page…');
-    try {
-      const newBytes = await insertBlankPage(State.pdfBytes, State.currentPage - 1);
-      await reloadAfterEdit(newBytes);
-      toast('Blank page inserted', 'success');
-    } catch (err) {
-      toast('Insert failed: ' + err.message, 'error');
-    } finally {
-      hideLoading();
-    }
-  });
-
-  // Image insertion
-  $('btn-insert-image').addEventListener('click', handleImageInsert);
-  $('image-file-input').addEventListener('change', onImageFileSelected);
-
-  // Annotate ribbon image button
-  if ($('btn-anno-image')) $('btn-anno-image').addEventListener('click', handleImageInsert);
-
-  // Sticky note — note text textarea
-  const noteTextarea = $('prop-note-text');
-  if (noteTextarea) {
-    noteTextarea.addEventListener('input', () => {
-      updateSelectedNoteText(noteTextarea.value);
-      refreshNotesSidebar();
-    });
-  }
-
-  // Sticky note — color swatches in props panel
-  document.querySelectorAll('#note-color-swatches .color-swatch').forEach(swatch => {
-    swatch.addEventListener('click', () => {
-      const canvas = getCanvas();
-      if (!canvas) return;
-      const obj = canvas.getActiveObject();
-      if (!obj || obj.mudbrickType !== 'sticky-note') return;
-      const colorName = swatch.dataset.noteColor;
-      const colorMap = { yellow:'#fff9c4', green:'#c8e6c9', blue:'#bbdefb', pink:'#f8bbd0', orange:'#ffe0b2' };
-      const fill = colorMap[colorName];
-      if (!fill) return;
-      // Update the rect background in the group
-      if (obj._objects) {
-        const rect = obj._objects.find(o => o.type === 'rect');
-        if (rect) {
-          rect.set('fill', fill);
-        }
-      }
-      obj.noteColor = colorName;
-      canvas.renderAll();
-      savePageAnnotations(State.currentPage);
-      // Update swatch active state
-      document.querySelectorAll('#note-color-swatches .color-swatch').forEach(s => s.classList.remove('active'));
-      swatch.classList.add('active');
-      refreshNotesSidebar();
-    });
-  });
-
-  // Fabric canvas selection events — show/hide note props
-  // We use a MutationObserver-style approach via periodic check, but
-  // actually Fabric fires events we can hook after init.
-  // Hook into canvas events after a short delay (canvas is ready after boot)
-  setTimeout(() => {
-    const canvas = getCanvas();
-    if (!canvas) return;
-
-    function _onObjectSelected(e) {
-      const obj = e.selected?.[0];
-      if (obj && obj.mudbrickType === 'sticky-note') {
-        showNotePropsPanel(obj);
-      } else {
-        hideNotePropsPanel();
-      }
-      if (obj && obj.mudbrickType === 'link') {
-        showLinkPropsPanel(obj);
-      } else {
-        hideLinkPropsPanel();
-      }
-      if (obj && obj.commentThread) {
-        showCommentThreadPanel(obj);
-      } else {
-        hideCommentThreadPanel();
-      }
-      // Sync properties panel to reflect the selected object's properties
-      if (obj) syncPanelFromObject(obj);
-    }
-
-    canvas.on('selection:created', (...args) => {
-      _onObjectSelected(...args);
-      if (typeof UIController !== 'undefined') {
-        UIController.showProperties();
-      }
-    });
-    canvas.on('selection:updated', (...args) => {
-      _onObjectSelected(...args);
-      if (typeof UIController !== 'undefined') {
-        UIController.showProperties();
-      }
-    });
-
-    canvas.on('selection:cleared', () => {
-      hideNotePropsPanel();
-      hideLinkPropsPanel();
-      hideCommentThreadPanel();
-      // Reset color swatches to default (no active highlight)
-      document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
-      if (typeof UIController !== 'undefined') {
-        UIController.hideProperties();
-      }
-    });
-
-    // Also refresh notes sidebar after any annotation modification
-    canvas.on('object:modified', () => {
-      refreshNotesSidebar();
-      updateUnsavedIndicator();
-    });
-
-    canvas.on('object:added', () => {
-      updateUnsavedIndicator();
-    });
-
-    canvas.on('object:removed', () => {
-      refreshNotesSidebar();
-      hideNotePropsPanel();
-      updateUnsavedIndicator();
-    });
-  }, 500);
-
-  // Export — opens unified export modal
-  $('btn-export').addEventListener('click', handleExport);
-
-  // Unified export modal — tab switching
-  document.querySelectorAll('.export-tab').forEach(tabBtn => {
-    tabBtn.addEventListener('click', () => {
-      _switchExportTab(tabBtn.dataset.exportTab);
-      _updateImgSizeHint();
-    });
-  });
-
-  // Unified export modal — image scope changes
-  $('export-imgs-scope')?.addEventListener('change', () => {
-    const custom = $('export-imgs-scope').value === 'custom';
-    $('export-imgs-range-row').classList.toggle('hidden', !custom);
-    _updateImgSizeHint();
-  });
-  $('export-imgs-dpi')?.addEventListener('change', _updateImgSizeHint);
-  $('export-imgs-format')?.addEventListener('change', () => {
-    const isJpeg = $('export-imgs-format').value === 'jpg';
-    $('export-imgs-quality-row').classList.toggle('hidden', !isJpeg);
-    _updateImgSizeHint();
-  });
-
-  // Unified export modal — execute button
-  $('btn-export-execute')?.addEventListener('click', executeExport);
-
-  // Print modal — scope toggle
-  $('print-scope')?.addEventListener('change', () => {
-    const custom = $('print-scope').value === 'custom';
-    $('print-range-row').classList.toggle('hidden', !custom);
-  });
-
-  // Print modal — execute button
-  $('btn-print-execute')?.addEventListener('click', async () => {
-    const scope = $('print-scope').value;
-    const printScale = parseFloat($('print-quality').value) || 1.5;
-
-    let pageNums;
-    if (scope === 'current') {
-      pageNums = [State.currentPage];
-    } else if (scope === 'all') {
-      pageNums = Array.from({ length: State.totalPages }, (_, i) => i + 1);
-    } else {
-      const rangeInput = $('print-range').value.trim();
-      const ranges = parsePageRanges(rangeInput, State.totalPages);
-      if (!ranges) { toast('Invalid page range', 'warning'); return; }
-      pageNums = ranges.flat().map(i => i + 1);
-    }
-
-    closePrintModal();
-    await executePrint(pageNums, printScale);
-  });
-
-  // Annotation context menu — right-click on Fabric canvas
-  DOM.fabricWrapper.addEventListener('contextmenu', e => {
-    // Only show annotation context menu when a PDF is loaded
-    if (!State.pdfDoc) return;
-    e.preventDefault();
-
-    const canvas = getCanvas();
-    if (!canvas) return;
-
-    // Find the Fabric object under the pointer
-    const target = canvas.getActiveObject() || canvas.findTarget(e);
-    showAnnotationContextMenu(e, target);
-  });
-
-  // Keyboard shortcuts
-  document.addEventListener('keydown', handleKeyboard);
-
-  // Text edit fallback notification
-  document.addEventListener('text-edit-fallback', (e) => {
-    const n = e.detail.count;
-    toast(`${n} line${n > 1 ? 's' : ''} used fallback rendering — font may differ slightly`, 'info');
-  });
-
-  // Redaction visual-only warning
-  document.addEventListener('redact-warning', () => {
-    toast('Redactions are visual only — export to PDF to make permanent. Original content may still be extractable.', 'warning', 6000);
-  });
-
-  // Find bar events
-  const findInput = $('find-input');
-  if (findInput) {
-    findInput.addEventListener('input', debounce(performSearch, 200));
-    findInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        if (e.shiftKey) navigateMatch('prev');
-        else navigateMatch('next');
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        closeFindBar();
-      }
-    });
-  }
-  $('find-next')?.addEventListener('click', () => navigateMatch('next'));
-  $('find-prev')?.addEventListener('click', () => navigateMatch('prev'));
-  $('find-close')?.addEventListener('click', closeFindBar);
-  $('find-case-sensitive')?.addEventListener('change', performSearch);
-  $('find-replace-toggle')?.addEventListener('click', toggleReplaceRow);
-  $('replace-one')?.addEventListener('click', executeReplace);
-  $('replace-all')?.addEventListener('click', executeReplaceAll);
-  const replaceInput = $('replace-input');
-  if (replaceInput) {
-    replaceInput.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); executeReplace(); }
-      if (e.key === 'Escape') { e.preventDefault(); closeFindBar(); }
-    });
-  }
-
-  // Window resize: debounced re-render
-  window.addEventListener('resize', debounce(() => {
-    if (State.pdfDoc) renderCurrentPage();
-  }, 250));
-
-  // Drag-and-drop on canvas area
-  // If no PDF is loaded → open the file. If a PDF is already open → append pages.
-  DOM.canvasArea.addEventListener('dragover', e => {
-    e.preventDefault();
-    DOM.canvasArea.classList.add('drag-over');
-  });
-  DOM.canvasArea.addEventListener('dragleave', () => {
-    DOM.canvasArea.classList.remove('drag-over');
-  });
-  DOM.canvasArea.addEventListener('drop', e => {
-    e.preventDefault();
-    DOM.canvasArea.classList.remove('drag-over');
-    const files = Array.from(e.dataTransfer.files).filter(f =>
-      f.name.toLowerCase().endsWith('.pdf') ||
-      f.type.startsWith('image/') ||
-      /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(f.name)
-    );
-    if (!files.length) return;
-    if (State.pdfDoc) {
-      // PDF already open — append pages to end
-      handleAddPages(files);
-    } else {
-      handleFiles(files);
-    }
-  });
-
-  // Drag-and-drop on sidebar thumbnail list — reorder pages or insert new ones
-  DOM.thumbnailList.addEventListener('dragover', e => {
-    e.preventDefault();
-    const isInternal = e.dataTransfer.types.includes('text/x-mudbrick-page');
-    e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy';
-    const target = getDropTarget(e);
-    clearDropIndicators();
-    if (target.item) {
-      target.item.classList.add(target.position === 'before' ? 'drop-before' : 'drop-after');
-    }
-  });
-  DOM.thumbnailList.addEventListener('dragleave', e => {
-    if (!DOM.thumbnailList.contains(e.relatedTarget)) {
-      clearDropIndicators();
-    }
-  });
-  DOM.thumbnailList.addEventListener('drop', async e => {
-    e.preventDefault();
-    clearDropIndicators();
-
-    // Internal page reorder
-    const draggedPage = e.dataTransfer.getData('text/x-mudbrick-page');
-    if (draggedPage && State.pdfBytes) {
-      const fromPage = parseInt(draggedPage);
-      const target = getDropTarget(e);
-      if (!target.item) return;
-      let toPage = parseInt(target.item.dataset.page);
-      if (target.position === 'after') toPage++;
-      const fromIdx = fromPage - 1;
-      let toIdx = toPage - 1;
-      if (fromIdx === toIdx || fromIdx === toIdx - 1) return;
-      if (fromIdx < toIdx) toIdx--;
-      showLoading('Reordering pages…');
-      try {
-        const newBytes = await reorderPages(State.pdfBytes, fromIdx, toIdx);
-        if (State.currentPage === fromPage) {
-          State.currentPage = toIdx + 1;
-        } else if (fromPage < State.currentPage && toIdx + 1 >= State.currentPage) {
-          State.currentPage--;
-        } else if (fromPage > State.currentPage && toIdx + 1 <= State.currentPage) {
-          State.currentPage++;
-        }
-        await reloadAfterEdit(newBytes);
-        toast(`Moved page ${fromPage}`, 'success');
-      } catch (err) {
-        console.error('Page reorder failed:', err);
-        toast('Reorder failed: ' + err.message, 'error');
-      } finally {
-        hideLoading();
-      }
-      return;
-    }
-
-    // External file drop — insert pages
-    const files = Array.from(e.dataTransfer.files).filter(f =>
-      f.name.toLowerCase().endsWith('.pdf') ||
-      f.type.startsWith('image/') ||
-      /\.(png|jpe?g|gif|webp|bmp|tiff?)$/i.test(f.name)
-    );
-    if (!files.length || !State.pdfDoc) return;
-
-    const target = getDropTarget(e);
-    let insertAfter;
-    if (target.item) {
-      const pageNum = parseInt(target.item.dataset.page);
-      insertAfter = target.position === 'before' ? pageNum - 2 : pageNum - 1;
-      if (insertAfter < -1) insertAfter = -1;
-    }
-    if (insertAfter === -1) {
-      handleAddPages(files, -1);
-    } else {
-      handleAddPages(files, insertAfter);
-    }
-  });
-
-  /* ── Security ribbon ── */
-  $('btn-encrypt').addEventListener('click', () => {
-    $('encrypt-modal-backdrop').classList.remove('hidden');
-  });
-  $('btn-encrypt-execute').addEventListener('click', executeEncrypt);
-
-  $('btn-metadata').addEventListener('click', openMetadataModal);
-  $('btn-meta-save').addEventListener('click', executeMetadataSave);
-  $('btn-meta-remove').addEventListener('click', executeMetadataRemove);
-
-  $('btn-redact-search').addEventListener('click', () => {
-    $('redact-results-list').innerHTML = '';
-    $('redact-results').classList.add('hidden');
-    $('btn-redact-apply').classList.add('hidden');
-    $('redact-search-modal-backdrop').classList.remove('hidden');
-  });
-  $('btn-redact-search-execute').addEventListener('click', executeRedactSearch);
-  $('btn-redact-apply').addEventListener('click', executeRedactApply);
-
-  // Toggle custom pattern row when "Custom Pattern" checkbox changes
-  document.querySelectorAll('.redact-pattern-cb').forEach(cb => {
-    if (cb.value === 'custom') {
-      cb.addEventListener('change', () => {
-        $('redact-custom-row').classList.toggle('hidden', !cb.checked);
-      });
-    }
-  });
-
-  /* ── Tools ribbon ── */
-  $('btn-export-image').addEventListener('click', () => {
-    $('export-image-modal-backdrop').classList.remove('hidden');
-  });
-  $('btn-export-image-execute').addEventListener('click', executeExportImage);
-
-  // Show/hide custom range row based on scope
-  $('export-img-scope')?.addEventListener('change', (e) => {
-    $('export-img-range-row').classList.toggle('hidden', e.target.value !== 'custom');
-  });
-  // Update quality % display
-  $('export-img-quality')?.addEventListener('input', (e) => {
-    const display = $('export-img-quality-val');
-    if (display) display.textContent = e.target.value + '%';
-  });
-
-  $('btn-create-from-images').addEventListener('click', () => {
-    $('create-from-images-modal-backdrop').classList.remove('hidden');
-    _imagesToPdf = [];
-    $('images-file-list').innerHTML = '<p style="color:var(--mb-text-secondary)">No images added yet.</p>';
-  });
-  $('btn-create-from-images-execute').addEventListener('click', executeCreateFromImages);
-
-  // Images drop zone
-  const imgDropZone = $('images-drop-zone');
-  if (imgDropZone) {
-    imgDropZone.addEventListener('dragover', e => { e.preventDefault(); imgDropZone.classList.add('drag-over'); });
-    imgDropZone.addEventListener('dragleave', () => imgDropZone.classList.remove('drag-over'));
-    imgDropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      imgDropZone.classList.remove('drag-over');
-      const files = Array.from(e.dataTransfer.files).filter(f => f.type.startsWith('image/'));
-      addImagesToList(files);
-    });
-    imgDropZone.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = 'image/*'; input.multiple = true;
-      input.addEventListener('change', () => addImagesToList(Array.from(input.files)));
-      input.click();
-    });
-  }
-
-  $('btn-optimize').addEventListener('click', () => {
-    $('optimize-result').textContent = '';
-    $('optimize-result').classList.add('hidden');
-    $('optimize-modal-backdrop').classList.remove('hidden');
-  });
-  $('btn-optimize-execute').addEventListener('click', executeOptimize);
-  $('optimize-quality')?.addEventListener('input', (e) => {
-    const display = $('optimize-quality-val');
-    if (display) display.textContent = e.target.value + '%';
-  });
-  // Show/hide custom options based on preset
-  $('optimize-preset')?.addEventListener('change', (e) => {
-    const customOpts = $('optimize-custom-opts');
-    if (customOpts) customOpts.classList.toggle('hidden', e.target.value !== 'custom');
-  });
-  // Update hint text when mode changes
-  $('optimize-mode')?.addEventListener('change', (e) => {
-    const hint = $('optimize-mode-hint');
-    if (hint) {
-      const hints = {
-        smart: 'Smart mode preserves text, links, and fonts on text-only pages. Only image-heavy pages are recompressed.',
-        images: 'Images Only mode recompresses individual embedded images without rasterizing pages. All text, fonts, links, and vectors are preserved.',
-        aggressive: 'Aggressive mode rasterizes all pages as JPEG. Text will become non-selectable.',
-      };
-      hint.textContent = hints[e.target.value] || hints.smart;
-    }
-    // Hide DPI for images-only mode (it doesn't use DPI)
-    const dpiRow = $('optimize-custom-opts');
-    const presetRow = $('optimize-preset')?.parentElement;
-    if (e.target.value === 'images') {
-      if (presetRow) presetRow.style.display = 'none';
-      if (dpiRow) dpiRow.classList.add('hidden');
-    } else {
-      if (presetRow) presetRow.style.display = '';
-    }
-  });
-
-  $('btn-compare').addEventListener('click', () => {
-    $('compare-setup').classList.remove('hidden');
-    $('compare-results').classList.add('hidden');
-    $('compare-modal-backdrop').classList.remove('hidden');
-    _compareDocB = null;
-  });
-  $('btn-compare-execute').addEventListener('click', executeCompare);
-  $('btn-compare-report').addEventListener('click', downloadCompareReport);
-  $('btn-compare-prev')?.addEventListener('click', () => navigateCompare(-1));
-  $('btn-compare-next')?.addEventListener('click', () => navigateCompare(1));
-  $('compare-view-mode')?.addEventListener('change', renderCurrentCompare);
-
-  // Compare drop zone
-  const cmpDropZone = $('compare-drop-zone');
-  if (cmpDropZone) {
-    cmpDropZone.addEventListener('dragover', e => { e.preventDefault(); cmpDropZone.classList.add('drag-over'); });
-    cmpDropZone.addEventListener('dragleave', () => cmpDropZone.classList.remove('drag-over'));
-    cmpDropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      cmpDropZone.classList.remove('drag-over');
-      const file = Array.from(e.dataTransfer.files).find(f => f.name.toLowerCase().endsWith('.pdf'));
-      if (file) loadCompareFile(file);
-    });
-    cmpDropZone.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = '.pdf';
-      input.addEventListener('change', () => { if (input.files[0]) loadCompareFile(input.files[0]); });
-      input.click();
-    });
-  }
-
-  $('btn-comment-summary').addEventListener('click', openCommentSummaryModal);
-  $('btn-comment-download').addEventListener('click', downloadCommentSummary);
-  $('btn-flatten-anno-exec').addEventListener('click', executeFlattenAnnotations);
-
-  $('btn-flatten-annotations').addEventListener('click', executeFlattenAnnotations);
-
-  /* ── Forms ribbon ── */
-  $('btn-form-text').addEventListener('click', () => createFormFieldInteractive('text'));
-  $('btn-form-checkbox').addEventListener('click', () => createFormFieldInteractive('checkbox'));
-  $('btn-form-dropdown').addEventListener('click', () => createFormFieldInteractive('dropdown'));
-  $('btn-form-radio').addEventListener('click', () => createFormFieldInteractive('radio'));
-  $('btn-form-signature').addEventListener('click', () => createFormFieldInteractive('signature'));
-  $('btn-form-button').addEventListener('click', () => createFormFieldInteractive('button'));
-
-  $('btn-form-import').addEventListener('click', () => {
-    $('form-import-pane').classList.remove('hidden');
-    $('form-export-pane').classList.add('hidden');
-    $('form-data-modal-backdrop').classList.remove('hidden');
-  });
-  $('btn-form-export').addEventListener('click', () => {
-    $('form-import-pane').classList.add('hidden');
-    $('form-export-pane').classList.remove('hidden');
-    $('form-data-modal-backdrop').classList.remove('hidden');
-  });
-  $('btn-form-data-execute')?.addEventListener('click', () => {
-    // Determine which pane is active
-    const importPane = $('form-import-pane');
-    if (importPane && !importPane.classList.contains('hidden')) {
-      executeFormDataImport();
-    } else {
-      const fmt = $('form-export-format')?.value || 'json';
-      executeFormDataExport(fmt);
-    }
-  });
-
-  $('btn-form-tab-order').addEventListener('click', showTabOrder);
-  $('btn-form-flatten').addEventListener('click', executeFormFlatten);
-
-  /* ── Phase 3 Batch: Exhibit Stamps, Sanitize, Page Labels, Replace Pages ── */
-
-  // Exhibit Stamp
-  $('btn-exhibit-stamp').addEventListener('click', openExhibitModal);
-  $('btn-exhibit-execute').addEventListener('click', executeExhibitPlace);
-  $('exhibit-format')?.addEventListener('change', updateExhibitPreview);
-  $('exhibit-prefix')?.addEventListener('input', updateExhibitPreview);
-
-  // Sanitize Document
-  $('btn-sanitize').addEventListener('click', openSanitizeModal);
-  $('btn-sanitize-execute').addEventListener('click', executeSanitize);
-  $('sanitize-confirm').addEventListener('change', () => {
-    $('btn-sanitize-execute').disabled = !$('sanitize-confirm').checked;
-  });
-
-  // Page Labels
-  $('btn-page-labels').addEventListener('click', openPageLabelsModal);
-  $('btn-add-label-range').addEventListener('click', addLabelRangeRow);
-  $('btn-page-labels-apply').addEventListener('click', executePageLabels);
-
-  // Replace Pages
-  $('btn-replace-pages').addEventListener('click', openReplacePagesModal);
-  $('btn-replace-execute').addEventListener('click', executeReplacePages);
-  $('replace-confirm').addEventListener('change', () => {
-    $('btn-replace-execute').disabled = !$('replace-confirm').checked;
-  });
-
-  // Replace Pages — file picker
-  const replaceDropZone = $('replace-source-drop');
-  if (replaceDropZone) {
-    replaceDropZone.addEventListener('dragover', e => { e.preventDefault(); replaceDropZone.classList.add('drag-over'); });
-    replaceDropZone.addEventListener('dragleave', () => replaceDropZone.classList.remove('drag-over'));
-    replaceDropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      replaceDropZone.classList.remove('drag-over');
-      const file = Array.from(e.dataTransfer.files).find(f => f.name.toLowerCase().endsWith('.pdf'));
-      if (file) loadReplaceSource(file);
-    });
-    replaceDropZone.addEventListener('click', () => {
-      $('replace-file-input').click();
-    });
-    $('replace-file-input').addEventListener('change', () => {
-      const f = $('replace-file-input').files[0];
-      if (f) loadReplaceSource(f);
-    });
-  }
-
-  // Form data drop zone
-  const formDropZone = $('form-import-drop-zone');
-  if (formDropZone) {
-    formDropZone.addEventListener('dragover', e => { e.preventDefault(); formDropZone.classList.add('drag-over'); });
-    formDropZone.addEventListener('dragleave', () => formDropZone.classList.remove('drag-over'));
-    formDropZone.addEventListener('drop', e => {
-      e.preventDefault();
-      formDropZone.classList.remove('drag-over');
-      const file = e.dataTransfer.files[0];
-      if (file) { _formDataFile = file; formDropZone.querySelector('p').textContent = file.name; }
-    });
-    formDropZone.addEventListener('click', () => {
-      const input = document.createElement('input');
-      input.type = 'file'; input.accept = '.json,.xfdf,.csv';
-      input.addEventListener('change', () => {
-        if (input.files[0]) { _formDataFile = input.files[0]; formDropZone.querySelector('p').textContent = input.files[0].name; }
-      });
-      input.click();
-    });
-  }
-
-  // ── Flyout: Pages panel buttons ──
-  $('btn-rotate-cw').addEventListener('click', async () => {
-    if (!State.pdfBytes) return;
-    showLoading('Rotating page…');
-    try {
-      const newBytes = await rotatePage(State.pdfBytes, State.currentPage - 1, 90);
-      await reloadAfterEdit(newBytes);
-      toast('Rotated page right', 'success');
-    } catch (err) { toast('Rotate failed: ' + err.message, 'error'); }
-    finally { hideLoading(); }
-  });
-
-  $('btn-rotate-ccw').addEventListener('click', async () => {
-    if (!State.pdfBytes) return;
-    showLoading('Rotating page…');
-    try {
-      const newBytes = await rotatePage(State.pdfBytes, State.currentPage - 1, -90);
-      await reloadAfterEdit(newBytes);
-      toast('Rotated page left', 'success');
-    } catch (err) { toast('Rotate failed: ' + err.message, 'error'); }
-    finally { hideLoading(); }
-  });
-
-  $('btn-delete-page').addEventListener('click', async () => {
-    if (!State.pdfBytes || State.totalPages <= 1) return;
-    if (!confirm(`Delete page ${State.currentPage}? This cannot be undone.`)) return;
-    showLoading('Deleting page…');
-    try {
-      const newBytes = await deletePage(State.pdfBytes, State.currentPage - 1);
-      if (State.currentPage > 1) State.currentPage--;
-      await reloadAfterEdit(newBytes);
-      toast('Page deleted', 'success');
-    } catch (err) { toast('Delete failed: ' + err.message, 'error'); }
-    finally { hideLoading(); }
-  });
-
-  $('btn-add-page').addEventListener('click', async () => {
-    if (!State.pdfBytes) return;
-    showLoading('Inserting page…');
-    try {
-      const newBytes = await insertBlankPage(State.pdfBytes, State.currentPage - 1);
-      State.currentPage = State.currentPage + 1;
-      await reloadAfterEdit(newBytes);
-      toast('Inserted blank page', 'success');
-    } catch (err) { toast('Insert page failed: ' + err.message, 'error'); }
-    finally { hideLoading(); }
-  });
-
-  // ── Flyout: Forms panel buttons ──
-  $('btn-detect-fields').addEventListener('click', async () => {
-    if (!State.pdfDoc && !State.pdfLibDoc) { toast('Open a PDF first', 'error'); return; }
-    try {
-      // Try pdf-lib first
-      if (State.pdfLibDoc) {
-        State.formFields = detectFormFields(State.pdfLibDoc);
-      }
-      // Fall back to PDF.js if pdf-lib found nothing
-      if (State.formFields.length === 0 && State.pdfDoc) {
-        State.formFields = await detectFormFieldsPdfJs(State.pdfDoc);
-      }
-      if (State.formFields.length > 0) {
-        toast(`Detected ${State.formFields.length} form field${State.formFields.length !== 1 ? 's' : ''}`, 'info');
-        await renderCurrentPage();
-      } else {
-        toast('No form fields detected', 'info');
-      }
-    } catch (err) { toast('Form detection failed: ' + err.message, 'error'); }
-  });
-
-  $('btn-fill-mode').addEventListener('click', () => {
-    if (!State.formFields.length) {
-      toast('No form fields detected. Click "Detect Fields" first.', 'info');
-      return;
-    }
-    renderCurrentPage();
-    toast('Fill mode active — click form fields to fill them', 'info');
-  });
-
-  $('btn-create-field').addEventListener('click', () => {
-    createFormFieldInteractive('text');
-  });
-
-  $('btn-import-form-data').addEventListener('click', () => {
-    if (!State.pdfLibDoc) { toast('Open a PDF first', 'error'); return; }
-    const backdrop = $('form-data-modal-backdrop');
-    if (backdrop) backdrop.classList.remove('hidden');
-  });
-
-  $('btn-export-form-data').addEventListener('click', () => {
-    if (!State.pdfLibDoc) { toast('Open a PDF first', 'error'); return; }
-    executeFormDataExport('json');
-  });
-
-  $('btn-flatten-forms').addEventListener('click', () => {
-    executeFormFlatten();
-  });
-
-  $('btn-tab-order').addEventListener('click', () => {
-    showTabOrder();
-  });
-
-  // ── Flyout: Edit Image button ──
-  $('btn-edit-image')?.addEventListener('click', () => {
-    if (!State.pdfDoc) return;
-    if (isImageEditActive()) {
-      exitImageEditMode();
-    } else {
-      enterImageEditMode(State.pdfDoc, State.currentPage, DOM.pageContainer, State.zoom);
-    }
-  });
-
-  // ── Flyout: OCR Correction Mode ──
-  $('btn-ocr-correct-flyout')?.addEventListener('click', () => {
-    if (!hasOCRResults()) { toast('Run OCR first', 'info'); return; }
-    enableCorrectionMode();
-    toast('OCR correction mode enabled', 'info');
-  });
-
-  // ── Flyout: Custom Stamp ──
-  $('btn-custom-stamp')?.addEventListener('click', () => {
-    selectTool('stamp');
-    toast('Select a stamp type from the toolbar', 'info');
-  });
-}
-
-/* ═══════════════════ Sidebar Drop Helpers ═══════════════════ */
 
 /** Find the thumbnail item closest to the drop point and whether to insert before/after it */
 function getDropTarget(e) {
@@ -6172,291 +3809,7 @@ async function executeReplacePages() {
   }
 }
 
-/* ═══════════════════ Keyboard Shortcuts ═══════════════════ */
-
-function handleKeyboard(e) {
-  const mod = e.ctrlKey || e.metaKey;
-
-  // Ctrl+F — open find bar (intercept before input check so it works globally)
-  if (mod && e.key === 'f' && State.pdfDoc) {
-    e.preventDefault();
-    openFindBar();
-    return;
-  }
-
-  // Ctrl+H — open find bar with replace visible
-  if (mod && e.key === 'h' && State.pdfDoc) {
-    e.preventDefault();
-    openFindBar(true);
-    return;
-  }
-
-  // F6 / Shift+F6 — cycle between app landmark regions (WCAG 2.1 AA SC 2.1.1)
-  // Handled before the input-guard so it works from any focused element.
-  if (e.key === 'F6' && !mod) {
-    e.preventDefault();
-    cycleRegion(e.shiftKey);
-    return;
-  }
-
-  // Undo / Redo — always available regardless of focus
-  if (mod && e.key === 'z' && !e.shiftKey && State.pdfDoc) {
-    e.preventDefault();
-    handleUndo();
-    return;
-  }
-  if (mod && (e.key === 'y' || (e.key === 'z' && e.shiftKey)) && State.pdfDoc) {
-    e.preventDefault();
-    handleRedo();
-    return;
-  }
-
-  // Don't intercept when typing in inputs, selects, or Fabric IText editing
-  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
-  if (e.target.contentEditable === 'true') return;
-
-  // ? key — show keyboard shortcuts (works without a PDF loaded)
-  if (e.key === '?' && !mod) {
-    e.preventDefault();
-    openShortcutsModal();
-    return;
-  }
-
-  // Shift+F10 — open context menu on the focused thumbnail (keyboard equivalent of right-click)
-  if (e.key === 'F10' && e.shiftKey && !mod) {
-    const focusedThumb = document.activeElement &&
-      document.activeElement.closest('.thumbnail-item');
-    if (focusedThumb && State.pdfDoc) {
-      e.preventDefault();
-      const pageNum = parseInt(focusedThumb.dataset.page, 10);
-      if (!isNaN(pageNum)) {
-        const rect = focusedThumb.getBoundingClientRect();
-        const syntheticEvent = {
-          preventDefault: () => {},
-          clientX: rect.left + rect.width / 2,
-          clientY: rect.top + rect.height / 2,
-        };
-        showContextMenu(syntheticEvent, pageNum);
-      }
-      return;
-    }
-  }
-
-  if (!State.pdfDoc) return;
-
-  // Check if Fabric.js IText is being edited
-  const canvas = getCanvas();
-  const activeObj = canvas && canvas.getActiveObject();
-  const isEditingText = activeObj && activeObj.isEditing;
-
-  switch (true) {
-    // Copy / Paste / Duplicate annotations
-    case mod && e.key === 'c' && !isEditingText:
-      e.preventDefault();
-      copySelected();
-      break;
-    case mod && e.key === 'v' && !isEditingText:
-      e.preventDefault();
-      pasteClipboard();
-      break;
-    case mod && e.key === 'd' && !isEditingText:
-      e.preventDefault();
-      duplicateSelected();
-      break;
-
-    // Delete selected annotation object
-    case (e.key === 'Delete' || e.key === 'Backspace') && !isEditingText:
-      e.preventDefault();
-      deleteSelected();
-      break;
-
-    // Escape: close dropdown → close context menu → close modal → close crop
-    //         → close find bar → deselect → switch to select tool
-    case e.key === 'Escape': {
-      if (_activeDropdown) {
-        // Close title-bar dropdown and restore focus to the menu button
-        const activeMenuBtn = document.querySelector('.menu-item.active');
-        closeDropdown();
-        if (activeMenuBtn) activeMenuBtn.focus();
-      } else if (contextMenu) {
-        // Close thumbnail / annotation context menu
-        hideContextMenu();
-      } else {
-        const openBackdrop = document.querySelector('.modal-backdrop:not(.hidden)');
-        if (openBackdrop) {
-          const closeBtn = openBackdrop.querySelector('[data-close-modal]');
-          if (closeBtn) closeBtn.click();
-        } else if (cropState.active) {
-          closeCropModal();
-        } else if (isFindOpen()) {
-          closeFindBar();
-        } else if (DOM.textLayer.querySelector('.ocr-text-span[contenteditable="true"]')) {
-          disableCorrectionMode(DOM.textLayer);
-          toast('OCR correction mode exited', 'info');
-        } else {
-          if (canvas) canvas.discardActiveObject().renderAll();
-          selectTool('select');
-        }
-      }
-      break;
-    }
-
-    // Tool shortcuts (only when not editing text)
-    case e.key === 'v' && !mod && !isEditingText:
-      selectTool('select');
-      break;
-    case e.key === 'h' && !mod && !isEditingText:
-      selectTool('hand');
-      break;
-    case e.key === 't' && !mod && !isEditingText:
-      selectTool('text');
-      break;
-    case e.key === 'd' && !mod && !isEditingText:
-      selectTool('draw');
-      break;
-
-    // Print
-    case mod && e.key === 'p':
-      e.preventDefault();
-      handlePrint();
-      break;
-
-    // Navigation
-    case e.key === 'ArrowLeft' || e.key === 'ArrowUp':
-      if (isEditingText) return; // let Fabric handle arrows in text
-      e.preventDefault();
-      prevPage();
-      break;
-    case e.key === 'ArrowRight' || e.key === 'ArrowDown':
-      if (isEditingText) return;
-      e.preventDefault();
-      nextPage();
-      break;
-    case e.key === 'Home':
-      e.preventDefault();
-      goToPage(1);
-      break;
-    case e.key === 'End':
-      e.preventDefault();
-      goToPage(State.totalPages);
-      break;
-
-    // Zoom
-    case (e.key === '=' || e.key === '+') && mod:
-      e.preventDefault();
-      zoomIn();
-      break;
-    case e.key === '-' && mod:
-      e.preventDefault();
-      zoomOut();
-      break;
-    case e.key === '0' && mod:
-      e.preventDefault();
-      setZoom(1.0);
-      break;
-
-    // File open
-    case e.key === 'o' && mod:
-      e.preventDefault();
-      DOM.fileInput.click();
-      break;
-
-    // Save (Ctrl+S) / Save & Download (Ctrl+Shift+S)
-    case e.key === 's' && mod:
-      e.preventDefault();
-      if (e.shiftKey) {
-        handleSaveDownload();
-      } else {
-        handleSave();
-      }
-      break;
-  }
-}
-
-/** Helper to switch tool and update UI across all ribbon panels */
-function selectTool(toolName) {
-  // Sync ribbon toolbar buttons
-  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll(`.tool-btn[data-tool="${toolName}"]`).forEach(btn => {
-    if (!btn.disabled) btn.classList.add('active');
-  });
-  // Sync floating toolbar buttons
-  document.querySelectorAll('.float-btn[data-tool]').forEach(b => b.classList.remove('active'));
-  document.querySelectorAll(`.float-btn[data-tool="${toolName}"]`).forEach(btn => {
-    btn.classList.add('active');
-  });
-  State.activeTool = toolName;
-  const activeShape = document.querySelector('#shape-picker .shape-pick.active');
-  setTool(toolName, { shapeType: activeShape?.dataset.shape || 'rect', stampType: 'approved' });
-  updatePanelToolTitle();
-  // Update status bar tool indicator
-  const toolLabel = $('status-tool');
-  const _toolNames = { select: 'Select', hand: 'Hand', text: 'Text', draw: 'Draw', highlight: 'Highlight', underline: 'Underline', strikethrough: 'Strikethrough', shape: 'Shape', cover: 'Cover', redact: 'Redact', stamp: 'Stamp', 'sticky-note': 'Note' };
-  if (toolLabel) {
-    toolLabel.textContent = 'Tool: ' + (_toolNames[toolName] || toolName);
-    toolLabel.classList.remove('hidden');
-  }
-  // Announce tool switch to screen readers
-  announceToScreenReader((_toolNames[toolName] || toolName) + ' tool selected');
-  // Show/hide tool properties section based on active tool
-  const toolPropsEl = $('panel-tool-props');
-  if (toolPropsEl) {
-    const noPropsTools = ['select', 'hand'];
-    toolPropsEl.style.display = noPropsTools.includes(toolName) ? 'none' : '';
-  }
-  // Show font controls only for text tool
-  const fontSizeRow = $('prop-font-size-row');
-  const fontFamilyRow = $('prop-font-family-row');
-  const isTextTool = toolName === 'text' || toolName === 'select';
-  if (fontSizeRow) fontSizeRow.style.display = isTextTool ? '' : 'none';
-  if (fontFamilyRow) fontFamilyRow.style.display = isTextTool ? '' : 'none';
-  // Show shape picker and stroke width only for shape tool
-  const shapeTypeRow = $('prop-shape-type-row');
-  const strokeWidthRow = $('prop-stroke-width-row');
-  const isShapeTool = toolName === 'shape';
-  if (shapeTypeRow) shapeTypeRow.style.display = isShapeTool ? '' : 'none';
-  if (strokeWidthRow) strokeWidthRow.style.display = isShapeTool ? '' : 'none';
-  // Update canvas cursor
-  DOM.canvasArea.setAttribute('data-cursor', toolName);
-
-  // Hand tool: disable text selection so it doesn't interfere with panning
-  // Select tool: enable text selection on the text layer
-  const textLayer = DOM.textLayer;
-  if (textLayer) {
-    if (toolName === 'hand') {
-      textLayer.style.pointerEvents = 'none';
-      textLayer.style.userSelect = 'none';
-    } else if (toolName === 'select') {
-      textLayer.style.pointerEvents = 'auto';
-      textLayer.style.userSelect = 'auto';
-    } else {
-      // Other annotation tools: disable text selection
-      textLayer.style.pointerEvents = 'none';
-      textLayer.style.userSelect = 'none';
-    }
-  }
-
-  // Contextual tip: first time activating an annotation tool
-  const annotationTools = ['text', 'draw', 'highlight', 'underline', 'strikethrough', 'shape', 'cover', 'redact', 'stamp', 'sticky-note'];
-  if (annotationTools.includes(toolName)) {
-    showTip('first-annotation', 'Tip: Press Ctrl+Z to undo, or use the toolbar undo button', document.getElementById('btn-undo'));
-  }
-
-  // Update new icon rail + flyout panel active states
-  document.querySelectorAll('.mb-rail-item[data-tool]').forEach(btn => {
-    btn.classList.toggle('mb-rail-item--active', btn.dataset.tool === toolName);
-  });
-  document.querySelectorAll('.mb-flyout-item[data-tool]').forEach(btn => {
-    btn.classList.toggle('mb-flyout-item--active', btn.dataset.tool === toolName);
-  });
-  if (typeof UIController !== 'undefined') {
-    UIController.setActiveTool(toolName);
-  }
-}
-
 /* ═══════════════════ Global Exports (for UIController) ═══════════════════ */
-
-window.selectTool = selectTool;
 window.openModal = openModal;
 window.closeModal = closeModal;
 
