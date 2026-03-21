@@ -3158,8 +3158,10 @@ function toggleDarkMode() {
 /* ═══════════════════ Sidebar Toggle ═══════════════════ */
 
 function toggleSidebar() {
-  // Legacy — sidebar replaced by icon rail + flyout panels
-  // Kept as no-op for any remaining references
+  // Toggle the flyout panel (replaces legacy sidebar)
+  if (typeof UIController !== 'undefined' && UIController.toggleFlyout) {
+    UIController.toggleFlyout('pages');
+  }
 }
 
 /* ═══════════════════ Properties Panel ═══════════════════ */
