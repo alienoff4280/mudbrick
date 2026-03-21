@@ -117,7 +117,8 @@ const State = {
 
 /* ═══════════════════ DOM References ═══════════════════ */
 
-const $ = id => document.getElementById(id);
+const _nullEl = new Proxy({}, { get: () => () => {}, set: () => true });
+const $ = id => document.getElementById(id) || _nullEl;
 
 const DOM = {
   welcomeScreen: $('welcome-screen'),
@@ -168,6 +169,11 @@ async function boot() {
   // Initialize centralized error handling first (before anything else)
   initErrorHandler();
 
+  // Initialize new icon rail + flyout panel UI
+  if (typeof UIController !== 'undefined') {
+    UIController.init();
+  }
+
   try {
     // Initialize PDF.js (async CDN import)
     await initPdfJs();
@@ -212,11 +218,10 @@ async function boot() {
       if (btn) btn.innerHTML = icon('sun', 16);
     }
 
-    // Auto-collapse sidebar on narrow screens
+    // Auto-collapse sidebar on narrow screens — sidebar replaced by flyout panels
     if (window.innerWidth < 768) {
       State.sidebarOpen = false;
-      DOM.sidebar.classList.add('collapsed');
-      $('btn-toggle-sidebar').innerHTML = icon('panel-left-open', 16);
+      if (DOM.sidebar) DOM.sidebar.classList.add('collapsed');
     }
 
     // Restore persisted custom fonts
@@ -497,6 +502,9 @@ async function openPDF(bytes, fileName, fileSize) {
   // Switch from welcome screen to app
   DOM.welcomeScreen.classList.add('hidden');
   DOM.app.classList.remove('hidden');
+  if (typeof UIController !== 'undefined') {
+    UIController.showEditor();
+  }
 
   // Enable toolbar buttons
   $('btn-merge').disabled = false;
@@ -557,8 +565,8 @@ async function openPDF(bytes, fileName, fileSize) {
   $('btn-form-tab-order').disabled = false;
   $('btn-form-flatten').disabled = false;
 
-  // Enable all tool-btn instances across ribbons (Annotate ribbon has duplicates without IDs)
-  document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => { btn.disabled = false; });
+  // Enable all tool-btn instances across ribbons and flyout panels
+  document.querySelectorAll('.tool-btn[data-tool], .mb-flyout-item[data-tool], .mb-rail-item[data-tool]').forEach(btn => { btn.disabled = false; });
   document.querySelectorAll('.sig-open-btn').forEach(btn => { btn.disabled = false; });
 
   // Detect form fields via pdf-lib
@@ -827,10 +835,10 @@ function updatePageNav() {
   DOM.totalPages.textContent = State.totalPages;
   const atFirst = State.currentPage <= 1;
   const atLast = State.currentPage >= State.totalPages;
-  DOM.btnFirst.disabled = atFirst;
+  if (DOM.btnFirst) DOM.btnFirst.disabled = atFirst;
   DOM.btnPrev.disabled = atFirst;
   DOM.btnNext.disabled = atLast;
-  DOM.btnLast.disabled = atLast;
+  if (DOM.btnLast) DOM.btnLast.disabled = atLast;
 }
 
 /* ═══════════════════ Zoom ═══════════════════ */
@@ -3135,11 +3143,8 @@ function toggleDarkMode() {
 /* ═══════════════════ Sidebar Toggle ═══════════════════ */
 
 function toggleSidebar() {
-  State.sidebarOpen = !State.sidebarOpen;
-  DOM.sidebar.classList.toggle('collapsed', !State.sidebarOpen);
-  $('btn-toggle-sidebar').innerHTML = State.sidebarOpen
-    ? icon('panel-left-close', 16)
-    : icon('panel-left-open', 16);
+  // Legacy — sidebar replaced by icon rail + flyout panels
+  // Kept as no-op for any remaining references
 }
 
 /* ═══════════════════ Properties Panel ═══════════════════ */
@@ -3882,8 +3887,8 @@ function closeModal(backdropId) {
 
 function wireEvents() {
   // File open
-  $('open-file-btn').addEventListener('click', () => DOM.fileInput.click());
-  $('btn-open').addEventListener('click', () => DOM.fileInput.click());
+  const openBtn = $('open-file-btn') || $('btn-open');
+  if (openBtn) openBtn.addEventListener('click', () => DOM.fileInput.click());
   DOM.fileInput.addEventListener('change', e => {
     if (e.target.files.length) handleFiles(Array.from(e.target.files));
     e.target.value = ''; // reset so same file can be reopened
@@ -4039,10 +4044,10 @@ function wireEvents() {
   document.addEventListener('image-edit-cancel', () => handleCancelImageEdits());
 
   // Page navigation
-  DOM.btnFirst.addEventListener('click', firstPage);
+  if (DOM.btnFirst) DOM.btnFirst.addEventListener('click', firstPage);
   DOM.btnPrev.addEventListener('click', prevPage);
   DOM.btnNext.addEventListener('click', nextPage);
-  DOM.btnLast.addEventListener('click', lastPage);
+  if (DOM.btnLast) DOM.btnLast.addEventListener('click', lastPage);
   DOM.pageInput.addEventListener('change', () => {
     const val = parseInt(DOM.pageInput.value);
     if (!isNaN(val)) goToPage(val);
@@ -4157,8 +4162,8 @@ function wireEvents() {
     }
   });
 
-  // Annotation tool buttons (sync active state across all ribbon panels)
-  document.querySelectorAll('.tool-btn[data-tool]').forEach(btn => {
+  // Annotation tool buttons (sync active state across all ribbon panels + flyout items)
+  document.querySelectorAll('.tool-btn[data-tool], .mb-flyout-item[data-tool], .mb-rail-item[data-tool]').forEach(btn => {
     btn.addEventListener('click', () => {
       if (btn.disabled) return;
       selectTool(btn.dataset.tool);
@@ -4176,21 +4181,8 @@ function wireEvents() {
     });
   });
 
-  // Sidebar tab switching
-  document.querySelectorAll('.sidebar-tab[data-sidebar]').forEach(tab => {
-    tab.addEventListener('click', () => {
-      document.querySelectorAll('.sidebar-tab[data-sidebar]').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.sidebar-panel').forEach(p => p.classList.remove('active'));
-      tab.classList.add('active');
-      const panel = $('sidebar-' + tab.dataset.sidebar);
-      if (panel) panel.classList.add('active');
-      // Refresh comments list when switching to comments tab
-      if (tab.dataset.sidebar === 'comments') refreshCommentsSidebar();
-    });
-  });
-
-  // Sidebar toggle
-  $('btn-toggle-sidebar').addEventListener('click', toggleSidebar);
+  // Sidebar tab switching — removed (sidebar replaced by flyout panels)
+  // Sidebar toggle — removed (sidebar replaced by flyout panels)
 
   // Properties panel close
   $('btn-close-panel').addEventListener('click', () => togglePropertiesPanel(false));
@@ -4354,22 +4346,7 @@ function wireEvents() {
   // Dark mode
   $('btn-dark-mode').addEventListener('click', toggleDarkMode);
 
-  // Ribbon tab switching
-  document.querySelectorAll('.ribbon-tab[data-ribbon]').forEach(tab => {
-    tab.addEventListener('click', () => {
-      // Deactivate all tabs and panels
-      document.querySelectorAll('.ribbon-tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.ribbon-content').forEach(p => p.classList.remove('active'));
-      // Activate clicked tab and its panel
-      tab.classList.add('active');
-      const panel = $('ribbon-' + tab.dataset.ribbon);
-      if (panel) panel.classList.add('active');
-      // Contextual tip: first time opening the Forms tab
-      if (tab.dataset.ribbon === 'forms') {
-        showTip('first-forms-tab', 'Tip: Click on form fields in the PDF to fill them', tab);
-      }
-    });
-  });
+  // Ribbon tab switching — removed (ribbon replaced by icon rail + flyout panels)
 
   // Signature modal
   $('btn-signature').addEventListener('click', openSignatureModal);
@@ -4736,8 +4713,18 @@ function wireEvents() {
       if (obj) syncPanelFromObject(obj);
     }
 
-    canvas.on('selection:created', _onObjectSelected);
-    canvas.on('selection:updated', _onObjectSelected);
+    canvas.on('selection:created', (...args) => {
+      _onObjectSelected(...args);
+      if (typeof UIController !== 'undefined') {
+        UIController.showProperties();
+      }
+    });
+    canvas.on('selection:updated', (...args) => {
+      _onObjectSelected(...args);
+      if (typeof UIController !== 'undefined') {
+        UIController.showProperties();
+      }
+    });
 
     canvas.on('selection:cleared', () => {
       hideNotePropsPanel();
@@ -4745,6 +4732,9 @@ function wireEvents() {
       hideCommentThreadPanel();
       // Reset color swatches to default (no active highlight)
       document.querySelectorAll('#panel-tool-props .color-swatch').forEach(s => s.classList.remove('active'));
+      if (typeof UIController !== 'undefined') {
+        UIController.hideProperties();
+      }
     });
 
     // Also refresh notes sidebar after any annotation modification
@@ -6317,7 +6307,24 @@ function selectTool(toolName) {
   if (annotationTools.includes(toolName)) {
     showTip('first-annotation', 'Tip: Press Ctrl+Z to undo, or use the toolbar undo button', document.getElementById('btn-undo'));
   }
+
+  // Update new icon rail + flyout panel active states
+  document.querySelectorAll('.mb-rail-item[data-tool]').forEach(btn => {
+    btn.classList.toggle('mb-rail-item--active', btn.dataset.tool === toolName);
+  });
+  document.querySelectorAll('.mb-flyout-item[data-tool]').forEach(btn => {
+    btn.classList.toggle('mb-flyout-item--active', btn.dataset.tool === toolName);
+  });
+  if (typeof UIController !== 'undefined') {
+    UIController.setActiveTool(toolName);
+  }
 }
+
+/* ═══════════════════ Global Exports (for UIController) ═══════════════════ */
+
+window.selectTool = selectTool;
+window.openModal = openModal;
+window.closeModal = closeModal;
 
 /* ═══════════════════ Public API (for testing & URL loading) ═══════════════════ */
 

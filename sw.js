@@ -6,7 +6,7 @@
  * update notification to clients.
  */
 
-const CACHE_VERSION = 'mudbrick-v4.5';
+const CACHE_VERSION = 'mudbrick-v5.0';
 
 /* App shell — local assets (28 JS modules + HTML/CSS/manifest) */
 const SHELL_ASSETS = [
@@ -15,7 +15,10 @@ const SHELL_ASSETS = [
   './styles/variables.css',
   './styles/layout.css',
   './styles/components.css',
+  './styles/panels.css',
+  './styles/welcome.css',
   './styles/print.css',
+  './js/ui-controller.js',
   './js/app.js',
   './js/pdf-engine.js',
   './js/utils.js',
