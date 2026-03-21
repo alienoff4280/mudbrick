@@ -100,6 +100,10 @@ import {
   fitWidth, fitPage, updateZoomDisplay, replaceIcons, setRendererCallbacks,
   _captureScrollRatio, setPendingScrollRestore,
 } from './renderer.js';
+import {
+  goToPage, prevPage, nextPage, firstPage, lastPage,
+  updatePageNav, setNavCallbacks,
+} from './navigation.js';
 
 /* ═══════════════════ Initialization ═══════════════════ */
 
@@ -148,6 +152,9 @@ async function boot() {
 
     // Register renderer callbacks (avoids circular imports)
     setRendererCallbacks({ updateUndoRedoButtons, refreshNotesSidebar });
+
+    // Register navigation callbacks (highlightActiveThumbnail still lives in app.js)
+    setNavCallbacks({ highlightActiveThumbnail });
 
     // Replace emoji placeholders with SVG icons
     replaceIcons();
@@ -575,60 +582,6 @@ async function openPDF(bytes, fileName, fileSize) {
       }
     } catch { /* ignore auto-detect errors */ }
   }, 1000);
-}
-
-/* ═══════════════════ Page Rendering ═══════════════════ */
-
-// Navigation debounce state
-let _navDebounceTimer = null;    // timer for debounced page navigation
-const NAV_DEBOUNCE_MS = 16;      // ~60fps batching for arrow-key holding
-
-/* ═══════════════════ Navigation ═══════════════════ */
-
-function goToPage(pageNum) {
-  const clamped = Math.max(1, Math.min(pageNum, State.totalPages));
-  if (clamped === State.currentPage) return;
-
-  State.currentPage = clamped;
-  updatePageNav();
-  highlightActiveThumbnail();
-
-  // Scroll thumbnail into view (within thumbnail list only — prevent app-level scroll)
-  const thumb = DOM.thumbnailList.querySelector(`[data-page="${clamped}"]`);
-  if (thumb) {
-    thumb.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-    // Prevent scrollIntoView from scrolling the #app grid container
-    DOM.app.scrollLeft = 0;
-    DOM.app.scrollTop = 0;
-  }
-
-  // Scroll canvas area to top on page change
-  DOM.canvasArea.scrollTo({ top: 0, behavior: 'smooth' });
-
-  // Debounce rapid calls (e.g. holding arrow key) — only render at ~60fps
-  if (_navDebounceTimer !== null) clearTimeout(_navDebounceTimer);
-  _navDebounceTimer = setTimeout(() => {
-    _navDebounceTimer = null;
-    renderCurrentPage();
-  }, NAV_DEBOUNCE_MS);
-}
-
-function prevPage() { goToPage(State.currentPage - 1); }
-function nextPage() { goToPage(State.currentPage + 1); }
-function firstPage() { goToPage(1); }
-function lastPage() { goToPage(State.totalPages); }
-
-function updatePageNav() {
-  const label = typeof getPageLabel === 'function' ? getPageLabel(State.currentPage) : null;
-  DOM.pageInput.value = label || State.currentPage;
-  DOM.pageInput.max = State.totalPages;
-  DOM.totalPages.textContent = State.totalPages;
-  const atFirst = State.currentPage <= 1;
-  const atLast = State.currentPage >= State.totalPages;
-  if (DOM.btnFirst) DOM.btnFirst.disabled = atFirst;
-  DOM.btnPrev.disabled = atFirst;
-  DOM.btnNext.disabled = atLast;
-  if (DOM.btnLast) DOM.btnLast.disabled = atLast;
 }
 
 /* ═══════════════════ Thumbnails ═══════════════════ */
