@@ -1,135 +1,179 @@
-/* Mudbrick — Design Tokens */
+/* Mudbrick — Design Tokens (Dark Pro theme) */
 
 :root {
-  /* Brand */
-  --mb-brand: #c0392b;
-  --mb-brand-light: #e74c3c;
-  --mb-brand-dark: #96281b;
+  /* ─── Background ─── */
+  --mb-bg-primary: #09090b;     /* zinc-950 — app bg, canvas */
+  --mb-bg-secondary: #18181b;   /* zinc-900 — panels, flyouts */
+  --mb-bg-elevated: #27272a;    /* zinc-800 — buttons, inputs, active states */
+  --mb-bg-hover: #3f3f46;       /* zinc-700 — hover states */
 
-  /* Accent (sidebar tabs, links, active tools) */
-  --mb-accent: #2980b9;
-  --mb-accent-light: #d6eaf8;
+  /* ─── Borders ─── */
+  --mb-border: #27272a;         /* zinc-800 — all borders */
+  --mb-border-subtle: #1e1e22;  /* slightly lighter than bg for subtle dividers */
 
-  /* Surface */
-  --mb-bg: #f5f5f5;
-  --mb-surface: #ffffff;
-  --mb-surface-alt: #eaeaea;
-  --mb-surface-hover: #e0e0e0;
-  --mb-surface-active: #d0d0d0;
+  /* ─── Text ─── */
+  --mb-text-primary: #fafafa;   /* zinc-50 — headings, primary content */
+  --mb-text-secondary: #a1a1aa; /* zinc-400 — body text, inactive icons */
+  --mb-text-muted: #71717a;     /* zinc-500 — labels, hints */
+  --mb-text-subtle: #52525b;    /* zinc-600 — tertiary, timestamps */
+  --mb-text-ghost: #3f3f46;     /* zinc-700 — disabled, placeholder */
+  --mb-text-inverse: #09090b;   /* for text on light backgrounds */
 
-  /* Borders */
-  --mb-border: #d0d0d0;
-  --mb-border-light: #e0e0e0;
+  /* ─── Accent ─── */
+  --mb-accent: #ef4444;         /* red-500 — brand, active indicators, primary buttons */
+  --mb-accent-hover: #dc2626;   /* red-600 — accent hover */
+  --mb-accent-subtle: rgba(239, 68, 68, 0.15); /* accent tint for backgrounds */
+  --mb-accent-ghost: rgba(239, 68, 68, 0.08);  /* very subtle accent bg */
 
-  /* Text */
-  --mb-text: #1a1a1a;
-  --mb-text-secondary: #666666;
-  --mb-text-muted: #999999;
-  --mb-text-inverse: #ffffff;
+  /* ─── Semantic ─── */
+  --mb-danger: #dc2626;         /* red-600 — destructive actions (darker than accent) */
+  --mb-danger-hover: #b91c1c;   /* red-700 */
+  --mb-success: #22c55e;        /* green-500 */
+  --mb-warning: #eab308;        /* yellow-500 */
+  --mb-info: #3b82f6;           /* blue-500 */
 
-  /* Toolbar */
-  --mb-toolbar-bg: #2c2c2c;
-  --mb-toolbar-text: #e0e0e0;
-  --mb-toolbar-hover: #3c3c3c;
-  --mb-toolbar-active: #505050;
-  --mb-toolbar-divider: #444444;
+  /* ─── Canvas ─── */
+  --mb-canvas-bg: #09090b;      /* dark bg behind PDF page */
+  --mb-page-shadow: 0 4px 32px rgba(0, 0, 0, 0.5);
 
-  /* Sidebar */
-  --mb-sidebar-bg: #f0f0f0;
-  --mb-sidebar-thumb-bg: #ffffff;
-  --mb-sidebar-thumb-border: #d0d0d0;
-  --mb-sidebar-thumb-active: var(--mb-brand);
+  /* ─── Scrollbars ─── */
+  --mb-scrollbar-thumb: rgba(255, 255, 255, 0.15);
+  --mb-scrollbar-thumb-hover: rgba(255, 255, 255, 0.25);
+  --mb-scrollbar-track: transparent;
 
-  /* Status bar */
-  --mb-statusbar-bg: #2c2c2c;
-  --mb-statusbar-text: #b0b0b0;
+  /* ─── Shadows ─── */
+  --mb-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --mb-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --mb-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
 
-  /* Canvas area */
-  --mb-canvas-bg: #808080;
-
-  /* Sunken / Inset (readonly inputs, slider tracks) */
-  --mb-surface-sunken: #f0f0f0;
-
-  /* Danger */
-  --mb-danger: #e74c3c;
-
-  /* Toasts */
-  --mb-toast-success: #27ae60;
-  --mb-toast-error: #e74c3c;
-  --mb-toast-warning: #f39c12;
-  --mb-toast-info: #3498db;
-
-  /* Brand tints (for active states, hover overlays) */
-  --mb-brand-tint: rgba(192, 57, 43, 0.1);
-  --mb-brand-tint-subtle: rgba(192, 57, 43, 0.05);
-
-  /* Scrollbars */
-  --mb-scrollbar-thumb: rgba(0,0,0,0.2);
-  --mb-scrollbar-thumb-hover: rgba(0,0,0,0.35);
-
-  /* Shadows */
-  --mb-shadow-sm: 0 1px 3px rgba(0,0,0,0.12);
-  --mb-shadow-md: 0 4px 12px rgba(0,0,0,0.15);
-  --mb-shadow-lg: 0 8px 24px rgba(0,0,0,0.2);
-
-  /* Radii */
+  /* ─── Border Radius ─── */
   --mb-radius-xs: 2px;
   --mb-radius-sm: 4px;
-  --mb-radius-md: 8px;
-  --mb-radius-lg: 12px;
+  --mb-radius-md: 6px;
+  --mb-radius-lg: 8px;
+  --mb-radius-xl: 12px;
+  --mb-radius-full: 9999px;
 
-  /* Spacing */
-  --mb-toolbar-height: 48px;
-  --mb-statusbar-height: 28px;
-  --mb-sidebar-width: 200px;
-  --mb-panel-width: 260px;
-  --mb-pagenav-height: 36px;
+  /* ─── Spacing (4px base) ─── */
+  --mb-space-1: 4px;
+  --mb-space-2: 8px;
+  --mb-space-3: 12px;
+  --mb-space-4: 16px;
+  --mb-space-5: 20px;
+  --mb-space-6: 24px;
+  --mb-space-8: 32px;
+  --mb-space-12: 48px;
 
-  /* Transitions */
+  /* ─── Layout Dimensions ─── */
+  --mb-titlebar-height: 36px;
+  --mb-statusbar-height: 24px;
+  --mb-rail-width: 48px;
+  --mb-flyout-width: 180px;
+  --mb-panel-width: 220px;
+
+  /* ─── Typography ─── */
+  --mb-font-sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mb-font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "Segoe UI Mono", monospace;
+  --mb-font-size-xs: 9px;
+  --mb-font-size-sm: 10px;
+  --mb-font-size-base: 11px;
+  --mb-font-size-md: 12px;
+  --mb-font-size-lg: 13px;
+  --mb-font-size-xl: 14px;
+  --mb-line-height: 1.4;
+
+  /* ─── Transitions ─── */
   --mb-transition: 150ms ease;
   --mb-transition-slow: 250ms ease;
+  --mb-transition-fast: 80ms ease;
 
-  /* Focus ring */
+  /* ─── Focus ─── */
   --mb-focus-ring: 0 0 0 2px var(--mb-accent);
-  --mb-focus-ring-offset: 0 0 0 3px var(--mb-surface);
+  --mb-focus-ring-offset: 0 0 0 3px var(--mb-bg-primary);
 
-  /* Z-index layers */
+  /* ─── Z-Index Scale ─── */
   --z-pdf-canvas: 1;
   --z-text-layer: 2;
   --z-fabric-canvas: 3;
-  --z-toolbar: 100;
+  --z-floating: 40;
   --z-sidebar: 50;
+  --z-toolbar: 100;
+  --z-dropdown: 200;
+  --z-tooltip: 500;
   --z-modal: 1000;
   --z-toast: 1100;
+
+  /* ─── Legacy compat (referenced by engine modules) ─── */
+  --mb-brand: var(--mb-accent);
+  --mb-brand-light: var(--mb-accent);
+  --mb-brand-dark: var(--mb-accent-hover);
+  --mb-bg: var(--mb-bg-primary);
+  --mb-surface: var(--mb-bg-secondary);
+  --mb-surface-alt: var(--mb-bg-elevated);
+  --mb-surface-hover: var(--mb-bg-hover);
+  --mb-surface-active: #52525b;
+  --mb-border-light: var(--mb-border);
+  --mb-text: var(--mb-text-primary);
+  --mb-text-secondary: var(--mb-text-secondary);
+  --mb-text-muted: var(--mb-text-muted);
+  --mb-toolbar-bg: var(--mb-bg-primary);
+  --mb-toolbar-text: var(--mb-text-secondary);
+  --mb-toolbar-hover: var(--mb-bg-elevated);
+  --mb-toolbar-active: var(--mb-bg-hover);
+  --mb-toolbar-divider: var(--mb-border);
+  --mb-sidebar-bg: var(--mb-bg-secondary);
+  --mb-sidebar-thumb-bg: var(--mb-bg-elevated);
+  --mb-sidebar-thumb-border: var(--mb-border);
+  --mb-sidebar-thumb-active: var(--mb-accent);
+  --mb-statusbar-bg: var(--mb-bg-primary);
+  --mb-statusbar-text: var(--mb-text-subtle);
+  --mb-surface-sunken: var(--mb-bg-secondary);
+  --mb-toast-success: var(--mb-success);
+  --mb-toast-error: var(--mb-danger);
+  --mb-toast-warning: var(--mb-warning);
+  --mb-toast-info: var(--mb-info);
+  --mb-brand-tint: var(--mb-accent-subtle);
+  --mb-brand-tint-subtle: var(--mb-accent-ghost);
+  --mb-accent-light: var(--mb-accent-subtle);
+  --mb-toolbar-height: var(--mb-titlebar-height);
+  --mb-panel-width: 220px;
+  --mb-pagenav-height: 0px;
+  --mb-sidebar-width: 0px;
+  --mb-danger: var(--mb-danger);
 }
 
-/* Dark mode */
-html[data-theme="dark"] {
-  --mb-bg: #1a1a1a;
-  --mb-surface: #2c2c2c;
-  --mb-surface-alt: #333333;
-  --mb-surface-hover: #3c3c3c;
-  --mb-surface-active: #4a4a4a;
-  --mb-border: #444444;
-  --mb-border-light: #3a3a3a;
-  --mb-text: #e0e0e0;
-  --mb-text-secondary: #aaaaaa;
-  --mb-text-muted: #777777;
-  --mb-toolbar-bg: #1a1a1a;
-  --mb-toolbar-hover: #2a2a2a;
-  --mb-toolbar-active: #3a3a3a;
-  --mb-toolbar-divider: #333333;
-  --mb-sidebar-bg: #222222;
-  --mb-sidebar-thumb-bg: #333333;
-  --mb-sidebar-thumb-border: #444444;
-  --mb-accent-light: #1a3a5c;
-  --mb-surface-sunken: #222222;
-  --mb-statusbar-bg: #1a1a1a;
-  --mb-canvas-bg: #555555;
-  --mb-brand-tint: rgba(192, 57, 43, 0.25);
-  --mb-brand-tint-subtle: rgba(192, 57, 43, 0.12);
-  --mb-scrollbar-thumb: rgba(255,255,255,0.2);
-  --mb-scrollbar-thumb-hover: rgba(255,255,255,0.35);
-  --mb-focus-ring: 0 0 0 2px rgba(41,128,185,0.7);
-  --mb-focus-ring-offset: 0 0 0 3px var(--mb-surface);
+/* ─── Light Mode ─── */
+html[data-theme="light"] {
+  --mb-bg-primary: #ffffff;
+  --mb-bg-secondary: #f4f4f5;   /* zinc-100 */
+  --mb-bg-elevated: #e4e4e7;    /* zinc-200 */
+  --mb-bg-hover: #d4d4d8;       /* zinc-300 */
+
+  --mb-border: #e4e4e7;         /* zinc-200 */
+  --mb-border-subtle: #f4f4f5;
+
+  --mb-text-primary: #09090b;   /* zinc-950 */
+  --mb-text-secondary: #52525b; /* zinc-600 */
+  --mb-text-muted: #71717a;     /* zinc-500 */
+  --mb-text-subtle: #a1a1aa;    /* zinc-400 */
+  --mb-text-ghost: #d4d4d8;     /* zinc-300 */
+  --mb-text-inverse: #fafafa;
+
+  --mb-accent-subtle: rgba(239, 68, 68, 0.1);
+  --mb-accent-ghost: rgba(239, 68, 68, 0.05);
+
+  --mb-canvas-bg: #f4f4f5;
+  --mb-page-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+
+  --mb-scrollbar-thumb: rgba(0, 0, 0, 0.15);
+  --mb-scrollbar-thumb-hover: rgba(0, 0, 0, 0.25);
+
+  --mb-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.08);
+  --mb-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.1);
+  --mb-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+
+  --mb-focus-ring-offset: 0 0 0 3px var(--mb-bg-primary);
+
+  /* Legacy compat overrides */
+  --mb-surface-active: #d4d4d8;
 }

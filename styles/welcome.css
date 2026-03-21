@@ -1,0 +1,315 @@
+/* MudBrick — Welcome Screen Styles */
+
+/* ═══════════════════════════════════════════════════════════
+   1. WELCOME CONTAINER
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-welcome {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: var(--mb-space-8);
+}
+
+.mb-welcome__content {
+  display: flex;
+  gap: var(--mb-space-8);
+  max-width: 800px;
+  width: 100%;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   2. LEFT COLUMN (60%)
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-welcome__left {
+  flex: 3;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mb-space-5);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   3. DROP ZONE
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-dropzone {
+  border: 2px dashed var(--mb-border);
+  border-radius: var(--mb-radius-xl);
+  padding: var(--mb-space-8) var(--mb-space-6);
+  text-align: center;
+  transition: all var(--mb-transition);
+  cursor: pointer;
+}
+
+.mb-dropzone:hover,
+.mb-dropzone--drag-over {
+  border-color: var(--mb-accent);
+  background: var(--mb-accent-ghost);
+}
+
+.mb-dropzone__icon {
+  font-size: 32px;
+  opacity: 0.3;
+  margin-bottom: var(--mb-space-2);
+  line-height: 1;
+}
+
+.mb-dropzone__title {
+  font-size: var(--mb-font-size-xl);
+  color: var(--mb-text-primary);
+  font-weight: 500;
+  margin-bottom: var(--mb-space-1);
+}
+
+.mb-dropzone__subtitle {
+  font-size: var(--mb-font-size-base);
+  color: var(--mb-text-subtle);
+}
+
+.mb-dropzone__formats {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-ghost);
+  margin-top: var(--mb-space-3);
+}
+
+.mb-dropzone__browse {
+  display: inline-block;
+  margin-top: var(--mb-space-3);
+  padding: var(--mb-space-2) var(--mb-space-5);
+  background: var(--mb-accent);
+  color: var(--mb-text-primary);
+  border: none;
+  border-radius: var(--mb-radius-md);
+  font-size: var(--mb-font-size-sm);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--mb-transition);
+}
+
+.mb-dropzone__browse:hover {
+  background: var(--mb-accent-hover);
+}
+
+.mb-dropzone__divider {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-ghost);
+  margin-top: var(--mb-space-2);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   4. RECENT FILES
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-recent {
+  flex: 1;
+}
+
+.mb-recent__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--mb-space-2);
+}
+
+.mb-recent__title {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.mb-recent__clear {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-ghost);
+  cursor: pointer;
+  background: none;
+  border: none;
+  padding: 0;
+  transition: color var(--mb-transition);
+}
+
+.mb-recent__clear:hover {
+  color: var(--mb-text-muted);
+}
+
+.mb-recent__list {
+  display: flex;
+  flex-direction: column;
+}
+
+.mb-recent__item {
+  display: flex;
+  align-items: center;
+  gap: var(--mb-space-2);
+  padding: var(--mb-space-2);
+  background: var(--mb-bg-secondary);
+  border-radius: var(--mb-radius-md);
+  margin-bottom: var(--mb-space-1);
+  cursor: pointer;
+  transition: background var(--mb-transition);
+}
+
+.mb-recent__item:hover {
+  background: var(--mb-bg-elevated);
+}
+
+.mb-recent__icon {
+  color: var(--mb-accent);
+  font-size: var(--mb-font-size-sm);
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.mb-recent__name {
+  font-size: var(--mb-font-size-sm);
+  color: var(--mb-text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mb-recent__time {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-ghost);
+  flex-shrink: 0;
+}
+
+.mb-recent__empty {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-ghost);
+  padding: var(--mb-space-2);
+  text-align: center;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   5. RIGHT COLUMN (40%)
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-welcome__right {
+  flex: 2;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mb-space-2);
+}
+
+.mb-welcome__actions-title {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: var(--mb-space-1);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   6. QUICK ACTION CARDS
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-action-card {
+  padding: var(--mb-space-2) var(--mb-space-3);
+  background: var(--mb-bg-secondary);
+  border-radius: var(--mb-radius-lg);
+  border: 1px solid var(--mb-border);
+  cursor: pointer;
+  transition: all var(--mb-transition);
+}
+
+.mb-action-card:hover {
+  border-color: var(--mb-text-ghost);
+  background: var(--mb-bg-elevated);
+}
+
+.mb-action-card__icon {
+  font-size: var(--mb-font-size-base);
+  margin-bottom: var(--mb-space-1);
+  opacity: 0.5;
+}
+
+.mb-action-card__title {
+  font-size: var(--mb-font-size-sm);
+  color: var(--mb-text-primary);
+  margin-bottom: var(--mb-space-1);
+}
+
+.mb-action-card__desc {
+  font-size: var(--mb-font-size-xs);
+  color: var(--mb-text-muted);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   7. BRAND IN WELCOME
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-welcome__brand {
+  font-size: var(--mb-font-size-xl);
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  margin-bottom: var(--mb-space-1);
+}
+
+.mb-welcome__brand-accent {
+  color: var(--mb-accent);
+}
+
+.mb-welcome__brand-text {
+  color: var(--mb-text-primary);
+}
+
+.mb-welcome__tagline {
+  font-size: var(--mb-font-size-sm);
+  color: var(--mb-text-subtle);
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   8. RESPONSIVE (< 768px)
+   ═══════════════════════════════════════════════════════════ */
+
+@media (max-width: 768px) {
+  .mb-welcome {
+    padding: var(--mb-space-4);
+  }
+
+  .mb-welcome__content {
+    flex-direction: column;
+    gap: var(--mb-space-5);
+  }
+
+  .mb-welcome__right {
+    order: -1;
+  }
+
+  .mb-dropzone {
+    padding: var(--mb-space-6) var(--mb-space-4);
+  }
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   FOCUS STATES
+   ═══════════════════════════════════════════════════════════ */
+
+.mb-dropzone:focus-visible,
+.mb-dropzone__browse:focus-visible,
+.mb-recent__item:focus-visible,
+.mb-recent__clear:focus-visible,
+.mb-action-card:focus-visible {
+  outline: 2px solid var(--mb-accent);
+  outline-offset: 2px;
+}
+
+.mb-dropzone:focus:not(:focus-visible),
+.mb-dropzone__browse:focus:not(:focus-visible),
+.mb-recent__item:focus:not(:focus-visible),
+.mb-recent__clear:focus:not(:focus-visible),
+.mb-action-card:focus:not(:focus-visible) {
+  outline: none;
+}

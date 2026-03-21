@@ -65,6 +65,9 @@ export default [
         CanvasRenderingContext2D: 'readonly',
         XMLSerializer: 'readonly',
         TextEncoder: 'readonly',
+        UIController: 'readonly',
+        Proxy: 'readonly',
+        DataTransfer: 'readonly',
       },
     },
     rules: {
