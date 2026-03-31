@@ -142,19 +142,28 @@ export async function appendPages(basePdfBytes, additions, insertAfter) {
   const baseCount = baseDoc.getPageCount();
   const insertIdx = insertAfter !== undefined ? insertAfter + 1 : baseCount;
 
-  let offset = 0;
+  const newDoc = await PDFDocument.create();
+
+  // Copy all base pages
+  const basePages = await newDoc.copyPages(baseDoc, baseDoc.getPageIndices());
+
+  // Copy all donor pages
+  const donorPages = [];
   for (const { bytes } of additions) {
     const donor = await PDFDocument.load(bytes, { ignoreEncryption: true });
-    const indices = donor.getPageIndices();
-    const pages = await baseDoc.copyPages(donor, indices);
-    for (let i = 0; i < pages.length; i++) {
-      baseDoc.insertPage(insertIdx + offset, pages[i]);
-      offset++;
-    }
+    const pages = await newDoc.copyPages(donor, donor.getPageIndices());
+    donorPages.push(...pages);
   }
 
-  pdfLibDoc = baseDoc;
-  return baseDoc.save();
+  // Splice donor pages into the base page array at insertIdx
+  const allPages = [...basePages];
+  allPages.splice(insertIdx, 0, ...donorPages);
+
+  // Add all pages to new document
+  allPages.forEach(p => newDoc.addPage(p));
+
+  pdfLibDoc = newDoc;
+  return newDoc.save();
 }
 
 /* ═══════════════════ Replace Pages ═══════════════════ */

@@ -9,6 +9,30 @@ Thumbs.db
 node_modules/
 .vercel
 
+# Python virtualenvs, caches, and coverage
+.venv/
+**/.venv/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+**/.pytest_cache/
+.pytest-tmp*/
+**/.pytest-tmp*/
+pytest-cache-files-*/
+**/pytest-cache-files-*/
+.coverage
+**/.coverage
+coverage.xml
+**/coverage.xml
+
+# Local build output
+apps/web/dist/
+apps/web/tsconfig.tsbuildinfo
+src-tauri/target/
+
+# Alternate lockfile created by local installs
+pnpm-lock.yaml
+
 # Reference screenshots (not source code)
 Screenshots/
 

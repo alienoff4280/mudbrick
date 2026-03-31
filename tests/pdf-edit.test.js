@@ -331,22 +331,53 @@ describe('appendPages', () => {
     expect(result).toBeInstanceOf(Uint8Array);
   });
 
-  it('inserts pages at the specified position', async () => {
-    const mockDoc = makeMockDoc(3);
-    window.PDFLib.PDFDocument.load.mockImplementation(() => Promise.resolve(mockDoc));
+  it('inserts pages at the specified position via new-doc pattern', async () => {
+    const baseDoc = makeMockDoc(3);
+    const createdDoc = makeMockDoc(0);
+    window.PDFLib.PDFDocument.load.mockImplementation(() => Promise.resolve(baseDoc));
+    window.PDFLib.PDFDocument.create.mockImplementation(() => Promise.resolve(createdDoc));
 
     await appendPages(fakePdfBytes, [{ bytes: fakePdfBytes }], 0);
-    // insertAfter=0 means insertIdx=1
-    expect(mockDoc.insertPage).toHaveBeenCalledWith(1, expect.anything());
+    // 3 base pages + 3 donor pages = 6 addPage calls
+    expect(createdDoc.addPage).toHaveBeenCalledTimes(6);
+    // copyPages called twice: once for base, once for donor
+    expect(createdDoc.copyPages).toHaveBeenCalledTimes(2);
   });
 
   it('appends at the end when no insertAfter is specified', async () => {
-    const mockDoc = makeMockDoc(3);
-    window.PDFLib.PDFDocument.load.mockImplementation(() => Promise.resolve(mockDoc));
+    const baseDoc = makeMockDoc(3);
+    const createdDoc = makeMockDoc(0);
+    window.PDFLib.PDFDocument.load.mockImplementation(() => Promise.resolve(baseDoc));
+    window.PDFLib.PDFDocument.create.mockImplementation(() => Promise.resolve(createdDoc));
 
     await appendPages(fakePdfBytes, [{ bytes: fakePdfBytes }]);
-    // insertIdx = baseCount = 3
-    expect(mockDoc.insertPage).toHaveBeenCalledWith(3, expect.anything());
+    // 3 base pages + 3 donor pages = 6 addPage calls
+    expect(createdDoc.addPage).toHaveBeenCalledTimes(6);
+    expect(createdDoc.copyPages).toHaveBeenCalledTimes(2);
+  });
+
+  it('prepends donor pages when insertAfter is -1', async () => {
+    const baseDoc = makeMockDoc(3);
+    const donorPageObjs = [{id: 'd1'}, {id: 'd2'}];
+    const basePageObjs = [{id: 'b1'}, {id: 'b2'}, {id: 'b3'}];
+    const createdDoc = makeMockDoc(0);
+    createdDoc.copyPages.mockImplementation((src) => {
+      return Promise.resolve(src === baseDoc ? basePageObjs : donorPageObjs);
+    });
+    window.PDFLib.PDFDocument.load.mockImplementation(() => Promise.resolve(baseDoc));
+    window.PDFLib.PDFDocument.create.mockImplementation(() => Promise.resolve(createdDoc));
+
+    const donorDoc = makeMockDoc(2);
+    let loadCount = 0;
+    window.PDFLib.PDFDocument.load.mockImplementation(() => {
+      loadCount++;
+      return Promise.resolve(loadCount === 1 ? baseDoc : donorDoc);
+    });
+
+    await appendPages(fakePdfBytes, [{ bytes: fakePdfBytes }], -1);
+    // insertAfter=-1 means insertIdx=0, donor pages come first
+    const addPageCalls = createdDoc.addPage.mock.calls.map(c => c[0]);
+    expect(addPageCalls).toEqual([...donorPageObjs, ...basePageObjs]);
   });
 });
 
